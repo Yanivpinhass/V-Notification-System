@@ -1,0 +1,331 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Hebrew RTL Admin Design System - All colors MUST be HSL */
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    /* Professional blue primary theme */
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 217 91% 55%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    /* Semantic colors for admin interface */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Professional admin borders and inputs */
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 217 91% 60%;
+
+    /* Tab navigation colors */
+    --tab-unselected: 220 100% 15%;
+
+    /* Header and navigation */
+    --header-background: 0 0% 100%;
+    --header-border: 214.3 31.8% 91.4%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-hover: 210 40% 96.1%;
+    --sidebar-active: 217 91% 95%;
+
+    /* Professional spacing and sizing */
+    --radius: 0.5rem;
+    --header-height: 64px;
+    --sidebar-width-collapsed: 56px;
+    --sidebar-width-expanded: 280px;
+
+    /* Admin card styling */
+    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    --card-padding: 24px;
+
+    /* Professional transitions */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* Modern tab styling */
+    --tab-gradient: linear-gradient(135deg, 217 91% 60% 0%, 217 91% 45% 100%);
+    --tab-container-gradient: linear-gradient(135deg, 210 100% 92% 0%, 210 100% 85% 100%);
+    --tab-shadow: 0 -2px 12px rgba(33, 150, 243, 0.4);
+    --tab-border-accent: 217 91% 35%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Noto Sans Hebrew", Arial, sans-serif;
+    direction: rtl;
+  }
+
+  /* Hebrew RTL Typography */
+  .rtl {
+    direction: rtl;
+    text-align: right;
+  }
+
+  .ltr {
+    direction: ltr;
+    text-align: left;
+  }
+
+  /* RTL Alert Dialog Styling */
+  .rtl [data-radix-alert-dialog-content] {
+    direction: rtl;
+  }
+
+  .rtl [data-radix-alert-dialog-title] {
+    text-align: right !important;
+  }
+
+  .rtl [data-radix-alert-dialog-description] {
+    text-align: right !important;
+  }
+
+  /* Force RTL for all dialog headers and content */
+  .rtl .alert-dialog-header {
+    text-align: right !important;
+  }
+
+  .rtl .alert-dialog-title {
+    text-align: right !important;
+    justify-content: flex-end !important;
+  }
+
+  /* Professional admin components */
+  .admin-header {
+    height: var(--header-height);
+    background: hsl(var(--header-background));
+    border-bottom: 1px solid hsl(var(--header-border));
+    box-shadow: var(--card-shadow);
+  }
+
+  .admin-card {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    box-shadow: var(--card-shadow);
+    padding: var(--card-padding);
+  }
+
+  .sidebar-nav {
+    background: hsl(var(--sidebar-background));
+    transition: var(--transition-smooth);
+  }
+
+  .sidebar-nav-item {
+    transition: var(--transition-smooth);
+  }
+
+  .sidebar-nav-item:hover {
+    background: hsl(var(--sidebar-hover));
+  }
+
+  .sidebar-nav-item.active {
+    background: hsl(var(--sidebar-active));
+    color: hsl(var(--primary));
+    font-weight: 500;
+  }
+
+  /* Hebrew-specific form styling */
+  .form-group {
+    margin-bottom: 1rem;
+  }
+
+  .form-label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    text-align: right;
+  }
+
+  /* RTL button groups */
+  .button-group {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-start;
+  }
+
+  .button-group.rtl {
+    justify-content: flex-end;
+  }
+
+  /* Modern tab styling */
+  .tab-container {
+    background: linear-gradient(135deg, hsl(210 100% 92%), hsl(210 100% 85%));
+    border-radius: 12px 12px 0 0;
+    display: flex;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  .tab-container::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab-container::-webkit-scrollbar-track {
+    display: none;
+  }
+
+  .tab-container::-webkit-scrollbar-thumb {
+    display: none;
+  }
+
+  .tab-container::-webkit-scrollbar-thumb:hover {
+    display: none;
+  }
+
+  /* General improved scrollbar styling for the app */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(217 91% 60%) hsl(210 40% 96.1%);
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: hsl(210 40% 96.1%);
+    border-radius: 4px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: hsl(217 91% 60%);
+    border-radius: 4px;
+    transition: background-color 0.3s ease;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: hsl(217 91% 45%);
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: hsl(210 40% 96.1%);
+  }
+
+  .tab-item {
+    padding: 12px 16px;
+    transition: var(--transition-smooth);
+    border-bottom: 3px solid transparent;
+    font-weight: 500;
+    color: hsl(var(--tab-unselected));
+    cursor: pointer;
+    position: relative;
+    white-space: nowrap;
+    flex-shrink: 0;
+    font-size: 0.875rem;
+  }
+
+  @media (min-width: 768px) {
+    .tab-item {
+      padding: 16px 24px;
+      font-size: 1rem;
+    }
+  }
+
+  .tab-item:hover {
+    background: rgba(255, 255, 255, 0.5);
+    color: hsl(var(--tab-border-accent));
+  }
+
+  .tab-item.selected {
+    background: linear-gradient(135deg, hsl(217 91% 60%), hsl(217 91% 45%));
+    color: white;
+    font-weight: 600;
+    border-radius: 8px 8px 0 0;
+    box-shadow: var(--tab-shadow);
+    transform: translateY(-2px);
+    border-bottom: 3px solid hsl(var(--tab-border-accent));
+  }
+
+  .tab-item.selected:hover {
+    background: linear-gradient(135deg, hsl(217 91% 65%), hsl(217 91% 50%));
+    color: white;
+  }
+
+  /* Sidebar header styling */
+  .sidebar-header {
+    background: linear-gradient(135deg, hsl(217 91% 60%), hsl(217 91% 45%));
+    border-bottom: 1px solid hsl(217 91% 45%);
+  }
+
+  .sidebar-header:hover {
+    background: linear-gradient(135deg, hsl(217 91% 45%), hsl(217 91% 35%));
+  }
+
+  .collapse-icon {
+    background: linear-gradient(135deg, hsl(217 91% 45%), hsl(217 91% 30%));
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+
+  .collapse-icon:hover {
+    background: linear-gradient(135deg, hsl(217 91% 30%), hsl(217 91% 20%));
+    transform: scale(1.05);
+  }
+}

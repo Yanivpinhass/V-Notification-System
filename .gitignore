@@ -1,0 +1,42 @@
+# Frontend (React/Vite)
+client/node_modules/
+client/dist/
+client/.vite-temp/
+client/.env.local
+client/.env*.local
+
+# Backend (ASP.NET)
+server/**/bin/
+server/**/obj/
+server/**/.vs/
+server/**/*.user
+server/**/*.suo
+
+# IDE & Editor Settings
+.vscode/
+.vs/
+.idea/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+
+# Database & Sensitive Data
+db/*.db
+db/**/*.db
+db/**/Pass.txt
+db/Pass.txt
+*.db-journal
+*.db-wal
+
+# Logs
+*.log
+**/logs/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Environment files
+.env
+.env.local
+.env*.local
