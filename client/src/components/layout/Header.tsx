@@ -61,7 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       <h1 className="font-bold text-foreground text-lg md:text-2xl text-center flex-1 md:flex-none">
-        מערכת מגב
+        מערכת לניהול תזכורות עבור מערך מתנדבים
       </h1>
 
       {/* Left side (appears right in RTL) - Empty for now */}

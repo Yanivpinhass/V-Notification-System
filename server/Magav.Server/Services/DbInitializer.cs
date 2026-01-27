@@ -60,6 +60,27 @@ public class DbInitializer
             using var cmd = new SqliteCommand(createTableSql, connection);
             await cmd.ExecuteNonQueryAsync();
 
+            // Create Volunteers table
+            var createVolunteersSql = @"
+                CREATE TABLE Volunteers (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    InternalIdHash TEXT NOT NULL UNIQUE,
+                    MappingName TEXT NOT NULL,
+                    FirstName TEXT NULL,
+                    LastName TEXT NULL,
+                    MobilePhone TEXT NULL,
+                    ApproveToReceiveSms INTEGER NOT NULL DEFAULT 0,
+                    RoleId INTEGER NULL,
+                    CreatedAt TEXT NULL,
+                    UpdatedAt TEXT NULL
+                );
+                CREATE INDEX IX_Volunteers_InternalIdHash ON Volunteers(InternalIdHash);
+                CREATE INDEX IX_Volunteers_RoleId ON Volunteers(RoleId);
+            ";
+
+            using var volunteersCmd = new SqliteCommand(createVolunteersSql, connection);
+            await volunteersCmd.ExecuteNonQueryAsync();
+
             // Create default admin user with BCrypt hashed password
             var adminPasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin123!", 12);
             var now = DateTime.UtcNow.ToString("o");

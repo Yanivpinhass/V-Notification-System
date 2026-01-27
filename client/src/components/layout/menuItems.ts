@@ -3,11 +3,12 @@ import { MenuItem } from './types';
 
 export const mainMenuItems: MenuItem[] = [
   {
-    id: 'home',
-    title: 'ראשי',
+    id: 'data-import',
+    title: 'קליטת נתונים',
     icon: Home,
     subItems: [
-      { id: 'dashboard', title: 'לוח בקרה', path: '/home/dashboard' },
+      { id: 'shifts-import', title: 'קליטת קובץ משמרות', path: '/data-import/shifts' },
+      { id: 'volunteers-import', title: 'קליטת קובץ מתנדבים', path: '/data-import/volunteers' },
     ]
   }
 ];

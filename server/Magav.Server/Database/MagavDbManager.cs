@@ -16,6 +16,7 @@ public class MagavDbManager
 
     // Lazy-initialized repositories (created on first access)
     private UsersRepository? _users;
+    private VolunteersRepository? _volunteers;
 
     public MagavDbManager(DbHelper db)
     {
@@ -26,6 +27,11 @@ public class MagavDbManager
     /// Users repository for all user-related database operations
     /// </summary>
     public UsersRepository Users => _users ??= new UsersRepository(_db);
+
+    /// <summary>
+    /// Volunteers repository for all volunteer-related database operations
+    /// </summary>
+    public VolunteersRepository Volunteers => _volunteers ??= new VolunteersRepository(_db);
 
     /// <summary>
     /// Direct DbHelper access for complex operations or raw queries.
