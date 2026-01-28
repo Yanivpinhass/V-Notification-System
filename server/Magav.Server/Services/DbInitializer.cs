@@ -116,6 +116,30 @@ public class DbInitializer
         {
             Console.WriteLine($"Database already exists at: {fullPath}");
         }
+
+        // Run migrations for both new and existing databases
+        await RunMigrationsAsync(connection);
+    }
+
+    private static async Task RunMigrationsAsync(SqliteConnection connection)
+    {
+        // Migration: Add Shifts table
+        var createShiftsSql = @"
+            CREATE TABLE IF NOT EXISTS Shifts (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ShiftDate TEXT NOT NULL,
+                ShiftName TEXT NOT NULL,
+                VolunteerId INTEGER NOT NULL,
+                SmsSentAt TEXT NULL,
+                CreatedAt TEXT NULL,
+                UpdatedAt TEXT NULL,
+                FOREIGN KEY (VolunteerId) REFERENCES Volunteers(Id)
+            );
+            CREATE INDEX IF NOT EXISTS IX_Shifts_VolunteerId ON Shifts(VolunteerId);
+            CREATE INDEX IF NOT EXISTS IX_Shifts_ShiftDate ON Shifts(ShiftDate);
+        ";
+        using var cmd = new SqliteCommand(createShiftsSql, connection);
+        await cmd.ExecuteNonQueryAsync();
     }
 
     public string GetConnectionString()

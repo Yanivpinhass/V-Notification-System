@@ -17,6 +17,7 @@ public class MagavDbManager
     // Lazy-initialized repositories (created on first access)
     private UsersRepository? _users;
     private VolunteersRepository? _volunteers;
+    private ShiftsRepository? _shifts;
 
     public MagavDbManager(DbHelper db)
     {
@@ -32,6 +33,11 @@ public class MagavDbManager
     /// Volunteers repository for all volunteer-related database operations
     /// </summary>
     public VolunteersRepository Volunteers => _volunteers ??= new VolunteersRepository(_db);
+
+    /// <summary>
+    /// Shifts repository for all shift-related database operations
+    /// </summary>
+    public ShiftsRepository Shifts => _shifts ??= new ShiftsRepository(_db);
 
     /// <summary>
     /// Direct DbHelper access for complex operations or raw queries.
