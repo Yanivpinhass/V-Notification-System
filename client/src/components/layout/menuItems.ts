@@ -1,4 +1,4 @@
-import { Home } from 'lucide-react';
+import { Home, Users } from 'lucide-react';
 import { MenuItem } from './types';
 
 export const mainMenuItems: MenuItem[] = [
@@ -9,6 +9,15 @@ export const mainMenuItems: MenuItem[] = [
     subItems: [
       { id: 'shifts-import', title: 'קליטת קובץ משמרות', path: '/data-import/shifts' },
       { id: 'volunteers-import', title: 'קליטת קובץ מתנדבים', path: '/data-import/volunteers' },
+    ]
+  },
+  {
+    id: 'user-management',
+    title: 'ניהול משתמשים',
+    icon: Users,
+    requiredRoles: ['Admin'],
+    subItems: [
+      { id: 'system-users', title: 'משתמשי מערכת', path: '/user-management/users' },
     ]
   }
 ];

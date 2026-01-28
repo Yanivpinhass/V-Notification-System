@@ -11,10 +11,11 @@ import { Header } from './layout/Header';
 import { Sidebar } from './layout/Sidebar';
 import { SubNavigation } from './layout/SubNavigation';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { authService } from '@/services/authService';
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
   children,
-  currentUser = { name: 'משה כהן', email: 'admin@example.com' },
+  currentUser = { name: 'משתמש' },
   activeSubItem: externalActiveSubItem,
   onSubItemChange,
   onLogout
@@ -24,6 +25,18 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeMainItem, setActiveMainItem] = useState('home');
   const [internalActiveSubItem, setInternalActiveSubItem] = useState('dashboard');
+
+  // Role-based menu filtering
+  const currentUserInfo = authService.getCurrentUser();
+  const userRoles = currentUserInfo?.roles || [];
+
+  const filteredMenuItems = mainMenuItems
+    .filter(item => !item.requiredRoles || item.requiredRoles.some(r => userRoles.includes(r)))
+    .map(item => ({
+      ...item,
+      subItems: item.subItems?.filter(sub => !sub.requiredRoles || sub.requiredRoles.some(r => userRoles.includes(r)))
+    }))
+    .filter(item => !item.subItems || item.subItems.length > 0);
 
   // Use external state if provided, otherwise use internal state
   const activeSubItem = externalActiveSubItem || internalActiveSubItem;
@@ -43,7 +56,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const handleMainItemClick = (itemId: string) => {
     setActiveMainItem(itemId);
     // Reset sub item when switching main items
-    const item = mainMenuItems.find(item => item.id === itemId);
+    const item = filteredMenuItems.find(item => item.id === itemId);
     if (item?.subItems?.length) {
       setActiveSubItem(item.subItems[0].id);
     }
@@ -54,7 +67,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   };
 
   const getCurrentActiveItem = () => {
-    return mainMenuItems.find(item => item.id === activeMainItem);
+    return filteredMenuItems.find(item => item.id === activeMainItem);
   };
 
   // Mobile Layout
@@ -78,7 +91,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               sidebarCollapsed={false}
               toggleSidebar={() => {}}
               activeMainItem={activeMainItem}
-              mainMenuItems={mainMenuItems}
+              mainMenuItems={filteredMenuItems}
               handleMainItemClick={handleMainItemClick}
               isMobile={true}
             />
@@ -128,7 +141,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               sidebarCollapsed={sidebarCollapsed}
               toggleSidebar={toggleSidebar}
               activeMainItem={activeMainItem}
-              mainMenuItems={mainMenuItems}
+              mainMenuItems={filteredMenuItems}
               handleMainItemClick={handleMainItemClick}
               isMobile={false}
             />

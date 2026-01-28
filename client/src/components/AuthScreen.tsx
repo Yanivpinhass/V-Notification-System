@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { authService } from '@/services/authService';
 
 interface AuthScreenProps {
-  onAuthenticated: (user: { name: string; email: string }) => void;
+  onAuthenticated: (user: { name: string }, mustChangePassword: boolean) => void;
 }
 
 const loginSchema = z.object({
@@ -42,8 +42,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
       // Successful authentication
       onAuthenticated({
         name: loginResponse.user.name,
-        email: loginResponse.user.email,
-      });
+      }, loginResponse.mustChangePassword);
     } catch (error: any) {
       console.error('Login error:', error);
       if (error.message.includes('שגוי')) {

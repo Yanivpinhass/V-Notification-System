@@ -1,7 +1,9 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using System.Text.RegularExpressions;
 using Magav.Common.Database;
+using Magav.Common.Models.Auth;
 using Magav.Server.Database;
 using Magav.Server.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -56,6 +58,9 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("CanImportVolunteers", policy =>
         policy.RequireRole("Admin", "SystemManager"));
+
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireRole("Admin"));
 });
 
 // Register services
@@ -183,6 +188,47 @@ app.MapPost("/api/auth/logout", async (HttpContext context, AuthService authServ
     }
 }).RequireAuthorization();
 
+// Change own password (for logged-in user)
+app.MapPost("/api/auth/change-password", async (ChangePasswordRequest request, MagavDbManager db,
+    HttpContext context, IConfiguration config) =>
+{
+    try
+    {
+        // Get current user ID from JWT (with fallback for claim mapping)
+        var userIdClaim = context.User.FindFirst(JwtRegisteredClaimNames.Sub)
+            ?? context.User.FindFirst(ClaimTypes.NameIdentifier);
+        if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var userId))
+            return Results.Unauthorized();
+
+        var user = await db.Users.GetByIdAsync(userId);
+        if (user == null)
+            return Results.Unauthorized();
+
+        // Validate new password
+        if (string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length < 6 ||
+            !request.NewPassword.Any(c => char.IsLetter(c)) ||
+            !request.NewPassword.Any(c => char.IsDigit(c)))
+            return Results.BadRequest(ApiResponse<object>.Fail("הסיסמה חייבת להכיל לפחות 6 תווים, אות אחת ומספר אחד"));
+
+        // Hash and save new password
+        var securitySettings = config.GetSection("Security").Get<SecuritySettings>() ?? new SecuritySettings();
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword, securitySettings.BcryptWorkFactor);
+        user.MustChangePassword = false;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await db.Users.UpdateAsync(user);
+
+        return Results.Ok(ApiResponse<object>.Ok(null!, "הסיסמה שונתה בהצלחה"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Change password error: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בשינוי הסיסמה"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization();
+
 // Health check endpoint
 app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
 
@@ -251,6 +297,259 @@ app.MapPost("/api/volunteers/import", async (HttpRequest request, MagavDbManager
 .DisableAntiforgery(); // Required for file uploads
 
 // ============================================
+// USER MANAGEMENT ENDPOINTS (Admin only)
+// ============================================
+
+// GET all users
+app.MapGet("/api/users", async (MagavDbManager db) =>
+{
+    try
+    {
+        var users = await db.Users.GetAllAsync();
+        var userDtos = users.Select(u => new
+        {
+            u.Id,
+            u.FullName,
+            u.UserName,
+            u.IsActive,
+            u.Role,
+            u.MustChangePassword,
+            u.LastConnected,
+            u.CreatedAt,
+            u.UpdatedAt
+        }).ToList();
+        return Results.Ok(ApiResponse<object>.Ok(userDtos));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error fetching users: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בטעינת הנתונים"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("AdminOnly");
+
+// GET single user
+app.MapGet("/api/users/{id:int}", async (int id, MagavDbManager db) =>
+{
+    try
+    {
+        var user = await db.Users.GetByIdAsync(id);
+        if (user == null)
+            return Results.NotFound(ApiResponse<object>.Fail("משתמש לא נמצא"));
+
+        return Results.Ok(ApiResponse<object>.Ok(new
+        {
+            user.Id,
+            user.FullName,
+            user.UserName,
+            user.IsActive,
+            user.Role,
+            user.MustChangePassword,
+            user.LastConnected,
+            user.CreatedAt,
+            user.UpdatedAt
+        }));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error fetching user: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בטעינת הנתונים"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("AdminOnly");
+
+// POST create user
+app.MapPost("/api/users", async (CreateUserRequest request, MagavDbManager db, IConfiguration config) =>
+{
+    try
+    {
+        // Validate required fields
+        if (string.IsNullOrWhiteSpace(request.FullName) ||
+            string.IsNullOrWhiteSpace(request.UserName) ||
+            string.IsNullOrWhiteSpace(request.Password))
+            return Results.BadRequest(ApiResponse<object>.Fail("כל השדות הם חובה"));
+
+        // Validate username format (Hebrew, English letters, digits, underscore, 3-50 chars)
+        var normalizedUserName = request.UserName.Trim();
+        if (!Regex.IsMatch((string)normalizedUserName, @"^[\u0590-\u05FFa-zA-Z0-9_]{3,50}$"))
+            return Results.BadRequest(ApiResponse<object>.Fail("שם משתמש חייב להכיל 3-50 תווים: אותיות בעברית או באנגלית, מספרים או קו תחתון"));
+
+        // Check username uniqueness (case-insensitive)
+        if (await db.Users.ExistsByUserNameAsync(normalizedUserName))
+            return Results.BadRequest(ApiResponse<object>.Fail("שם משתמש כבר קיים במערכת"));
+
+        // Validate password strength (min 6 chars, at least 1 letter and 1 digit)
+        if (request.Password.Length < 6 ||
+            !request.Password.Any(c => char.IsLetter(c)) ||
+            !request.Password.Any(c => char.IsDigit(c)))
+            return Results.BadRequest(ApiResponse<object>.Fail("הסיסמה חייבת להכיל לפחות 6 תווים, אות אחת ומספר אחד"));
+
+        // Validate role
+        var validRoles = new[] { "Admin", "User", "SystemManager" };
+        if (!validRoles.Contains(request.Role))
+            return Results.BadRequest(ApiResponse<object>.Fail("תפקיד לא תקין"));
+
+        var securitySettings = config.GetSection("Security").Get<SecuritySettings>() ?? new SecuritySettings();
+
+        var user = new User
+        {
+            FullName = request.FullName.Trim(),
+            UserName = normalizedUserName,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password, securitySettings.BcryptWorkFactor),
+            Role = request.Role,
+            IsActive = request.IsActive,
+            MustChangePassword = request.MustChangePassword,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await db.Users.InsertAsync(user);
+
+        return Results.Created($"/api/users/{user.Id}", ApiResponse<object>.Ok(new
+        {
+            user.Id,
+            user.FullName,
+            user.UserName,
+            user.IsActive,
+            user.Role,
+            user.MustChangePassword,
+            user.CreatedAt,
+            user.UpdatedAt
+        }));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error creating user: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בשמירת הנתונים"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("AdminOnly");
+
+// PUT update user
+app.MapPut("/api/users/{id:int}", async (int id, UpdateUserRequest request, MagavDbManager db,
+    HttpContext context, IConfiguration config) =>
+{
+    try
+    {
+        var user = await db.Users.GetByIdAsync(id);
+        if (user == null)
+            return Results.NotFound(ApiResponse<object>.Fail("משתמש לא נמצא"));
+
+        // Get current user ID from JWT (with fallback for claim mapping)
+        var userIdClaim = context.User.FindFirst(JwtRegisteredClaimNames.Sub)
+            ?? context.User.FindFirst(ClaimTypes.NameIdentifier);
+        if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var currentUserId))
+            return Results.Unauthorized();
+
+        // Prevent admin from deactivating themselves
+        if (id == currentUserId && !request.IsActive)
+            return Results.BadRequest(ApiResponse<object>.Fail("לא ניתן לבטל את החשבון שלך"));
+
+        // Prevent admin from removing their own admin role
+        if (id == currentUserId && request.Role != "Admin")
+            return Results.BadRequest(ApiResponse<object>.Fail("לא ניתן להסיר את הרשאות המנהל מעצמך"));
+
+        // Validate username format (Hebrew, English letters, digits, underscore, 3-50 chars)
+        var normalizedUserName = request.UserName.Trim();
+        if (!Regex.IsMatch((string)normalizedUserName, @"^[\u0590-\u05FFa-zA-Z0-9_]{3,50}$"))
+            return Results.BadRequest(ApiResponse<object>.Fail("שם משתמש חייב להכיל 3-50 תווים: אותיות בעברית או באנגלית, מספרים או קו תחתון"));
+
+        // Check username uniqueness if changed
+        if (normalizedUserName != user.UserName && await db.Users.ExistsByUserNameAsync(normalizedUserName))
+            return Results.BadRequest(ApiResponse<object>.Fail("שם משתמש כבר קיים במערכת"));
+
+        // Validate role
+        var validRoles = new[] { "Admin", "User", "SystemManager" };
+        if (!validRoles.Contains(request.Role))
+            return Results.BadRequest(ApiResponse<object>.Fail("תפקיד לא תקין"));
+
+        // Update fields
+        user.FullName = request.FullName.Trim();
+        user.UserName = normalizedUserName;
+        user.Role = request.Role;
+        user.IsActive = request.IsActive;
+        user.MustChangePassword = request.MustChangePassword;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        // Update password if provided
+        if (!string.IsNullOrWhiteSpace(request.NewPassword))
+        {
+            if (request.NewPassword.Length < 6 ||
+                !request.NewPassword.Any(c => char.IsLetter(c)) ||
+                !request.NewPassword.Any(c => char.IsDigit(c)))
+                return Results.BadRequest(ApiResponse<object>.Fail("הסיסמה חייבת להכיל לפחות 6 תווים, אות אחת ומספר אחד"));
+
+            var securitySettings = config.GetSection("Security").Get<SecuritySettings>() ?? new SecuritySettings();
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword, securitySettings.BcryptWorkFactor);
+        }
+
+        await db.Users.UpdateAsync(user);
+
+        return Results.Ok(ApiResponse<object>.Ok(new
+        {
+            user.Id,
+            user.FullName,
+            user.UserName,
+            user.IsActive,
+            user.Role,
+            user.MustChangePassword,
+            user.LastConnected,
+            user.CreatedAt,
+            user.UpdatedAt
+        }));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error updating user: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בשמירת הנתונים"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("AdminOnly");
+
+// DELETE user
+app.MapDelete("/api/users/{id:int}", async (int id, MagavDbManager db, HttpContext context) =>
+{
+    try
+    {
+        var user = await db.Users.GetByIdAsync(id);
+        if (user == null)
+            return Results.NotFound(ApiResponse<object>.Fail("משתמש לא נמצא"));
+
+        // Get current user ID from JWT (with fallback for claim mapping)
+        var userIdClaim = context.User.FindFirst(JwtRegisteredClaimNames.Sub)
+            ?? context.User.FindFirst(ClaimTypes.NameIdentifier);
+        if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out var currentUserId))
+            return Results.Unauthorized();
+
+        // Prevent admin from deleting themselves
+        if (id == currentUserId)
+            return Results.BadRequest(ApiResponse<object>.Fail("לא ניתן למחוק את החשבון שלך"));
+
+        // Prevent deleting the last admin
+        if (user.Role == "Admin")
+        {
+            var adminCount = (await db.Users.GetByRoleAsync("Admin")).Count;
+            if (adminCount <= 1)
+                return Results.BadRequest(ApiResponse<object>.Fail("לא ניתן למחוק את המנהל האחרון במערכת"));
+        }
+
+        await db.Users.DeleteAsync(user);
+        return Results.Ok(ApiResponse<object>.Ok(null!, "המשתמש נמחק בהצלחה"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error deleting user: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה במחיקת הנתונים"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("AdminOnly");
+
+// ============================================
 // RUN
 // ============================================
 
@@ -268,3 +567,6 @@ app.Run();
 
 public record LoginRequest(string Username, string Password);
 public record RefreshTokenRequest(string RefreshToken);
+public record ChangePasswordRequest(string NewPassword);
+public record CreateUserRequest(string FullName, string UserName, string Password, string Role, bool IsActive = true, bool MustChangePassword = true);
+public record UpdateUserRequest(string FullName, string UserName, string? NewPassword, string Role, bool IsActive, bool MustChangePassword);

@@ -1,24 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { AuthScreen } from '@/components/AuthScreen';
 import { AdminLayout } from '@/components/AdminLayout';
+import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { PlaceholderPage } from '@/pages/PlaceholderPage';
 import { VolunteersImportPage } from '@/pages/VolunteersImportPage';
+import { SystemUsersPage } from '@/pages/SystemUsersPage';
 import { authService } from '@/services/authService';
 
 interface User {
   name: string;
-  email: string;
 }
 
 const Index = () => {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const [activeSubItem, setActiveSubItem] = useState('dashboard');
 
-  const handleAuthentication = (authenticatedUser: User) => {
+  const handleAuthentication = (authenticatedUser: User, needsPasswordChange: boolean) => {
     setUser(authenticatedUser);
     setIsAuthenticated(true);
+    setMustChangePassword(needsPasswordChange);
   };
+
+  const handlePasswordChanged = () => {
+    setMustChangePassword(false);
+  };
+
+  // Refresh user info from localStorage (called after user edits)
+  const refreshUserInfo = useCallback(() => {
+    const currentUser = authService.getCurrentUser();
+    if (currentUser) {
+      setUser({ name: currentUser.name });
+    }
+  }, []);
 
   const handleLogout = async () => {
     await authService.logout();
@@ -33,6 +48,8 @@ const Index = () => {
         return <PlaceholderPage />;
       case 'volunteers-import':
         return <VolunteersImportPage />;
+      case 'system-users':
+        return <SystemUsersPage onUserUpdated={refreshUserInfo} />;
       default:
         return <PlaceholderPage />;
     }
@@ -43,14 +60,22 @@ const Index = () => {
   }
 
   return (
-    <AdminLayout
-      currentUser={user}
-      activeSubItem={activeSubItem}
-      onSubItemChange={setActiveSubItem}
-      onLogout={handleLogout}
-    >
-      {renderContent()}
-    </AdminLayout>
+    <>
+      <AdminLayout
+        currentUser={user}
+        activeSubItem={activeSubItem}
+        onSubItemChange={setActiveSubItem}
+        onLogout={handleLogout}
+      >
+        {renderContent()}
+      </AdminLayout>
+
+      {/* Force password change dialog */}
+      <ChangePasswordDialog
+        open={mustChangePassword}
+        onPasswordChanged={handlePasswordChanged}
+      />
+    </>
   );
 };
 

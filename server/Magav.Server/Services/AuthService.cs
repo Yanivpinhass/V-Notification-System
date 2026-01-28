@@ -74,7 +74,6 @@ public class AuthService
             {
                 Id = user.Id.ToString(),
                 Name = user.FullName,
-                Email = $"{user.UserName}@magav.local",  // Placeholder email
                 Roles = new[] { user.Role },
                 Permissions = new Dictionary<string, object>()
             },
@@ -114,7 +113,6 @@ public class AuthService
             {
                 Id = user.Id.ToString(),
                 Name = user.FullName,
-                Email = $"{user.UserName}@magav.local",
                 Roles = new[] { user.Role },
                 Permissions = new Dictionary<string, object>()
             },
@@ -214,7 +212,6 @@ public class UserInfo
 {
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
-    public string Email { get; set; } = string.Empty;
     public string[] Roles { get; set; } = Array.Empty<string>();
     public Dictionary<string, object> Permissions { get; set; } = new();
 }

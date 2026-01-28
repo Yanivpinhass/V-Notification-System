@@ -16,7 +16,6 @@ export interface LoginResponse {
 export interface UserInfo {
   id: string;
   name: string;
-  email: string;
   roles: string[];
   permissions: Record<string, any>;
 }
@@ -153,6 +152,35 @@ class AuthService {
 
   isAuthenticated(): boolean {
     return !!this.getAccessToken() && !!this.getCurrentUser();
+  }
+
+  async changePassword(newPassword: string): Promise<void> {
+    const accessToken = this.getAccessToken();
+    if (!accessToken) {
+      throw new Error('לא מחובר למערכת');
+    }
+
+    const response = await fetch(this.buildUrl('/auth/change-password'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ newPassword }),
+    });
+
+    if (!response.ok) {
+      let errorMessage = 'שגיאה בשינוי הסיסמה';
+      try {
+        const result = await response.json();
+        if (result?.message) {
+          errorMessage = result.message;
+        }
+      } catch {
+        // Use default message
+      }
+      throw new Error(errorMessage);
+    }
   }
 }
 

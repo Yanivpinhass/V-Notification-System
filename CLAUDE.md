@@ -103,8 +103,37 @@ app.MapDelete("/api/users/{id}", async (int id) =>
 - `POST /api/auth/refresh` - Token refresh before expiry
 - `GET /api/health` - Health checks for monitoring
 
+### Error Handling - No Sensitive Data Exposure
+
+**CRITICAL: Never expose exception details or sensitive data in API error responses.**
+
+Error messages returned to the UI must NOT include:
+- Exception messages or stack traces
+- Database column names, table structures, or query details
+- User IDs, volunteer IDs, or other identifying information
+- Internal system paths, configuration, or implementation details
+
+**Required pattern for all API endpoints:**
+```csharp
+catch (Exception ex)
+{
+    // Log full details SERVER-SIDE ONLY (for debugging)
+    Console.Error.WriteLine($"Error: {ex}");
+
+    // Return GENERIC message to client - no technical details
+    return Results.Json(
+        ApiResponse<object>.Fail("אירעה שגיאה"),  // Generic Hebrew error
+        statusCode: StatusCodes.Status500InternalServerError);
+}
+```
+
+**Why `Results.Json` instead of `Results.Problem`:**
+- `Results.Problem()` can include exception details in development mode
+- `Results.Json()` with explicit ApiResponse ensures consistent, safe responses
+
 ### RTL/Hebrew Considerations
 
 - All components use `dir="rtl"` and Hebrew font (Noto Sans Hebrew)
 - CSS uses RTL-aware flexbox positioning
 - Error messages and labels are in Hebrew
+- **Dialog close buttons (X):** Must be positioned on the LEFT side (`left-4`) not the right, since RTL reverses the expected close button position. The Shadcn/UI dialog component has been modified to reflect this.

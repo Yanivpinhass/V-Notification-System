@@ -33,7 +33,6 @@ export const Header: React.FC<HeaderProps> = ({
             <DropdownMenuItem className="text-right">
               <div className="flex flex-col items-end w-full">
                 <span className="font-medium">{currentUser.name}</span>
-                <span className="text-sm text-muted-foreground">{currentUser.email}</span>
               </div>
             </DropdownMenuItem>
 

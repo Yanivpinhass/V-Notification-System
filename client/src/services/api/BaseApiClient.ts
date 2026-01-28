@@ -41,7 +41,22 @@ export class BaseApiClient {
 
   protected async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      // Try to parse error body for ApiResponse format with Hebrew messages
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      try {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          if (errorData?.message) {
+            errorMessage = errorData.message;
+          } else if (errorData?.errors && errorData.errors.length > 0) {
+            errorMessage = errorData.errors.join(', ');
+          }
+        }
+      } catch {
+        // Use default message if parsing fails
+      }
+      throw new Error(errorMessage);
     }
 
     // Handle 204 No Content responses (no body to parse)
