@@ -47,4 +47,33 @@ public class VolunteersRepository : Repository<Volunteer>
         => await Db.FetchAsync<Volunteer>(v => v.ApproveToReceiveSms);
 
     public async Task<Volunteer?> GetByIdAsync(int id) => await GetByIdAsync((long)id);
+
+    /// <summary>
+    /// Insert or update volunteer by internal ID.
+    /// On update: only updates MappingName and MobilePhone, preserves other fields.
+    /// </summary>
+    public async Task<bool> UpsertByInternalIdAsync(Volunteer volunteer, string rawInternalId)
+    {
+        var hash = HashInternalId(rawInternalId);
+        var existing = await GetByInternalIdAsync(rawInternalId);
+
+        if (existing != null)
+        {
+            // UPDATE: Only update fields from Excel, preserve other fields
+            existing.MappingName = volunteer.MappingName;
+            existing.MobilePhone = volunteer.MobilePhone;
+            existing.UpdatedAt = DateTime.UtcNow;
+            await UpdateAsync(existing);
+            return false; // Updated
+        }
+        else
+        {
+            // INSERT: Set hash and timestamps
+            volunteer.InternalIdHash = hash;
+            volunteer.CreatedAt = DateTime.UtcNow;
+            volunteer.UpdatedAt = DateTime.UtcNow;
+            await InsertAsync(volunteer);
+            return true; // Inserted
+        }
+    }
 }

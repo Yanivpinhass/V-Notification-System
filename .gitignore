@@ -28,6 +28,10 @@ db/**/Pass.txt
 db/Pass.txt
 *.db-journal
 *.db-wal
+*.db-shm
+
+# Test data / input files (may contain sensitive data)
+input/
 
 # Logs
 *.log

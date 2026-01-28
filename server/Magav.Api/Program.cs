@@ -52,7 +52,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("CanImportVolunteers", policy =>
+        policy.RequireRole("Admin", "SystemManager"));
+});
 
 // Register services
 builder.Services.AddSingleton<DbInitializer>();
@@ -181,6 +185,70 @@ app.MapPost("/api/auth/logout", async (HttpContext context, AuthService authServ
 
 // Health check endpoint
 app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
+
+// ============================================
+// VOLUNTEERS ENDPOINTS
+// ============================================
+
+app.MapPost("/api/volunteers/import", async (HttpRequest request, MagavDbManager db) =>
+{
+    const long MaxFileSize = 10 * 1024 * 1024; // 10MB
+
+    try
+    {
+        // CSRF protection: Require custom header that forms can't set
+        if (!request.Headers.TryGetValue("X-Requested-With", out var xhrHeader) ||
+            xhrHeader.ToString() != "XMLHttpRequest")
+        {
+            return Results.BadRequest(ApiResponse<ImportResult>.Fail("בקשה לא תקינה"));
+        }
+
+        // Read form data
+        var form = await request.ReadFormAsync();
+        var file = form.Files.GetFile("file");
+
+        // Validation 1: File exists
+        if (file == null || file.Length == 0)
+            return Results.BadRequest(ApiResponse<ImportResult>.Fail("לא נבחר קובץ"));
+
+        // Validation 2: File size
+        if (file.Length > MaxFileSize)
+            return Results.BadRequest(ApiResponse<ImportResult>.Fail("גודל הקובץ חורג מהמותר (10MB)"));
+
+        // Validation 3: File extension
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (extension != ".xlsx" && extension != ".xls")
+            return Results.BadRequest(ApiResponse<ImportResult>.Fail("יש להעלות קובץ אקסל בלבד (.xlsx או .xls)"));
+
+        // Copy to MemoryStream (ensures seekability for magic bytes check + EPPlus)
+        using var memoryStream = new MemoryStream();
+        await file.CopyToAsync(memoryStream);
+        memoryStream.Position = 0;
+
+        // Validation 4: Magic bytes (file signature)
+        var header = new byte[4];
+        await memoryStream.ReadAsync(header, 0, 4);
+        memoryStream.Position = 0; // Reset for EPPlus
+
+        bool isXlsx = header[0] == 0x50 && header[1] == 0x4B; // ZIP signature (PK)
+        bool isXls = header[0] == 0xD0 && header[1] == 0xCF;  // OLE signature
+        if (!isXlsx && !isXls)
+            return Results.BadRequest(ApiResponse<ImportResult>.Fail("הקובץ אינו קובץ אקסל תקין"));
+
+        // Process import
+        var service = new VolunteersImportService();
+        var result = await service.ImportFromExcelAsync(memoryStream, db);
+
+        return Results.Ok(ApiResponse<ImportResult>.Ok(result));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Volunteers import error: {ex}");
+        return Results.Problem("אירעה שגיאה בעת ייבוא הקובץ");
+    }
+})
+.RequireAuthorization("CanImportVolunteers")
+.DisableAntiforgery(); // Required for file uploads
 
 // ============================================
 // RUN

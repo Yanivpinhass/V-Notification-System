@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AuthScreen } from '@/components/AuthScreen';
 import { AdminLayout } from '@/components/AdminLayout';
 import { PlaceholderPage } from '@/pages/PlaceholderPage';
+import { VolunteersImportPage } from '@/pages/VolunteersImportPage';
 import { authService } from '@/services/authService';
 
 interface User {
@@ -30,6 +31,8 @@ const Index = () => {
     switch (activeSubItem) {
       case 'dashboard':
         return <PlaceholderPage />;
+      case 'volunteers-import':
+        return <VolunteersImportPage />;
       default:
         return <PlaceholderPage />;
     }

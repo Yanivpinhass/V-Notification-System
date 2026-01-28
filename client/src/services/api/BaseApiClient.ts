@@ -132,6 +132,59 @@ export class BaseApiClient {
     }
   }
 
+  protected async postFormData<T>(endpoint: string, formData: FormData): Promise<T> {
+    const token = localStorage.getItem('accessToken');
+    const url = this.baseUrl.startsWith('http')
+      ? `${this.baseUrl}${endpoint}`
+      : `${window.location.origin}${this.baseUrl}${endpoint}`;
+
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const result = JSON.parse(xhr.responseText);
+            if (result && typeof result === 'object' && 'success' in result) {
+              if (result.success && result.data !== undefined) {
+                resolve(result.data);
+              } else {
+                reject(new Error(result.message || 'API request failed'));
+              }
+            } else {
+              resolve(result);
+            }
+          } catch {
+            reject(new Error('Failed to parse response'));
+          }
+        } else {
+          let errorMessage = `HTTP ${xhr.status}: ${xhr.statusText}`;
+          try {
+            const errorData = JSON.parse(xhr.responseText);
+            if (errorData?.message) {
+              errorMessage = errorData.message;
+            }
+          } catch {
+            // Use default message
+          }
+          reject(new Error(errorMessage));
+        }
+      });
+
+      xhr.addEventListener('error', () => reject(new Error('Network error')));
+      xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
+      xhr.addEventListener('timeout', () => reject(new Error('Request timed out')));
+
+      xhr.open('POST', url, true);
+      xhr.timeout = 60000;
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      }
+      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+      xhr.send(formData);
+    });
+  }
+
   protected async handleDeleteResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
       let errorMessage = `HTTP ${response.status}: ${response.statusText}`;

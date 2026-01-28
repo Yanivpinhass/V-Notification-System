@@ -29,11 +29,20 @@ export interface ApiResponse<T = any> {
 }
 
 class AuthService {
-  private baseUrl = authConfig.apiBaseUrl;
+  private baseUrl = authConfig.apiBaseUrl.includes('/api')
+    ? authConfig.apiBaseUrl
+    : `${authConfig.apiBaseUrl}/api`;
+
+  private buildUrl(endpoint: string): string {
+    if (this.baseUrl.startsWith('http')) {
+      return `${this.baseUrl}${endpoint}`;
+    }
+    return `${window.location.origin}${this.baseUrl}${endpoint}`;
+  }
 
   async login(username: string, password: string): Promise<LoginResponse> {
     try {
-      const response = await fetch(`${this.baseUrl}/auth/login`, {
+      const response = await fetch(this.buildUrl('/auth/login'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -76,7 +85,7 @@ class AuthService {
     }
 
     try {
-      const response = await fetch(`${this.baseUrl}/auth/refresh`, {
+      const response = await fetch(this.buildUrl('/auth/refresh'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -112,7 +121,7 @@ class AuthService {
     try {
       const accessToken = localStorage.getItem('accessToken');
       if (accessToken) {
-        await fetch(`${this.baseUrl}/auth/logout`, {
+        await fetch(this.buildUrl('/auth/logout'), {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${accessToken}`,

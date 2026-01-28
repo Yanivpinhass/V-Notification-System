@@ -29,13 +29,19 @@ public class DbInitializer
         // Create SQLCipher connection
         var connectionString = $"Data Source={fullPath};Password={_dbPassword}";
 
+        // Create SQLCipher connection - always set up WAL mode and busy timeout
+        using var connection = new SqliteConnection(connectionString);
+        await connection.OpenAsync();
+
+        // Enable WAL mode for better concurrent access (persists in database)
+        using (var walCmd = new SqliteCommand("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=30000;", connection))
+        {
+            await walCmd.ExecuteNonQueryAsync();
+        }
+
         if (!dbExists)
         {
             Console.WriteLine($"Creating database at: {fullPath}");
-
-            // Create database and tables
-            using var connection = new SqliteConnection(connectionString);
-            await connection.OpenAsync();
 
             var createTableSql = @"
                 CREATE TABLE Users (
@@ -115,6 +121,7 @@ public class DbInitializer
     public string GetConnectionString()
     {
         var fullPath = Path.GetFullPath(_dbPath);
-        return $"Data Source={fullPath};Password={_dbPassword}";
+        // Add busy timeout (30 seconds) to prevent "database is locked" errors
+        return $"Data Source={fullPath};Password={_dbPassword};Default Timeout=30";
     }
 }
