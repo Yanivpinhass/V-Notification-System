@@ -76,4 +76,29 @@ public class VolunteersRepository : Repository<Volunteer>
             return true; // Inserted
         }
     }
+
+    /// <summary>
+    /// Update volunteer SMS approval and contact details.
+    /// Returns false if volunteer not found or already approved.
+    /// </summary>
+    public async Task<bool> UpdateSmsApprovalAsync(
+        string rawInternalId,
+        string firstName,
+        string lastName,
+        string mobilePhone,
+        bool approveToReceiveSms)
+    {
+        var volunteer = await GetByInternalIdAsync(rawInternalId);
+        if (volunteer == null) return false;
+        if (volunteer.ApproveToReceiveSms) return false; // Already approved - must contact admin
+
+        volunteer.FirstName = firstName;
+        volunteer.LastName = lastName;
+        volunteer.MobilePhone = mobilePhone;
+        volunteer.ApproveToReceiveSms = approveToReceiveSms;
+        volunteer.UpdatedAt = DateTime.UtcNow;
+
+        await UpdateAsync(volunteer);
+        return true;
+    }
 }

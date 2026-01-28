@@ -2,11 +2,13 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading.RateLimiting;
 using Magav.Common.Database;
 using Magav.Common.Models.Auth;
 using Magav.Server.Database;
 using Magav.Server.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -78,6 +80,26 @@ builder.Services.AddScoped<AuthService>(sp =>
     return new AuthService(dbManager, config);
 });
 
+// Add Rate Limiting for public SMS approval endpoints
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            ApiResponse<object>.Fail("יותר מדי בקשות, נסה שוב מאוחר יותר"),
+            cancellationToken);
+    };
+    options.AddFixedWindowLimiter("sms-approval", opt =>
+    {
+        opt.Window = TimeSpan.FromMinutes(5);
+        opt.PermitLimit = 3;
+        opt.QueueLimit = 0;
+        opt.AutoReplenishment = true;
+    });
+});
+
 // ============================================
 // HTTPS ENFORCEMENT (Production)
 // ============================================
@@ -117,6 +139,9 @@ if (!app.Environment.IsDevelopment())
 
 // CORS
 app.UseCors("AllowClient");
+
+// Rate Limiting
+app.UseRateLimiter();
 
 // Authentication & Authorization
 app.UseAuthentication();
@@ -295,6 +320,171 @@ app.MapPost("/api/volunteers/import", async (HttpRequest request, MagavDbManager
 })
 .RequireAuthorization("CanImportVolunteers")
 .DisableAntiforgery(); // Required for file uploads
+
+// ============================================
+// PUBLIC SMS APPROVAL ENDPOINTS (No Auth Required)
+// ============================================
+
+// Verify volunteer by internal ID
+app.MapPost("/api/public/sms-approval/{accessKey}/verify", async (
+    string accessKey,
+    VerifyVolunteerRequest request,
+    MagavDbManager db,
+    IConfiguration config,
+    HttpContext context) =>
+{
+    var resultStatus = "unknown";
+    try
+    {
+        // Validate access key
+        var expectedKey = config["PublicPages:SmsApprovalAccessKey"];
+        if (string.IsNullOrEmpty(expectedKey) || accessKey != expectedKey)
+        {
+            resultStatus = "invalid_key";
+            return Results.Json(
+                ApiResponse<object>.Fail("המספר האישי אינו קיים במערכת"),
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        // Validate internal ID format - same error as "not found" to prevent format discovery
+        if (string.IsNullOrWhiteSpace(request.InternalId) ||
+            !Regex.IsMatch((string)request.InternalId, @"^[0-9]{1,8}$"))
+        {
+            resultStatus = "invalid_format";
+            return Results.BadRequest(ApiResponse<object>.Fail("המספר האישי אינו קיים במערכת"));
+        }
+
+        // Look up volunteer
+        var volunteer = await db.Volunteers.GetByInternalIdAsync(request.InternalId);
+        if (volunteer == null)
+        {
+            resultStatus = "not_found";
+            return Results.Json(
+                ApiResponse<object>.Fail("המספר האישי אינו קיים במערכת"),
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        // Check if already approved
+        if (volunteer.ApproveToReceiveSms)
+        {
+            resultStatus = "already_approved";
+            return Results.Ok(ApiResponse<VerifyVolunteerResponse>.Ok(
+                new VerifyVolunteerResponse("already_approved")));
+        }
+
+        // Pending approval - ready for form
+        resultStatus = "pending_approval";
+        return Results.Ok(ApiResponse<VerifyVolunteerResponse>.Ok(
+            new VerifyVolunteerResponse("pending_approval")));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"SMS approval verify error: {ex}");
+        resultStatus = "error";
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+    finally
+    {
+        // Security logging - NO PII or internal ID
+        Console.WriteLine($"[SMS-APPROVAL] Verify attempt from {context.Connection.RemoteIpAddress} " +
+            $"at {DateTime.UtcNow:O} - Result: {resultStatus}");
+    }
+}).RequireRateLimiting("sms-approval");
+
+// Submit SMS approval
+app.MapPost("/api/public/sms-approval/{accessKey}/submit", async (
+    string accessKey,
+    SubmitSmsApprovalRequest request,
+    MagavDbManager db,
+    IConfiguration config,
+    HttpContext context) =>
+{
+    var success = false;
+    try
+    {
+        // Validate access key
+        var expectedKey = config["PublicPages:SmsApprovalAccessKey"];
+        if (string.IsNullOrEmpty(expectedKey) || accessKey != expectedKey)
+        {
+            return Results.Json(
+                ApiResponse<object>.Fail("המספר האישי אינו קיים במערכת"),
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        // Validate internal ID format
+        if (string.IsNullOrWhiteSpace(request.InternalId) ||
+            !Regex.IsMatch((string)request.InternalId, @"^[0-9]{1,8}$"))
+        {
+            return Results.BadRequest(ApiResponse<object>.Fail("המספר האישי אינו קיים במערכת"));
+        }
+
+        // Validate first name
+        if (string.IsNullOrWhiteSpace(request.FirstName) ||
+            !Regex.IsMatch((string)request.FirstName, @"^[\u0590-\u05FFa-zA-Z\s\-']{1,20}$"))
+        {
+            return Results.BadRequest(ApiResponse<object>.Fail("שם פרטי לא תקין"));
+        }
+
+        // Validate last name
+        if (string.IsNullOrWhiteSpace(request.LastName) ||
+            !Regex.IsMatch((string)request.LastName, @"^[\u0590-\u05FFa-zA-Z\s\-']{1,20}$"))
+        {
+            return Results.BadRequest(ApiResponse<object>.Fail("שם משפחה לא תקין"));
+        }
+
+        // Validate phone - Israeli mobile format
+        if (string.IsNullOrWhiteSpace(request.MobilePhone) ||
+            !Regex.IsMatch((string)request.MobilePhone.Replace("-", "").Replace(" ", ""),
+            @"^(0|(\+)?972)?5[0-9]{8}$"))
+        {
+            return Results.BadRequest(ApiResponse<object>.Fail("מספר טלפון נייד לא תקין"));
+        }
+
+        // Normalize phone number
+        var normalizedPhone = NormalizeIsraeliPhone(request.MobilePhone);
+
+        // Update volunteer
+        var updated = await db.Volunteers.UpdateSmsApprovalAsync(
+            request.InternalId,
+            request.FirstName.Trim(),
+            request.LastName.Trim(),
+            normalizedPhone,
+            request.ApproveToReceiveSms);
+
+        if (!updated)
+        {
+            // Either not found or already approved
+            return Results.BadRequest(ApiResponse<object>.Fail("לא ניתן לעדכן את הפרטים"));
+        }
+
+        success = true;
+        return Results.Ok(ApiResponse<object>.Ok(null!, "האישור נקלט בהצלחה"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"SMS approval submit error: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+    finally
+    {
+        // Security logging - NO PII or internal ID
+        Console.WriteLine($"[SMS-APPROVAL] Submit from {context.Connection.RemoteIpAddress} " +
+            $"at {DateTime.UtcNow:O} - Success: {success}");
+    }
+}).RequireRateLimiting("sms-approval");
+
+// Helper function for phone normalization
+static string NormalizeIsraeliPhone(string phone)
+{
+    var digits = Regex.Replace(phone, @"\D", "");
+    if (digits.StartsWith("972")) digits = "0" + digits.Substring(3);
+    if (!digits.StartsWith("0")) digits = "0" + digits;
+    return digits;
+}
 
 // ============================================
 // USER MANAGEMENT ENDPOINTS (Admin only)
@@ -570,3 +760,8 @@ public record RefreshTokenRequest(string RefreshToken);
 public record ChangePasswordRequest(string NewPassword);
 public record CreateUserRequest(string FullName, string UserName, string Password, string Role, bool IsActive = true, bool MustChangePassword = true);
 public record UpdateUserRequest(string FullName, string UserName, string? NewPassword, string Role, bool IsActive, bool MustChangePassword);
+
+// SMS Approval request/response models
+public record VerifyVolunteerRequest(string InternalId);
+public record VerifyVolunteerResponse(string Status);
+public record SubmitSmsApprovalRequest(string InternalId, string FirstName, string LastName, string MobilePhone, bool ApproveToReceiveSms);
