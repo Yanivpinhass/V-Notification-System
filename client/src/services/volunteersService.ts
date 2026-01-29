@@ -14,6 +14,10 @@ class VolunteersService extends BaseApiClient {
     formData.append('file', file);
     return this.postFormData<ImportResult>('/volunteers/import', formData);
   }
+
+  async revokeSmsApproval(internalId: string): Promise<void> {
+    return this.post('/volunteers/revoke-sms-approval', { internalId });
+  }
 }
 
 export const volunteersService = new VolunteersService();

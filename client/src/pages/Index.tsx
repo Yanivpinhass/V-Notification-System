@@ -5,6 +5,7 @@ import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { PlaceholderPage } from '@/pages/PlaceholderPage';
 import { VolunteersImportPage } from '@/pages/VolunteersImportPage';
 import { SystemUsersPage } from '@/pages/SystemUsersPage';
+import { RevokeSmsApprovalPage } from '@/pages/RevokeSmsApprovalPage';
 import { authService } from '@/services/authService';
 
 interface User {
@@ -50,6 +51,8 @@ const Index = () => {
         return <VolunteersImportPage />;
       case 'system-users':
         return <SystemUsersPage onUserUpdated={refreshUserInfo} />;
+      case 'revoke-sms-approval':
+        return <RevokeSmsApprovalPage />;
       default:
         return <PlaceholderPage />;
     }

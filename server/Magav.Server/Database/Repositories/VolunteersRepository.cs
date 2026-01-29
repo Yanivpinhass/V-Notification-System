@@ -101,4 +101,20 @@ public class VolunteersRepository : Repository<Volunteer>
         await UpdateAsync(volunteer);
         return true;
     }
+
+    /// <summary>
+    /// Revoke SMS approval for a volunteer by internal ID.
+    /// Returns false if volunteer not found or already not approved.
+    /// </summary>
+    public async Task<bool> RevokeSmsApprovalAsync(string rawInternalId)
+    {
+        var volunteer = await GetByInternalIdAsync(rawInternalId);
+        if (volunteer == null) return false;
+        if (!volunteer.ApproveToReceiveSms) return false; // Already not approved
+
+        volunteer.ApproveToReceiveSms = false;
+        volunteer.UpdatedAt = DateTime.UtcNow;
+        await UpdateAsync(volunteer);
+        return true;
+    }
 }

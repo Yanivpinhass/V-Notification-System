@@ -63,6 +63,9 @@ builder.Services.AddAuthorization(options =>
 
     options.AddPolicy("AdminOnly", policy =>
         policy.RequireRole("Admin"));
+
+    options.AddPolicy("CanManageMessages", policy =>
+        policy.RequireRole("Admin", "SystemManager"));
 });
 
 // Register services
@@ -740,6 +743,40 @@ app.MapDelete("/api/users/{id:int}", async (int id, MagavDbManager db, HttpConte
 }).RequireAuthorization("AdminOnly");
 
 // ============================================
+// SMS MANAGEMENT ENDPOINTS (Admin + SystemManager)
+// ============================================
+
+app.MapPost("/api/volunteers/revoke-sms-approval", async (
+    RevokeSmsApprovalRequest request,
+    MagavDbManager db) =>
+{
+    try
+    {
+        // Validate internal ID format (1-8 digits only)
+        if (string.IsNullOrWhiteSpace(request.InternalId) ||
+            !Regex.IsMatch(request.InternalId, @"^[0-9]{1,8}$"))
+        {
+            return Results.BadRequest(ApiResponse<object>.Fail("מספר אישי לא תקין"));
+        }
+
+        var revoked = await db.Volunteers.RevokeSmsApprovalAsync(request.InternalId);
+        if (!revoked)
+        {
+            return Results.BadRequest(ApiResponse<object>.Fail("המתנדב לא נמצא או שאינו רשום לקבלת הודעות"));
+        }
+
+        return Results.Ok(ApiResponse<object>.Ok(null!, "ההרשמה להודעות בוטלה בהצלחה"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error revoking SMS approval: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// ============================================
 // RUN
 // ============================================
 
@@ -765,3 +802,4 @@ public record UpdateUserRequest(string FullName, string UserName, string? NewPas
 public record VerifyVolunteerRequest(string InternalId);
 public record VerifyVolunteerResponse(string Status);
 public record SubmitSmsApprovalRequest(string InternalId, string FirstName, string LastName, string MobilePhone, bool ApproveToReceiveSms);
+public record RevokeSmsApprovalRequest(string InternalId);

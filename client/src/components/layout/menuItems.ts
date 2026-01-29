@@ -1,4 +1,4 @@
-import { Home, Users } from 'lucide-react';
+import { Home, Users, MessageSquare } from 'lucide-react';
 import { MenuItem } from './types';
 
 export const mainMenuItems: MenuItem[] = [
@@ -9,6 +9,15 @@ export const mainMenuItems: MenuItem[] = [
     subItems: [
       { id: 'shifts-import', title: 'קליטת קובץ משמרות', path: '/data-import/shifts' },
       { id: 'volunteers-import', title: 'קליטת קובץ מתנדבים', path: '/data-import/volunteers' },
+    ]
+  },
+  {
+    id: 'message-management',
+    title: 'ניהול הודעות',
+    icon: MessageSquare,
+    requiredRoles: ['Admin', 'SystemManager'],
+    subItems: [
+      { id: 'revoke-sms-approval', title: 'ביטול הרשמה להודעות', path: '/message-management/revoke' },
     ]
   },
   {
