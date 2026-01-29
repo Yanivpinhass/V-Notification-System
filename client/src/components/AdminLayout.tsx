@@ -23,7 +23,16 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const isMobile = useIsMobile();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [activeMainItem, setActiveMainItem] = useState('home');
+  // Derive initial main menu item from the active sub-item
+  const getParentMenuId = (subItemId: string) => {
+    const parent = mainMenuItems.find(item =>
+      item.subItems?.some(sub => sub.id === subItemId)
+    );
+    return parent?.id || '';
+  };
+
+  const initialSubItem = externalActiveSubItem || 'dashboard';
+  const [activeMainItem, setActiveMainItem] = useState(() => getParentMenuId(initialSubItem));
   const [internalActiveSubItem, setInternalActiveSubItem] = useState('dashboard');
 
   // Role-based menu filtering

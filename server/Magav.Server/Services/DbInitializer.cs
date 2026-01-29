@@ -30,11 +30,11 @@ public class DbInitializer
         var connectionString = $"Data Source={fullPath};Password={_dbPassword}";
 
         // Create SQLCipher connection - always set up WAL mode and busy timeout
-        using var connection = new SqliteConnection(connectionString);
+        await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync();
 
         // Enable WAL mode for better concurrent access (persists in database)
-        using (var walCmd = new SqliteCommand("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=30000;", connection))
+        await using (var walCmd = new SqliteCommand("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=30000;", connection))
         {
             await walCmd.ExecuteNonQueryAsync();
         }
@@ -63,7 +63,7 @@ public class DbInitializer
                 CREATE INDEX IX_Users_UserName ON Users(UserName);
             ";
 
-            using var cmd = new SqliteCommand(createTableSql, connection);
+            await using var cmd = new SqliteCommand(createTableSql, connection);
             await cmd.ExecuteNonQueryAsync();
 
             // Create Volunteers table
@@ -84,8 +84,28 @@ public class DbInitializer
                 CREATE INDEX IX_Volunteers_RoleId ON Volunteers(RoleId);
             ";
 
-            using var volunteersCmd = new SqliteCommand(createVolunteersSql, connection);
+            await using var volunteersCmd = new SqliteCommand(createVolunteersSql, connection);
             await volunteersCmd.ExecuteNonQueryAsync();
+
+            // Create Shifts table
+            var createShiftsSql = @"
+                CREATE TABLE Shifts (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ShiftDate TEXT NOT NULL,
+                    ShiftName TEXT NOT NULL,
+                    CarId TEXT NOT NULL DEFAULT '',
+                    VolunteerId INTEGER NOT NULL,
+                    SmsSentAt TEXT NULL,
+                    CreatedAt TEXT NULL,
+                    UpdatedAt TEXT NULL,
+                    FOREIGN KEY (VolunteerId) REFERENCES Volunteers(Id)
+                );
+                CREATE INDEX IX_Shifts_VolunteerId ON Shifts(VolunteerId);
+                CREATE INDEX IX_Shifts_ShiftDate ON Shifts(ShiftDate);
+            ";
+
+            await using var shiftsCmd = new SqliteCommand(createShiftsSql, connection);
+            await shiftsCmd.ExecuteNonQueryAsync();
 
             // Create default admin user with BCrypt hashed password
             var adminPasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin123!", 12);
@@ -97,7 +117,7 @@ public class DbInitializer
             ";
 
             using var insertCmd = new SqliteCommand(insertAdminSql, connection);
-            insertCmd.Parameters.AddWithValue("@FullName", "מנהל מערכת");
+            insertCmd.Parameters.AddWithValue("@FullName","יניב פנחס");
             insertCmd.Parameters.AddWithValue("@UserName", "admin");
             insertCmd.Parameters.AddWithValue("@PasswordHash", adminPasswordHash);
             insertCmd.Parameters.AddWithValue("@CreatedAt", now);
@@ -117,29 +137,6 @@ public class DbInitializer
             Console.WriteLine($"Database already exists at: {fullPath}");
         }
 
-        // Run migrations for both new and existing databases
-        await RunMigrationsAsync(connection);
-    }
-
-    private static async Task RunMigrationsAsync(SqliteConnection connection)
-    {
-        // Migration: Add Shifts table
-        var createShiftsSql = @"
-            CREATE TABLE IF NOT EXISTS Shifts (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                ShiftDate TEXT NOT NULL,
-                ShiftName TEXT NOT NULL,
-                VolunteerId INTEGER NOT NULL,
-                SmsSentAt TEXT NULL,
-                CreatedAt TEXT NULL,
-                UpdatedAt TEXT NULL,
-                FOREIGN KEY (VolunteerId) REFERENCES Volunteers(Id)
-            );
-            CREATE INDEX IF NOT EXISTS IX_Shifts_VolunteerId ON Shifts(VolunteerId);
-            CREATE INDEX IF NOT EXISTS IX_Shifts_ShiftDate ON Shifts(ShiftDate);
-        ";
-        using var cmd = new SqliteCommand(createShiftsSql, connection);
-        await cmd.ExecuteNonQueryAsync();
     }
 
     public string GetConnectionString()
