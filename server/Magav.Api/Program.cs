@@ -133,11 +133,10 @@ var app = builder.Build();
 var dbInitializer = app.Services.GetRequiredService<DbInitializer>();
 await dbInitializer.InitializeAsync();
 
-// HTTPS (Production)
+// HSTS header (Production) - HTTPS redirect handled by Nginx reverse proxy
 if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
-    app.UseHttpsRedirection();
 }
 
 // CORS

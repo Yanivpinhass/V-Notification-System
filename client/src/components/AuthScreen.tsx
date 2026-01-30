@@ -62,7 +62,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
       <Card className="w-full max-w-md bg-white">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold text-primary">
-            מערכת לניהול תזכורות עבור מערך מתנדבים
+            מערכת תזכורות
           </CardTitle>
           <CardDescription className="text-base text-muted-foreground">
             הזן את פרטי ההתחברות שלך

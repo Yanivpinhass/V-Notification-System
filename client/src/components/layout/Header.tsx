@@ -19,7 +19,25 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   return (
     <header className="admin-header flex items-center justify-between px-4 md:px-6">
-      {/* Right side (appears left in RTL) - Account dropdown and Mobile menu */}
+      {/* Right side in RTL - Hamburger menu (mobile) */}
+      <div className="flex items-center gap-2">
+        {isMobile && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onMenuClick}
+            className="flex items-center justify-center w-8 h-8 p-0"
+          >
+            <Menu size={20} />
+          </Button>
+        )}
+      </div>
+
+      <h1 className="font-bold text-foreground text-lg md:text-2xl text-center flex-1 md:flex-none">
+        מערכת תזכורות
+      </h1>
+
+      {/* Left side in RTL - User account */}
       <div className="flex items-center gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -29,7 +47,7 @@ export const Header: React.FC<HeaderProps> = ({
               <User size={18} className="md:w-5 md:h-5" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuContent align="start" className="w-48">
             <DropdownMenuItem className="text-right">
               <div className="flex flex-col items-end w-full">
                 <span className="font-medium">{currentUser.name}</span>
@@ -46,26 +64,6 @@ export const Header: React.FC<HeaderProps> = ({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-
-        {isMobile && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onMenuClick}
-            className="flex items-center justify-center w-8 h-8 p-0"
-          >
-            <Menu size={20} />
-          </Button>
-        )}
-      </div>
-
-      <h1 className="font-bold text-foreground text-lg md:text-2xl text-center flex-1 md:flex-none">
-        מערכת לניהול תזכורות עבור מערך מתנדבים
-      </h1>
-
-      {/* Left side (appears right in RTL) - Empty for now */}
-      <div className="flex items-center gap-2">
-        {/* Placeholder for future elements */}
       </div>
     </header>
   );

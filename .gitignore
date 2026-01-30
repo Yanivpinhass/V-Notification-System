@@ -44,3 +44,7 @@ input/
 .env
 .env.local
 .env*.local
+client/.env.production
+
+# Published server output
+server/**/publish/
