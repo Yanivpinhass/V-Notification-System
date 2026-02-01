@@ -1,4 +1,4 @@
-import { Home, Users, MessageSquare } from 'lucide-react';
+import { Home, Users, MessageSquare, Settings, Search } from 'lucide-react';
 import { MenuItem } from './types';
 
 export const mainMenuItems: MenuItem[] = [
@@ -17,9 +17,27 @@ export const mainMenuItems: MenuItem[] = [
     icon: MessageSquare,
     requiredRoles: ['Admin', 'SystemManager'],
     subItems: [
-      { id: 'sms-logs', title: 'יומן שליחת הודעות', path: '/message-management/sms-logs' },
-      { id: 'sms-summary', title: 'סיכום שליחה לפי צוות', path: '/message-management/sms-summary' },
       { id: 'revoke-sms-approval', title: 'ביטול הרשמה להודעות', path: '/message-management/revoke' },
+    ]
+  },
+  {
+    id: 'message-tracking',
+    title: 'מעקב הודעות',
+    icon: Search,
+    requiredRoles: ['Admin', 'SystemManager'],
+    subItems: [
+      { id: 'sms-logs', title: 'יומן שליחת הודעות', path: '/message-tracking/sms-logs' },
+      { id: 'sms-summary', title: 'סיכום שליחה לפי צוות', path: '/message-tracking/sms-summary' },
+      { id: 'scheduler-run-log', title: 'היסטוריית הרצות', path: '/message-tracking/scheduler-run-log' },
+    ]
+  },
+  {
+    id: 'settings',
+    title: 'הגדרות',
+    icon: Settings,
+    requiredRoles: ['Admin', 'SystemManager'],
+    subItems: [
+      { id: 'scheduler-settings', title: 'הגדרות תזמון', path: '/settings/scheduler' },
     ]
   },
   {

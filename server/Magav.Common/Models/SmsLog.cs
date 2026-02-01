@@ -11,4 +11,5 @@ public class SmsLog
     public DateTime SentAt { get; set; }
     public string Status { get; set; } = "Success";
     public string? Error { get; set; }
+    public string ReminderType { get; set; } = "SameDay";
 }

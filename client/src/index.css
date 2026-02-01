@@ -218,24 +218,16 @@
   .tab-container {
     background: linear-gradient(135deg, hsl(210 100% 92%), hsl(210 100% 85%));
     border-radius: 12px 12px 0 0;
-    display: flex;
-    gap: 0;
-    overflow: hidden;
   }
 
-  .tab-container::-webkit-scrollbar {
-    display: none;
+  .tab-container nav {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
   }
 
-  .tab-container::-webkit-scrollbar-track {
-    display: none;
-  }
-
-  .tab-container::-webkit-scrollbar-thumb {
-    display: none;
-  }
-
-  .tab-container::-webkit-scrollbar-thumb:hover {
+  .tab-container nav::-webkit-scrollbar {
     display: none;
   }
 

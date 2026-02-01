@@ -115,6 +115,7 @@ public class DbInitializer
                     SentAt TEXT NOT NULL,
                     Status TEXT NOT NULL DEFAULT 'Success',
                     Error TEXT NULL,
+                    ReminderType TEXT NOT NULL DEFAULT 'SameDay',
                     FOREIGN KEY (ShiftId) REFERENCES Shifts(Id)
                 );
                 CREATE INDEX IX_SmsLog_ShiftId ON SmsLog(ShiftId);
@@ -123,6 +124,51 @@ public class DbInitializer
 
             await using var smsLogCmd = new SqliteCommand(createSmsLogSql, connection);
             await smsLogCmd.ExecuteNonQueryAsync();
+
+            // Create SchedulerConfig table
+            var createSchedulerConfigSql = @"
+                CREATE TABLE SchedulerConfig (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    DayGroup TEXT NOT NULL,
+                    ReminderType TEXT NOT NULL,
+                    Time TEXT NOT NULL,
+                    DaysBeforeShift INTEGER NOT NULL DEFAULT 0,
+                    IsEnabled INTEGER NOT NULL DEFAULT 1,
+                    MessageTemplate TEXT NOT NULL DEFAULT '',
+                    UpdatedAt TEXT NULL,
+                    UpdatedBy TEXT NULL,
+                    UNIQUE(DayGroup, ReminderType)
+                );
+            ";
+
+            await using var schedulerConfigCmd = new SqliteCommand(createSchedulerConfigSql, connection);
+            await schedulerConfigCmd.ExecuteNonQueryAsync();
+
+            // Create SchedulerRunLog table
+            var createSchedulerRunLogSql = @"
+                CREATE TABLE SchedulerRunLog (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ConfigId INTEGER NOT NULL,
+                    ReminderType TEXT NOT NULL,
+                    RanAt TEXT NOT NULL,
+                    TargetDate TEXT NOT NULL,
+                    TotalEligible INTEGER NOT NULL DEFAULT 0,
+                    SmsSent INTEGER NOT NULL DEFAULT 0,
+                    SmsFailed INTEGER NOT NULL DEFAULT 0,
+                    Status TEXT NOT NULL DEFAULT 'Pending',
+                    Error TEXT NULL,
+                    FOREIGN KEY (ConfigId) REFERENCES SchedulerConfig(Id),
+                    UNIQUE(ConfigId, TargetDate, ReminderType)
+                );
+                CREATE INDEX IX_SchedulerRunLog_RanAt ON SchedulerRunLog(RanAt);
+                CREATE INDEX IX_SchedulerRunLog_ConfigId ON SchedulerRunLog(ConfigId);
+            ";
+
+            await using var schedulerRunLogCmd = new SqliteCommand(createSchedulerRunLogSql, connection);
+            await schedulerRunLogCmd.ExecuteNonQueryAsync();
+
+            // Seed default SchedulerConfig rows
+            await SeedSchedulerConfigAsync(connection);
 
             // Create default admin user with BCrypt hashed password
             var adminPasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin123!", 12);
@@ -164,6 +210,35 @@ public class DbInitializer
         var fullPath = Path.GetFullPath(_dbPath);
         // Add busy timeout (30 seconds) to prevent "database is locked" errors
         return $"Data Source={fullPath};Password={_dbPassword};Default Timeout=30";
+    }
+
+    private static async Task SeedSchedulerConfigAsync(SqliteConnection connection)
+    {
+        var configs = new[]
+        {
+            ("SunThu", "SameDay", "13:00", 0, "שלום {שם}, תזכורת למשמרת היום ({יום}, {תאריך}), משמרת {משמרת}, רכב {רכב}."),
+            ("SunThu", "Advance", "18:30", 2, "שלום {שם}, תזכורת: יש לך משמרת ביום {יום} {תאריך}, משמרת {משמרת}, רכב {רכב}."),
+            ("Fri",    "SameDay", "10:00", 0, "שלום {שם}, תזכורת למשמרת היום ({יום}, {תאריך}), משמרת {משמרת}, רכב {רכב}."),
+            ("Fri",    "Advance", "12:00", 2, "שלום {שם}, תזכורת: יש לך משמרת ביום {יום} {תאריך}, משמרת {משמרת}, רכב {רכב}."),
+            ("Sat",    "SameDay", "10:00", 0, "שלום {שם}, תזכורת למשמרת היום ({יום}, {תאריך}), משמרת {משמרת}, רכב {רכב}."),
+            ("Sat",    "Advance", "12:00", 2, "שלום {שם}, תזכורת: יש לך משמרת ביום {יום} {תאריך}, משמרת {משמרת}, רכב {רכב}."),
+        };
+
+        var sql = @"INSERT INTO SchedulerConfig (DayGroup, ReminderType, Time, DaysBeforeShift, IsEnabled, MessageTemplate)
+                    VALUES (@DayGroup, @ReminderType, @Time, @DaysBeforeShift, 1, @MessageTemplate)";
+
+        foreach (var (dayGroup, reminderType, time, daysBefore, template) in configs)
+        {
+            await using var cmd = new SqliteCommand(sql, connection);
+            cmd.Parameters.AddWithValue("@DayGroup", dayGroup);
+            cmd.Parameters.AddWithValue("@ReminderType", reminderType);
+            cmd.Parameters.AddWithValue("@Time", time);
+            cmd.Parameters.AddWithValue("@DaysBeforeShift", daysBefore);
+            cmd.Parameters.AddWithValue("@MessageTemplate", template);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        Console.WriteLine("Scheduler config seeded with 6 default entries.");
     }
 
     // === SAMPLE DATA FOR TESTING — remove this method before production ===

@@ -19,6 +19,8 @@ public class MagavDbManager
     private VolunteersRepository? _volunteers;
     private ShiftsRepository? _shifts;
     private SmsLogRepository? _smsLog;
+    private SchedulerConfigRepository? _schedulerConfig;
+    private SchedulerRunLogRepository? _schedulerRunLog;
 
     public MagavDbManager(DbHelper db)
     {
@@ -44,6 +46,10 @@ public class MagavDbManager
     /// SmsLog repository for all SMS log-related database operations
     /// </summary>
     public SmsLogRepository SmsLog => _smsLog ??= new SmsLogRepository(_db);
+
+    public SchedulerConfigRepository SchedulerConfig => _schedulerConfig ??= new SchedulerConfigRepository(_db);
+
+    public SchedulerRunLogRepository SchedulerRunLog => _schedulerRunLog ??= new SchedulerRunLogRepository(_db);
 
     /// <summary>
     /// Direct DbHelper access for complex operations or raw queries.

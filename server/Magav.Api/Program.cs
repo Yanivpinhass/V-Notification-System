@@ -4,9 +4,11 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.RateLimiting;
 using Magav.Common.Database;
+using Magav.Common.Models;
 using Magav.Common.Models.Auth;
 using Magav.Server.Database;
 using Magav.Server.Services;
+using Magav.Server.Services.Sms;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
@@ -82,6 +84,17 @@ builder.Services.AddScoped<AuthService>(sp =>
     var dbManager = sp.GetRequiredService<MagavDbManager>();
     return new AuthService(dbManager, config);
 });
+
+// SMS Provider (InforUMobile) — registered as Transient via IHttpClientFactory
+builder.Services.AddHttpClient<ISmsProvider, InforUMobileSmsProvider>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["InforUMobile:BaseUrl"] ?? "https://api.inforu.co.il/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+
+// SMS Scheduler services
+builder.Services.AddScoped<SmsReminderService>();
+builder.Services.AddHostedService<SmsSchedulerService>();
 
 // Add Rate Limiting for public SMS approval endpoints
 builder.Services.AddRateLimiter(options =>
@@ -912,6 +925,120 @@ app.MapGet("/api/sms-log/summary", async (int? days, MagavDbManager db) =>
 }).RequireAuthorization("CanManageMessages");
 
 // ============================================
+// SCHEDULER CONFIG ENDPOINTS
+// ============================================
+
+// GET scheduler config (Admin + SystemManager can view)
+app.MapGet("/api/scheduler/config", async (MagavDbManager db) =>
+{
+    try
+    {
+        var configs = await db.SchedulerConfig.GetAllAsync();
+        return Results.Ok(ApiResponse<List<SchedulerConfig>>.Ok(configs));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error fetching scheduler config: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בטעינת הגדרות התזמון"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// PUT scheduler config (Admin only)
+app.MapPut("/api/scheduler/config", async (
+    List<SchedulerConfigUpdateDto> configs,
+    MagavDbManager db,
+    HttpContext context) =>
+{
+    try
+    {
+        // Validate exactly 6 entries
+        if (configs == null || configs.Count != 6)
+            return Results.BadRequest(ApiResponse<object>.Fail("נדרשות בדיוק 6 רשומות הגדרה"));
+
+        var timeRegex = new Regex(@"^([01]\d|2[0-3]):[0-5]\d$");
+
+        // Validate and collect existing records in one pass
+        var existingConfigs = new List<SchedulerConfig>();
+        foreach (var config in configs)
+        {
+            // Verify ID exists in DB
+            var existing = await db.SchedulerConfig.GetByIdAsync(config.Id);
+            if (existing == null)
+                return Results.BadRequest(ApiResponse<object>.Fail("רשומת הגדרה לא נמצאה"));
+
+            if (!timeRegex.IsMatch(config.Time))
+                return Results.BadRequest(ApiResponse<object>.Fail("פורמט שעה לא תקין (HH:mm)"));
+
+            if (config.IsEnabled != 0 && config.IsEnabled != 1)
+                return Results.BadRequest(ApiResponse<object>.Fail("ערך הפעלה לא תקין"));
+
+            if (config.DaysBeforeShift < 0 || config.DaysBeforeShift > 7)
+                return Results.BadRequest(ApiResponse<object>.Fail("ימים לפני משמרת חייב להיות בין 0 ל-7"));
+
+            // Cross-validate DaysBeforeShift against ReminderType
+            if (existing.ReminderType == "SameDay" && config.DaysBeforeShift != 0)
+                return Results.BadRequest(ApiResponse<object>.Fail("תזכורת ליום המשמרת חייבת להיות 0 ימים לפני"));
+            if (existing.ReminderType == "Advance" && config.DaysBeforeShift < 1)
+                return Results.BadRequest(ApiResponse<object>.Fail("תזכורת מוקדמת חייבת להיות לפחות יום אחד לפני"));
+
+            if (string.IsNullOrWhiteSpace(config.MessageTemplate) || config.MessageTemplate.Length > 200)
+                return Results.BadRequest(ApiResponse<object>.Fail("תבנית הודעה חייבת להכיל 1-200 תווים"));
+
+            if (!config.MessageTemplate.Contains("{שם}") || !config.MessageTemplate.Contains("{תאריך}"))
+                return Results.BadRequest(ApiResponse<object>.Fail("תבנית הודעה חייבת להכיל {שם} ו-{תאריך}"));
+
+            existingConfigs.Add(existing);
+        }
+
+        // Get username from JWT claims
+        var usernameClaim = context.User.FindFirst(ClaimTypes.Name);
+        var username = usernameClaim?.Value ?? "unknown";
+
+        // Update all configs (using already-fetched records — no double DB fetch)
+        for (var i = 0; i < configs.Count; i++)
+        {
+            var config = configs[i];
+            var existing = existingConfigs[i];
+            existing.Time = config.Time;
+            existing.DaysBeforeShift = config.DaysBeforeShift;
+            existing.IsEnabled = config.IsEnabled;
+            existing.MessageTemplate = config.MessageTemplate;
+            existing.UpdatedAt = DateTime.UtcNow;
+            existing.UpdatedBy = username;
+            await db.SchedulerConfig.UpdateAsync(existing);
+        }
+
+        return Results.Ok(ApiResponse<object>.Ok(null!, "ההגדרות נשמרו בהצלחה"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error updating scheduler config: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בשמירת ההגדרות"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("AdminOnly");
+
+// GET scheduler run log (Admin + SystemManager)
+app.MapGet("/api/scheduler/run-log", async (MagavDbManager db) =>
+{
+    try
+    {
+        var logs = await db.SchedulerRunLog.GetRecentAsync(50);
+        return Results.Ok(ApiResponse<List<SchedulerRunLog>>.Ok(logs));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error fetching scheduler run log: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בטעינת היסטוריית ההרצות"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// ============================================
 // RUN
 // ============================================
 
@@ -960,3 +1087,6 @@ public class SmsLogSummaryDto
     public int SentFail { get; set; }
     public int NotSent { get; set; }
 }
+
+// Scheduler Config DTO (editable fields only)
+public record SchedulerConfigUpdateDto(int Id, string Time, int DaysBeforeShift, int IsEnabled, string MessageTemplate);

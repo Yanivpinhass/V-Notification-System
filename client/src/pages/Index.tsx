@@ -9,6 +9,8 @@ import { RevokeSmsApprovalPage } from '@/pages/RevokeSmsApprovalPage';
 import { ShiftsImportPage } from '@/pages/ShiftsImportPage';
 import { SmsLogsPage } from '@/pages/SmsLogsPage';
 import { SmsLogSummaryPage } from '@/pages/SmsLogSummaryPage';
+import { SchedulerSettingsPage } from '@/pages/SchedulerSettingsPage';
+import { SchedulerRunLogPage } from '@/pages/SchedulerRunLogPage';
 import { authService } from '@/services/authService';
 
 interface User {
@@ -62,6 +64,10 @@ const Index = () => {
         return <RevokeSmsApprovalPage />;
       case 'shifts-import':
         return <ShiftsImportPage />;
+      case 'scheduler-settings':
+        return <SchedulerSettingsPage />;
+      case 'scheduler-run-log':
+        return <SchedulerRunLogPage />;
       default:
         return <PlaceholderPage />;
     }

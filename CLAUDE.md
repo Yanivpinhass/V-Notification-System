@@ -4,23 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Megav is a Hebrew RTL admin system with a React frontend client. The UI is in Hebrew with right-to-left layout.
+Megav is a Hebrew RTL volunteer shift management and SMS reminder system. The UI is entirely in Hebrew with right-to-left layout. It manages volunteer patrol shifts, sends SMS reminders via a background scheduler, and provides admin tools for user/volunteer/shift management.
 
 ## Security First
 
-**Security is the top priority for this project.** All code changes must prioritize security above all else:
-- Always validate and sanitize all inputs (client and server)
-- Never trust client-side data
-- Use parameterized queries - never concatenate SQL
-- Implement proper authentication and authorization checks
-- Encrypt sensitive data at rest and in transit
-- Follow OWASP security guidelines
-- Review all dependencies for known vulnerabilities
+**Security is the top priority.** Key rules:
+- Use parameterized queries only (`@0`, `@1`, ...) — never concatenate SQL
+- All new API endpoints MUST include `.RequireAuthorization()` unless intentionally public
+- Never expose exception details in API responses — use generic Hebrew error messages
+- Use `Results.Json()` with `ApiResponse<T>` instead of `Results.Problem()` (which can leak details in dev mode)
+- File uploads require CSRF header check, extension validation, and magic byte verification
+- Validate all inputs server-side even if validated client-side
 
 ## Development Commands
 
-All commands should be run from the `client/` directory:
-
+**Client** (from `client/` directory):
 ```bash
 cd client
 npm install       # Install dependencies
@@ -30,214 +28,370 @@ npm run lint      # Run ESLint
 npm run preview   # Preview production build
 ```
 
+**Server** (from `server/Magav.Api/` directory):
+```bash
+cd server/Magav.Api
+dotnet build      # Build server
+dotnet run        # Run server at http://localhost:5015
+```
+
+Both must run simultaneously for development. Vite proxies `/api/*` requests to `localhost:5015`.
+
+There are no automated tests in this project.
+
+**Default dev credentials:** username `admin`, password `Admin123!` (seeded by DbInitializer on first run).
+
 ## Architecture
 
-### Tech Stack
-- **Frontend:** React (latest stable) + TypeScript + Vite
-- **Backend:** ASP.NET (latest stable) with Minimal APIs
-- **API:** REST using ASP.NET Minimal API pattern
-- **Database:** SQLCipher (encrypted SQLite)
-- **Styling:** Tailwind CSS + Shadcn/UI (Radix primitives)
-- **State:** TanStack React Query for server state, React useState for local state
-- **Forms:** React Hook Form + Zod validation
-- **Routing:** React Router DOM (single-page with state-based navigation)
+### Solution Structure
 
-### Key Directories
+Three .NET 8 projects:
+
+```
+server/
+├── Magav.Common/     # Shared: Models, DbHelper ORM wrapper, extensions, Excel utilities
+├── Magav.Server/     # Business logic: Services, Repositories, SMS subsystem
+└── Magav.Api/        # Entry point: Program.cs (Minimal API endpoints, DI, middleware)
+```
+
+- `Magav.Api` references both `Magav.Server` and `Magav.Common`
+- `Magav.Server` references `Magav.Common`
+- All entity/model classes go in `Magav.Common/Models/` (namespace `Magav.Common.Models`)
+- Request/response DTOs are defined as records at the bottom of `Program.cs`
+
+### Tech Stack
+
+- **Frontend:** React 18 + TypeScript + Vite
+- **Backend:** ASP.NET 8 with Minimal APIs
+- **Database:** SQLCipher (encrypted SQLite) with WAL mode + 30s busy timeout
+- **ORM:** NPoco via custom `DbHelper` wrapper
+- **Styling:** Tailwind CSS + Shadcn/UI (Radix primitives)
+- **Forms:** React Hook Form + Zod validation (used in AuthScreen, UserDialog, ChangePasswordDialog, VolunteerSmsApprovalPage)
+- **Data fetching:** `useState` + `useEffect` with direct service calls (TanStack Query provider is set up but not actively used)
+- **Toast notifications:** Sonner (`toast` from `sonner`)
+- **PWA:** vite-plugin-pwa with service worker
+
+### Client Key Directories
 
 ```
 client/src/
 ├── components/
-│   ├── ui/              # Shadcn/UI components (don't modify directly)
+│   ├── ui/              # Shadcn/UI components (modified: switch.tsx, dialog.tsx for RTL)
 │   ├── layout/          # Header, Sidebar, SubNavigation, menuItems
 │   ├── AdminLayout.tsx  # Main layout wrapper with resizable panels
-│   └── AuthScreen.tsx   # Username/password login form
+│   └── AuthScreen.tsx   # Username/password login form (uses RHF + Zod)
 ├── services/
-│   ├── api/BaseApiClient.ts  # HTTP client with auth headers
-│   └── authService.ts        # Authentication (login, logout, token refresh)
+│   ├── api/BaseApiClient.ts  # HTTP client with auth headers + token management
+│   └── *.ts                  # Domain service classes extending BaseApiClient
 ├── pages/               # Page components rendered by Index.tsx
+│   └── components/      # Shared page sub-components (e.g. DayGroupConfigCard)
 ├── hooks/               # Custom hooks (use-mobile, use-toast)
 ├── config/auth.ts       # API base URL configuration
 └── lib/utils.ts         # Tailwind cn() helper
 ```
 
-### Entity/Model Location
+### TypeScript Configuration
 
-**All entity and model classes must be placed in `server/Magav.Common/Models/`** (namespace `Magav.Common.Models`). This includes database entities, DTOs, and parsed data models. This keeps models shared and accessible to both `Magav.Common` and `Magav.Server`.
+The project uses relaxed TypeScript settings:
+- `strictNullChecks: false`
+- `noImplicitAny: false`
 
-### Navigation Pattern
+These are set in `tsconfig.json` and affect how null/undefined and untyped values are handled.
 
-This app uses **state-based navigation**, not URL routing. The `Index.tsx` page:
-1. Shows `AuthScreen` if not authenticated
-2. Shows `AdminLayout` with content based on `activeSubItem` state
-3. Menu items are defined in `components/layout/menuItems.ts`
+### Database Layer
 
-To add a new page:
+**DbHelper** wraps NPoco and provides async CRUD operations. Key method names (these differ from NPoco defaults):
+- `FetchAsync<T>(expression)` — query with lambda predicate
+- `FetchAsync<T>(sql, args)` — raw SQL with parameterized args (`@0`, `@1`, ...)
+- `FetchAllAsync<T>()` — all rows (no-argument; use this, NOT `FetchAsync<T>()` with 0 args)
+- `InsertAsync<T>`, `UpdateAsync<T>`, `DeleteAsync<T>` — standard CRUD
+- `ExecuteQueryAsync(sql, args)` — raw SQL execution (NOT `ExecuteAsync`)
+- `ExecuteScalarAsync<T>(sql, args)` — scalar queries
+- `SingleOrDefaultByIdAsync<T>(id)` — by primary key
+
+**Repository pattern**: `Repository<T>` base class provides virtual CRUD methods. Specialized repositories in `Magav.Server/Database/Repositories/` add domain-specific queries.
+
+**MagavDbManager**: Scoped (per-request) facade with lazy-initialized repository properties:
+```csharp
+db.Users             // UsersRepository
+db.Volunteers        // VolunteersRepository
+db.Shifts            // ShiftsRepository
+db.SmsLog            // SmsLogRepository
+db.SchedulerConfig   // SchedulerConfigRepository
+db.SchedulerRunLog   // SchedulerRunLogRepository
+db.Db                // Direct DbHelper for raw SQL
+```
+
+### Routing & Navigation
+
+**Two-tier routing:**
+
+1. **React Router** (`App.tsx`) handles top-level routes:
+   - `/` → `Index` (the admin SPA)
+   - `/sms-approval/:accessKey` → `VolunteerSmsApprovalPage` (public page, no auth)
+   - `*` → `NotFound`
+
+2. **State-based navigation** inside the admin app (`Index.tsx`):
+   - `activeSubItem` state determines which page component renders
+   - Menu items defined in `components/layout/menuItems.ts` with `requiredRoles` filtering
+   - Not URL-based — no browser back/forward for internal pages
+
+**To add a new admin page:**
 1. Create component in `pages/`
-2. Add menu item in `menuItems.ts`
-3. Add case in `Index.tsx` `renderContent()` switch
+2. Add menu item in `menuItems.ts` (with `requiredRoles` if needed)
+3. Add `case` in `Index.tsx` `renderContent()` switch
+
+### Authentication & Authorization
+
+**JWT flow:**
+- Login returns `accessToken` (15min), `refreshToken` (7 days), and `user` object
+- Refresh tokens stored as SHA256 hashes server-side, rotated on each refresh
+- `BaseApiClient` auto-attaches `Authorization: Bearer {token}` header
+- Account lockout after 5 failed attempts (15 min)
+
+**Roles** (case-sensitive strings): `"Admin"`, `"SystemManager"`, `"User"`
+
+**Authorization policies** (defined in Program.cs):
+- `"AdminOnly"` — Admin role only
+- `"CanManageMessages"` — Admin + SystemManager
+- `"CanImportVolunteers"` — Admin + SystemManager
+
+**User object in localStorage** (key: `"user"`):
+```typescript
+{
+  id: string;
+  name: string;
+  roles: string[];    // Array, e.g. ["Admin"] — NOT a single string
+  permissions: Record<string, any>;
+}
+```
+
+**Important:** The role field is `user.roles` (string array), not `user.role`. Always check with `roles.includes("Admin")`.
 
 ### API Integration
 
-- Client communicates with server via REST API (ASP.NET Minimal APIs)
-- Backend expected at `http://localhost:5015` (proxied via `/api`)
 - All API responses wrapped in `ApiResponse<T>` with `success`, `data`, `message` fields
-- Auth tokens stored in localStorage (`accessToken`, `refreshToken`, `user`)
-- `BaseApiClient` automatically adds Bearer token to requests
-
-### API Endpoint Security
-
-**CRITICAL: All new API endpoints MUST include `.RequireAuthorization()` unless they are intentionally public.**
-
-```csharp
-// Protected endpoint (default for all business endpoints)
-app.MapGet("/api/users", async (MagavDbManager db) =>
-{
-    // ...
-}).RequireAuthorization();
-
-// Role-restricted endpoint
-app.MapDelete("/api/users/{id}", async (int id) =>
-{
-    // ...
-}).RequireAuthorization(policy => policy.RequireRole("Admin"));
-```
+- Auth tokens stored in localStorage: `accessToken`, `refreshToken`, `user`
+- File uploads use `postFormData()` with `X-Requested-With: XMLHttpRequest` CSRF header
 
 **Intentionally public endpoints (no auth required):**
-- `POST /api/auth/login` - Users must be able to login
-- `POST /api/auth/refresh` - Token refresh before expiry
-- `GET /api/health` - Health checks for monitoring
+- `POST /api/auth/login`, `POST /api/auth/refresh`
+- `GET /api/health`
+- `POST /api/public/sms-approval/{accessKey}/*` (rate-limited, 3 req/5 min)
 
-### Error Handling - No Sensitive Data Exposure
+### Error Handling Pattern
 
-**CRITICAL: Never expose exception details or sensitive data in API error responses.**
-
-Error messages returned to the UI must NOT include:
-- Exception messages or stack traces
-- Database column names, table structures, or query details
-- User IDs, volunteer IDs, or other identifying information
-- Internal system paths, configuration, or implementation details
-
-**Required pattern for all API endpoints:**
 ```csharp
 catch (Exception ex)
 {
-    // Log full details SERVER-SIDE ONLY (for debugging)
-    Console.Error.WriteLine($"Error: {ex}");
-
-    // Return GENERIC message to client - no technical details
+    Console.Error.WriteLine($"Error context: {ex}");  // Full details server-side only
     return Results.Json(
-        ApiResponse<object>.Fail("אירעה שגיאה"),  // Generic Hebrew error
+        ApiResponse<object>.Fail("אירעה שגיאה"),       // Generic Hebrew message to client
         statusCode: StatusCodes.Status500InternalServerError);
 }
 ```
 
-**Why `Results.Json` instead of `Results.Problem`:**
-- `Results.Problem()` can include exception details in development mode
-- `Results.Json()` with explicit ApiResponse ensures consistent, safe responses
+Never include exception messages, stack traces, DB column names, internal paths, or user IDs in API error responses.
+
+### File Upload Validation Pattern
+
+All file upload endpoints must follow this pattern (see volunteers/shifts import):
+1. **CSRF header**: Require `X-Requested-With: XMLHttpRequest`
+2. **File existence + size**: Max 10MB
+3. **Extension**: `.xlsx` or `.xls` only
+4. **Magic bytes**: ZIP signature (`0x50 0x4B`) or OLE signature (`0xD0 0xCF`)
+5. Process in memory via `MemoryStream` — never save to disk
+
+### SMS Scheduler Subsystem
+
+Background service that sends shift reminders to volunteers. Lives in `Magav.Server/Services/Sms/`:
+
+- **ISmsProvider** — Interface for SMS sending
+- **InforUMobileSmsProvider** — InforUMobile XML API implementation (registered via `AddHttpClient<ISmsProvider, InforUMobileSmsProvider>`)
+- **SmsSchedulerService** — `BackgroundService` polling every 60s, uses `IServiceScopeFactory` to resolve scoped services
+- **SmsReminderService** — Scoped service that queries eligible shifts, builds messages from templates, sends SMS, logs results
+
+**Key design decisions:**
+- Cross-platform timezone: `OperatingSystem.IsWindows() ? "Israel Standard Time" : "Asia/Jerusalem"`
+- Duplicate prevention: `SmsLog` table with `ReminderType` column — allows both Advance and SameDay reminders per shift
+- Race condition prevention: `UNIQUE(ConfigId, TargetDate, ReminderType)` on `SchedulerRunLog`
+- Template placeholders: `{שם}`, `{שם מלא}`, `{תאריך}`, `{יום}`, `{משמרת}`, `{רכב}`
+
+### DI Registration Patterns
+
+In `Program.cs`:
+```csharp
+builder.Services.AddSingleton<DbInitializer>();                              // DB init, singleton
+builder.Services.AddScoped<MagavDbManager>(...);                             // Per-request DB access
+builder.Services.AddScoped<AuthService>(...);                                // Per-request auth
+builder.Services.AddScoped<SmsReminderService>();                            // Per-scope SMS logic
+builder.Services.AddHttpClient<ISmsProvider, InforUMobileSmsProvider>(...);   // Transient via factory
+builder.Services.AddHostedService<SmsSchedulerService>();                    // Singleton background service
+```
+
+The `SmsSchedulerService` (singleton) resolves scoped services via `IServiceScopeFactory.CreateScope()`.
+
+### Public Pages (Access Key Pattern)
+
+The SMS approval page (`/sms-approval/:accessKey`) is a public route that does not require authentication. Instead, it uses a secret access key configured in `appsettings.json` under `PublicPages:SmsApprovalAccessKey`. The server validates this key on every request. Rate limiting (3 requests/5 min per IP) is applied via `RequireRateLimiting("sms-approval")`.
 
 ### RTL/Hebrew Considerations
 
 - All components use `dir="rtl"` and Hebrew font (Noto Sans Hebrew)
 - CSS uses RTL-aware flexbox positioning
 - Error messages and labels are in Hebrew
-- **Dialog close buttons (X):** Must be positioned on the LEFT side (`left-4`) not the right, since RTL reverses the expected close button position. The Shadcn/UI dialog component has been modified to reflect this.
+- **Dialog close buttons (X):** Must be positioned on the LEFT side (`left-4`) not the right, since RTL reverses the expected close button position. The Shadcn/UI `dialog.tsx` has been modified to reflect this.
+- **Directional UI primitives:** Components that use CSS `translate-x` for positioning (e.g., Switch thumb) break in RTL because the browser mirrors the entire component, causing the transform to move in the wrong direction. Fix: add `dir="ltr"` to the component root so it renders in a fixed LTR context. The Shadcn/UI `switch.tsx` has been modified with this fix. Apply the same pattern to any new components using directional transforms.
 
-## Shift Schedule Excel File Format (תוכנית מתמי"ד)
+## Shift Schedule Excel File Format
 
 The system processes volunteer shift schedule Excel files (`.xlsx`). These files contain weekly patrol/shift assignments for volunteer teams. Input files are placed in the `input/` directory.
 
 ### File Structure
 
-- **Sheets:** A file can have 1 or more sheets. Each sheet typically covers a month (e.g., sheet "1.26" = January 2026, "2.26" = February 2026). **All sheets must be parsed.**
-- **Relevant columns:** Only columns **A through G** (7 columns = 7 days of the week, Sunday through Saturday).
-- **Row 1:** Title header row — contains "תוכנית פעילות מתמי״ד" (can be ignored during parsing).
+- **Sheets:** 1 or more sheets per file. Each sheet typically covers a month (e.g., "1.26" = January 2026). **All sheets must be parsed.**
+- **Relevant columns:** Only columns **A through G** (7 days of the week, Sunday through Saturday).
+- **Row 1:** Title header row ("תוכנית פעילות מתמי״ד") — ignore during parsing.
 
 ### Weekly Block Layout
 
-Each sheet contains multiple **weekly blocks** stacked vertically, separated by empty rows. Each weekly block has this structure:
+Each sheet contains multiple **weekly blocks** stacked vertically, separated by empty rows:
 
 ```
 Row 1:  [Date Sun] [Date Mon] [Date Tue] [Date Wed] [Date Thu] [Date Fri] [Date Sat]
-Row 2:  [Day-of-week indicators — stored as 1900-era dates, represent יום א through יום ש]
+Row 2:  [Day-of-week indicators — 1900-era Excel serial dates]
 Row 3:  [Empty separator]
---- Team Block 1 (e.g., מרחבים 221) ---
-Row 4:  [Shift/team name — same value repeated across all 7 columns]
-Row 5:  [Car number — same value repeated across all 7 columns]
-Row 6:  [Volunteer 1 name or empty] × 7 columns
-Row 7:  [Volunteer 2 name or empty] × 7 columns
-Row 8:  [Volunteer 3 name or empty] × 7 columns
-Row 9:  [Volunteer 4 name or empty] × 7 columns
---- Team Block 2 (e.g., מרחבים 222) — starts immediately, no separator ---
-Row 10: [Shift/team name]
-Row 11: [Car number]
-Row 12-15: [4 volunteer rows]
---- Team Block 3 (e.g., מרחבים 211) ---
-Row 16: [Shift/team name]
-Row 17: [Car number]
-Row 18-21: [4 volunteer rows]
---- Team Block 4 (e.g., מרחבים 212) ---
-Row 22: [Shift/team name]
-Row 23: [Car number]
-Row 24-27: [4 volunteer rows]
+--- Team Block (6 rows each, back-to-back, no separator between teams) ---
+Row 4:  [Shift/team name — same value across all 7 columns]
+Row 5:  [Car number — same value across all 7 columns]
+Row 6-9: [4 volunteer name rows, some cells may be empty]
+--- Next Team Block ---
+...
 [Empty rows before next weekly block]
 ```
 
-Each team block is exactly **6 rows** (name + car + 4 volunteers), and teams follow **back-to-back with no separators** between them.
+Each team block is exactly **6 rows** (name + car + 4 volunteers). There are typically **4 teams per weekly block**.
 
-### How to Read a Team's Shift for a Specific Date
+### Reading Shift Data
 
-Each **column** (A-G) represents a specific **day of the week**:
-- Column A = Sunday (יום א)
-- Column B = Monday (יום ב)
-- Column C = Tuesday (יום ג)
-- Column D = Wednesday (יום ד)
-- Column E = Thursday (יום ה)
-- Column F = Friday (יום ו)
-- Column G = Saturday (שבת)
-
-To extract shift data for a specific date:
-1. Find the **dates row** where that date appears — the column it's in determines the day
-2. Within the same weekly block, for each team block read **vertically down that column**:
-   - **Team/shift name** (e.g., "מרחבים 221")
-   - **Car number** (e.g., "21-850")
-   - **Volunteer names** (exactly 4 rows below the car number; some cells may be empty)
-
-### Per-Day Shift Record
-
-For each day, there are **4 teams**. Each team's shift record contains:
-
-| Field | Description | Example |
-|-------|-------------|---------|
-| **Date** | The calendar date from the dates row | 01/02/2026 |
-| **Day of week** | Derived from column position (A=Sun...G=Sat) | יום א |
-| **Shift/team name** | Patrol area identifier | מרחבים 221 |
-| **Car number** | Vehicle assignment | 21-850 |
-| **Volunteers** | Exactly 4 cells (some may be empty) | ארז וייל, ליאור אסחייק, מוטי עטיה, אוריין הראל |
+Each column (A-G) = a day (A=Sunday ... G=Saturday). To extract a shift for a date:
+1. Find the dates row containing that date
+2. Read down that column within each team block: team name, car number, volunteer names (4 slots)
 
 ### Day-of-Week Row Encoding
 
-The day-of-week row uses Excel serial dates from 1900:
-- `01/01/1900` = יום א (Sunday)
-- `02/01/1900` = יום ב (Monday)
-- `03/01/1900` = יום ג (Tuesday)
-- `04/01/1900` = יום ד (Wednesday)
-- `05/01/1900` = יום ה (Thursday)
-- `06/01/1900` = יום ו (Friday)
-- `07/01/1900` = שבת (Saturday)
-
-### Known Station/Team Names and Car Numbers
-
-| Team Name | Car Number |
-|-----------|------------|
-| מרחבים 221 | 21-850 |
-| מרחבים 222 | 21-176 |
-| מרחבים 211 | 21-174 |
-| מרחבים 212 | 21-851 |
-
-**Note:** Team names and car numbers may vary between files. Always read them from the Excel data rather than hardcoding.
+Uses Excel serial dates from 1900: `01/01/1900` = Sunday through `07/01/1900` = Saturday.
 
 ### Parsing Notes
 
-- Some weekly blocks may have the team structure (name + car number rows) but **empty volunteer slots** — this means no volunteers are assigned yet for those weeks.
-- Each team always has exactly **4 volunteer rows**. Not all cells in those rows will have names — empty cells mean no volunteer is assigned for that day in that slot.
-- The number of sheets and weeks per sheet can vary between files.
+- Team names and car numbers may vary between files — always read from data, never hardcode
+- Some blocks have team structure but empty volunteer slots (unassigned weeks)
+- Each team always has exactly 4 volunteer rows (some cells may be empty)
+
+## Production Deployment (Ubuntu Server)
+
+### Server Layout
+
+```
+/opt/magav/
+├── server/          # .NET published output (Magav.Api.dll + dependencies)
+│   └── appsettings.json  # Production config (secrets, real credentials)
+├── client/          # Vite production build (static files)
+└── db/              # SQLCipher database (magav.db, auto-created on first run)
+```
+
+### Publishing
+
+**Server** (from Windows, targets Linux):
+```bash
+cd server/Magav.Api
+dotnet publish -c Release -r linux-x64 --self-contained false -o ../../publish/server
+```
+
+**Client:**
+```bash
+cd client
+npm run build
+# Copy client/dist/* to publish/client/
+```
+
+**Copy to server:**
+```bash
+scp -r publish/* user@server-ip:/tmp/magav-deploy/
+# Then on server: sudo cp -r /tmp/magav-deploy/server/* /opt/magav/server/
+# And: sudo cp -r /tmp/magav-deploy/client/* /opt/magav/client/
+```
+
+### Runtime
+
+- **Runtime:** .NET 8 ASP.NET Core Runtime (`aspnetcore-runtime-8.0`)
+- **Process manager:** systemd (`/etc/systemd/system/magav.service`)
+- **Reverse proxy:** Nginx serves client static files and proxies `/api/` to `http://localhost:5015`
+- **Service user:** `www-data`
+
+### systemd Service
+
+```ini
+[Unit]
+Description=Magav API Server
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/magav/server
+ExecStart=/usr/bin/dotnet /opt/magav/server/Magav.Api.dll
+Restart=always
+RestartSec=10
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=DOTNET_PRINT_TELEMETRY_MESSAGE=false
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Nginx Config
+
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.com;
+
+    root /opt/magav/client;
+    index index.html;
+
+    location /api/ {
+        proxy_pass http://localhost:5015;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection keep-alive;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+### Common Server Commands
+
+```bash
+sudo systemctl restart magav       # Restart after deploy
+sudo systemctl status magav        # Check status
+sudo journalctl -u magav -f        # Tail logs
+sudo chown -R www-data:www-data /opt/magav  # Fix permissions after deploy
+```
+
+### Database Reset
+
+To recreate the database with fresh schema (e.g., after schema changes), delete the DB file and restart:
+```bash
+sudo rm /opt/magav/db/magav.db
+sudo systemctl restart magav
+```
+The `DbInitializer` will recreate all tables and seed default data on startup.
