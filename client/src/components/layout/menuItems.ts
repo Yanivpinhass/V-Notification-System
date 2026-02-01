@@ -17,6 +17,8 @@ export const mainMenuItems: MenuItem[] = [
     icon: MessageSquare,
     requiredRoles: ['Admin', 'SystemManager'],
     subItems: [
+      { id: 'sms-logs', title: 'יומן שליחת הודעות', path: '/message-management/sms-logs' },
+      { id: 'sms-summary', title: 'סיכום שליחה לפי צוות', path: '/message-management/sms-summary' },
       { id: 'revoke-sms-approval', title: 'ביטול הרשמה להודעות', path: '/message-management/revoke' },
     ]
   },

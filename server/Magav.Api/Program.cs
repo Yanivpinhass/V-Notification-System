@@ -842,6 +842,76 @@ app.MapPost("/api/volunteers/revoke-sms-approval", async (
 }).RequireAuthorization("CanManageMessages");
 
 // ============================================
+// SMS LOG ENDPOINTS (Admin + SystemManager)
+// ============================================
+
+// GET SMS log entries for the last N days
+app.MapGet("/api/sms-log", async (int? days, MagavDbManager db) =>
+{
+    try
+    {
+        var lookbackDays = days ?? 5;
+        if (lookbackDays < 1 || lookbackDays > 90)
+            lookbackDays = 5;
+
+        var from = DateTime.UtcNow.Date.AddDays(-lookbackDays).ToString("o");
+
+        var logs = await db.Db.FetchAsync<SmsLogDto>(
+            @"SELECT sl.Id, sl.SentAt, sl.Status, sl.Error,
+                     s.ShiftDate, s.ShiftName,
+                     v.MappingName as VolunteerName
+              FROM SmsLog sl
+              JOIN Shifts s ON sl.ShiftId = s.Id
+              JOIN Volunteers v ON s.VolunteerId = v.Id
+              WHERE sl.SentAt >= @0
+              ORDER BY sl.SentAt DESC", from);
+
+        return Results.Ok(ApiResponse<object>.Ok(logs));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error fetching SMS logs: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בטעינת הנתונים"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// GET SMS log summary grouped by team per day for the last N days
+app.MapGet("/api/sms-log/summary", async (int? days, MagavDbManager db) =>
+{
+    try
+    {
+        var lookbackDays = days ?? 7;
+        if (lookbackDays < 1 || lookbackDays > 90)
+            lookbackDays = 7;
+
+        var from = DateTime.UtcNow.Date.AddDays(-lookbackDays).ToString("o");
+
+        var summary = await db.Db.FetchAsync<SmsLogSummaryDto>(
+            @"SELECT s.ShiftDate, s.ShiftName,
+                     COUNT(*) as TotalVolunteers,
+                     COUNT(CASE WHEN sl.Status = 'Success' THEN 1 END) as SentSuccess,
+                     COUNT(CASE WHEN sl.Status = 'Fail' THEN 1 END) as SentFail,
+                     COUNT(CASE WHEN sl.Id IS NULL THEN 1 END) as NotSent
+              FROM Shifts s
+              LEFT JOIN SmsLog sl ON sl.ShiftId = s.Id
+              WHERE s.ShiftDate >= @0
+              GROUP BY s.ShiftDate, s.ShiftName
+              ORDER BY s.ShiftDate DESC, s.ShiftName", from);
+
+        return Results.Ok(ApiResponse<object>.Ok(summary));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error fetching SMS log summary: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בטעינת הנתונים"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// ============================================
 // RUN
 // ============================================
 
@@ -868,3 +938,25 @@ public record VerifyVolunteerRequest(string InternalId);
 public record VerifyVolunteerResponse(string Status);
 public record SubmitSmsApprovalRequest(string InternalId, string FirstName, string LastName, string MobilePhone, bool ApproveToReceiveSms);
 public record RevokeSmsApprovalRequest(string InternalId);
+
+// SMS Log DTOs (for raw SQL query mapping)
+public class SmsLogDto
+{
+    public int Id { get; set; }
+    public string SentAt { get; set; } = "";
+    public string Status { get; set; } = "";
+    public string? Error { get; set; }
+    public string ShiftDate { get; set; } = "";
+    public string ShiftName { get; set; } = "";
+    public string VolunteerName { get; set; } = "";
+}
+
+public class SmsLogSummaryDto
+{
+    public string ShiftDate { get; set; } = "";
+    public string ShiftName { get; set; } = "";
+    public int TotalVolunteers { get; set; }
+    public int SentSuccess { get; set; }
+    public int SentFail { get; set; }
+    public int NotSent { get; set; }
+}

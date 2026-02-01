@@ -18,6 +18,7 @@ public class MagavDbManager
     private UsersRepository? _users;
     private VolunteersRepository? _volunteers;
     private ShiftsRepository? _shifts;
+    private SmsLogRepository? _smsLog;
 
     public MagavDbManager(DbHelper db)
     {
@@ -38,6 +39,11 @@ public class MagavDbManager
     /// Shifts repository for all shift-related database operations
     /// </summary>
     public ShiftsRepository Shifts => _shifts ??= new ShiftsRepository(_db);
+
+    /// <summary>
+    /// SmsLog repository for all SMS log-related database operations
+    /// </summary>
+    public SmsLogRepository SmsLog => _smsLog ??= new SmsLogRepository(_db);
 
     /// <summary>
     /// Direct DbHelper access for complex operations or raw queries.

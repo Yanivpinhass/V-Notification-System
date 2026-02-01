@@ -7,6 +7,8 @@ import { VolunteersImportPage } from '@/pages/VolunteersImportPage';
 import { SystemUsersPage } from '@/pages/SystemUsersPage';
 import { RevokeSmsApprovalPage } from '@/pages/RevokeSmsApprovalPage';
 import { ShiftsImportPage } from '@/pages/ShiftsImportPage';
+import { SmsLogsPage } from '@/pages/SmsLogsPage';
+import { SmsLogSummaryPage } from '@/pages/SmsLogSummaryPage';
 import { authService } from '@/services/authService';
 
 interface User {
@@ -52,6 +54,10 @@ const Index = () => {
         return <VolunteersImportPage />;
       case 'system-users':
         return <SystemUsersPage onUserUpdated={refreshUserInfo} />;
+      case 'sms-logs':
+        return <SmsLogsPage />;
+      case 'sms-summary':
+        return <SmsLogSummaryPage />;
       case 'revoke-sms-approval':
         return <RevokeSmsApprovalPage />;
       case 'shifts-import':
