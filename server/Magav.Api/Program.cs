@@ -863,9 +863,9 @@ app.MapGet("/api/sms-log", async (int? days, MagavDbManager db) =>
 {
     try
     {
-        var lookbackDays = days ?? 5;
+        var lookbackDays = days ?? 90;
         if (lookbackDays < 1 || lookbackDays > 90)
-            lookbackDays = 5;
+            lookbackDays = 90;
 
         var from = DateTime.UtcNow.Date.AddDays(-lookbackDays).ToString("o");
 
@@ -895,9 +895,9 @@ app.MapGet("/api/sms-log/summary", async (int? days, MagavDbManager db) =>
 {
     try
     {
-        var lookbackDays = days ?? 7;
+        var lookbackDays = days ?? 90;
         if (lookbackDays < 1 || lookbackDays > 90)
-            lookbackDays = 7;
+            lookbackDays = 90;
 
         var from = DateTime.UtcNow.Date.AddDays(-lookbackDays).ToString("o");
 

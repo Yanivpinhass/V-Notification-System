@@ -139,29 +139,29 @@ export const SystemUsersPage: React.FC<SystemUsersPageProps> = ({ onUserUpdated 
           ) : (
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="text-right">שם מלא</TableHead>
-                  <TableHead className="text-right">שם משתמש</TableHead>
-                  <TableHead className="text-right">תפקיד</TableHead>
-                  <TableHead className="text-right">סטטוס</TableHead>
-                  <TableHead className="text-right">התחברות אחרונה</TableHead>
-                  <TableHead className="text-right">נוצר</TableHead>
-                  <TableHead className="text-right">פעולות</TableHead>
+                <TableRow className="bg-muted/60">
+                  <TableHead className="text-center font-semibold text-foreground">שם מלא</TableHead>
+                  <TableHead className="text-center font-semibold text-foreground">שם משתמש</TableHead>
+                  <TableHead className="text-center font-semibold text-foreground">תפקיד</TableHead>
+                  <TableHead className="text-center font-semibold text-foreground">סטטוס</TableHead>
+                  <TableHead className="text-center font-semibold text-foreground">התחברות אחרונה</TableHead>
+                  <TableHead className="text-center font-semibold text-foreground">נוצר</TableHead>
+                  <TableHead className="text-center font-semibold text-foreground">פעולות</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {users.map((user) => (
                   <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.fullName}</TableCell>
-                    <TableCell>{user.userName}</TableCell>
-                    <TableCell>
+                    <TableCell className="text-right font-medium">{user.fullName}</TableCell>
+                    <TableCell className="text-right">{user.userName}</TableCell>
+                    <TableCell className="text-center">
                       <Badge
                         variant={user.role === 'Admin' ? 'default' : 'secondary'}
                       >
                         {roleLabels[user.role] || user.role}
                       </Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       <Badge
                         variant={user.isActive ? 'default' : 'destructive'}
                         className={user.isActive ? 'bg-green-600 hover:bg-green-700' : ''}
@@ -169,10 +169,10 @@ export const SystemUsersPage: React.FC<SystemUsersPageProps> = ({ onUserUpdated 
                         {user.isActive ? 'פעיל' : 'לא פעיל'}
                       </Badge>
                     </TableCell>
-                    <TableCell>{formatDate(user.lastConnected)}</TableCell>
-                    <TableCell>{formatDate(user.createdAt)}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
+                    <TableCell className="text-center">{formatDate(user.lastConnected)}</TableCell>
+                    <TableCell className="text-center">{formatDate(user.createdAt)}</TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex justify-center gap-2">
                         <Button
                           variant="ghost"
                           size="sm"

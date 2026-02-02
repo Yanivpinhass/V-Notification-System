@@ -29,7 +29,7 @@ export const SmsLogSummaryPage: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await smsLogService.getSummary(7);
+      const data = await smsLogService.getSummary();
       setSummary(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'אירעה שגיאה בטעינת הנתונים');
@@ -46,7 +46,7 @@ export const SmsLogSummaryPage: React.FC = () => {
     <div className="p-4">
       <Card>
         <CardHeader className="pb-4">
-          <CardTitle>סיכום שליחה לפי צוות (7 ימים אחרונים)</CardTitle>
+          <CardTitle>סיכום שליחה לפי צוות</CardTitle>
         </CardHeader>
         <CardContent>
           {error && (
@@ -66,28 +66,28 @@ export const SmsLogSummaryPage: React.FC = () => {
           ) : (
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="text-right">תאריך</TableHead>
-                  <TableHead className="text-right">שם צוות</TableHead>
-                  <TableHead className="text-right">מתנדבים בצוות</TableHead>
-                  <TableHead className="text-right">נשלחו בהצלחה</TableHead>
-                  <TableHead className="text-right">נכשלו</TableHead>
-                  <TableHead className="text-right">לא נשלחו</TableHead>
+                <TableRow className="bg-muted/60">
+                  <TableHead className="text-center font-semibold text-foreground">תאריך</TableHead>
+                  <TableHead className="text-center font-semibold text-foreground">שם צוות</TableHead>
+                  <TableHead className="text-center font-semibold text-foreground">מתנדבים בצוות</TableHead>
+                  <TableHead className="text-center font-semibold text-foreground">נשלחו בהצלחה</TableHead>
+                  <TableHead className="text-center font-semibold text-foreground">נכשלו</TableHead>
+                  <TableHead className="text-center font-semibold text-foreground">לא נשלחו</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {summary.map((row, index) => (
                   <TableRow key={`${row.shiftDate}-${row.shiftName}-${index}`}>
-                    <TableCell>{formatDate(row.shiftDate)}</TableCell>
-                    <TableCell>{row.shiftName}</TableCell>
-                    <TableCell>{row.totalVolunteers}</TableCell>
-                    <TableCell className="text-green-600 font-medium">
+                    <TableCell className="text-center">{formatDate(row.shiftDate)}</TableCell>
+                    <TableCell className="text-right">{row.shiftName}</TableCell>
+                    <TableCell className="text-center">{row.totalVolunteers}</TableCell>
+                    <TableCell className="text-center text-green-600 font-medium">
                       {row.sentSuccess}
                     </TableCell>
-                    <TableCell className={row.sentFail > 0 ? 'text-red-600 font-medium' : ''}>
+                    <TableCell className={`text-center ${row.sentFail > 0 ? 'text-red-600 font-medium' : ''}`}>
                       {row.sentFail}
                     </TableCell>
-                    <TableCell className={row.notSent > 0 ? 'text-orange-600 font-medium' : ''}>
+                    <TableCell className={`text-center ${row.notSent > 0 ? 'text-orange-600 font-medium' : ''}`}>
                       {row.notSent}
                     </TableCell>
                   </TableRow>

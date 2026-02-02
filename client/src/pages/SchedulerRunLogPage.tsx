@@ -91,28 +91,28 @@ export const SchedulerRunLogPage: React.FC = () => {
           ) : (
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>תאריך הרצה</TableHead>
-                  <TableHead>סוג תזכורת</TableHead>
-                  <TableHead>תאריך יעד</TableHead>
-                  <TableHead>זכאים</TableHead>
-                  <TableHead>נשלחו</TableHead>
-                  <TableHead>נכשלו</TableHead>
-                  <TableHead>סטטוס</TableHead>
+                <TableRow className="bg-muted/60">
+                  <TableHead className="text-center font-semibold text-foreground">תאריך הרצה</TableHead>
+                  <TableHead className="text-center font-semibold text-foreground">סוג תזכורת</TableHead>
+                  <TableHead className="text-center font-semibold text-foreground">תאריך יעד</TableHead>
+                  <TableHead className="text-center font-semibold text-foreground">זכאים</TableHead>
+                  <TableHead className="text-center font-semibold text-foreground">נשלחו</TableHead>
+                  <TableHead className="text-center font-semibold text-foreground">נכשלו</TableHead>
+                  <TableHead className="text-center font-semibold text-foreground">סטטוס</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {runLogs.map((log) => (
                   <TableRow key={log.id}>
-                    <TableCell className="text-sm">{formatRunDate(log.ranAt)}</TableCell>
-                    <TableCell className="text-sm">
+                    <TableCell className="text-center text-sm">{formatRunDate(log.ranAt)}</TableCell>
+                    <TableCell className="text-center text-sm">
                       {REMINDER_TYPE_LABELS[log.reminderType] || log.reminderType}
                     </TableCell>
-                    <TableCell className="text-sm">{formatTargetDate(log.targetDate)}</TableCell>
-                    <TableCell className="text-sm">{log.totalEligible}</TableCell>
-                    <TableCell className="text-sm">{log.smsSent}</TableCell>
-                    <TableCell className="text-sm">{log.smsFailed}</TableCell>
-                    <TableCell>
+                    <TableCell className="text-center text-sm">{formatTargetDate(log.targetDate)}</TableCell>
+                    <TableCell className="text-center text-sm">{log.totalEligible}</TableCell>
+                    <TableCell className="text-center text-sm">{log.smsSent}</TableCell>
+                    <TableCell className="text-center text-sm">{log.smsFailed}</TableCell>
+                    <TableCell className="text-center">
                       <Badge
                         variant={
                           log.status === 'Completed' ? 'default' :

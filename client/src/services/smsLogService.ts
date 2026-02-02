@@ -20,12 +20,12 @@ export interface SmsLogSummaryEntry {
 }
 
 class SmsLogService extends BaseApiClient {
-  async getLogs(days: number): Promise<SmsLogEntry[]> {
-    return this.get<SmsLogEntry[]>('/sms-log', { days });
+  async getLogs(days?: number): Promise<SmsLogEntry[]> {
+    return this.get<SmsLogEntry[]>('/sms-log', days ? { days } : {});
   }
 
-  async getSummary(days: number): Promise<SmsLogSummaryEntry[]> {
-    return this.get<SmsLogSummaryEntry[]>('/sms-log/summary', { days });
+  async getSummary(days?: number): Promise<SmsLogSummaryEntry[]> {
+    return this.get<SmsLogSummaryEntry[]>('/sms-log/summary', days ? { days } : {});
   }
 }
 
