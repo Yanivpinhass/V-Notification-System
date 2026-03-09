@@ -1,16 +1,30 @@
 # Frontend (React/Vite)
-client/node_modules/
-client/dist/
-client/.vite-temp/
-client/.env.local
-client/.env*.local
+web/client/node_modules/
+web/client/dist/
+web/client/.vite-temp/
+web/client/.env.local
+web/client/.env*.local
+web/client/.env.production
 
-# Backend (ASP.NET)
-server/**/bin/
-server/**/obj/
-server/**/.vs/
-server/**/*.user
-server/**/*.suo
+# Backend (ASP.NET) - legacy web server
+web/server/**/bin/
+web/server/**/obj/
+web/server/**/.vs/
+web/server/**/*.user
+web/server/**/*.suo
+
+# Android
+android/.gradle/
+android/.idea/
+android/build/
+android/app/build/
+android/app/release/
+android/local.properties
+android/app/src/main/assets/web/
+*.apk
+*.aab
+*.keystore
+*.jks
 
 # IDE & Editor Settings
 .vscode/
@@ -22,16 +36,17 @@ server/**/*.suo
 Thumbs.db
 
 # Database & Sensitive Data
-db/*.db
-db/**/*.db
-db/**/Pass.txt
-db/Pass.txt
+db/
+*.db
 *.db-journal
 *.db-wal
 *.db-shm
 
 # Test data / input files (may contain sensitive data)
 input/
+*.xlsx
+parse_output.txt
+parse_shifts.py
 
 # Logs
 *.log
@@ -44,7 +59,8 @@ input/
 .env
 .env.local
 .env*.local
-client/.env.production
 
-# Published server output
-server/**/publish/
+# Build output
+publish/
+nul
+plan.md

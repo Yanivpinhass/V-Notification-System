@@ -1,0 +1,99 @@
+package com.magav.app.scheduler
+
+import android.app.AlarmManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import com.magav.app.MagavApplication
+import java.time.DayOfWeek
+import java.time.ZoneId
+import java.time.ZonedDateTime
+
+class AlarmScheduler(private val context: Context) {
+
+    private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    private val israelTz = ZoneId.of("Asia/Jerusalem")
+
+    suspend fun scheduleAllAlarms() {
+        val database = MagavApplication.database
+        val configs = database.schedulerConfigDao().getEnabled()
+
+        android.util.Log.d("AlarmScheduler", "Scheduling alarms for ${configs.size} enabled configs")
+
+        // Cancel all existing alarms first
+        cancelAllAlarms(configs.size * 7) // max possible alarms
+
+        for (config in configs) {
+            val days = getDaysForGroup(config.dayGroup)
+            for (day in days) {
+                scheduleAlarmForDay(config.id, config.time, day)
+            }
+        }
+        android.util.Log.d("AlarmScheduler", "All alarms scheduled")
+    }
+
+    private fun scheduleAlarmForDay(configId: Int, time: String, dayOfWeek: DayOfWeek) {
+        val parts = time.split(":")
+        val hour = parts[0].toInt()
+        val minute = parts[1].toInt()
+
+        val now = ZonedDateTime.now(israelTz)
+        var target = now.with(dayOfWeek)
+            .withHour(hour).withMinute(minute).withSecond(0).withNano(0)
+
+        // If target is in the past, move to next week
+        if (target.isBefore(now) || target.isEqual(now)) {
+            target = target.plusWeeks(1)
+        }
+
+        val triggerAtMillis = target.toInstant().toEpochMilli()
+        val requestCode = configId * 10 + dayOfWeek.value // unique per config+day
+
+        val intent = Intent(context, SmsAlarmReceiver::class.java).apply {
+            putExtra("configId", configId)
+            action = "com.magav.app.SMS_ALARM_$requestCode"
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context, requestCode, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (alarmManager.canScheduleExactAlarms()) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent
+                )
+                android.util.Log.d("AlarmScheduler", "Alarm set: configId=$configId day=$dayOfWeek at $target (millis=$triggerAtMillis)")
+            } else {
+                android.util.Log.w("AlarmScheduler", "Cannot schedule exact alarms - permission not granted")
+            }
+        } else {
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent
+            )
+            android.util.Log.d("AlarmScheduler", "Alarm set: configId=$configId day=$dayOfWeek at $target")
+        }
+    }
+
+    private fun cancelAllAlarms(maxAlarms: Int) {
+        for (requestCode in 0 until maxAlarms) {
+            val intent = Intent(context, SmsAlarmReceiver::class.java)
+            val pendingIntent = PendingIntent.getBroadcast(
+                context, requestCode, intent,
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+            )
+            pendingIntent?.let { alarmManager.cancel(it) }
+        }
+    }
+
+    private fun getDaysForGroup(dayGroup: String): List<DayOfWeek> = when (dayGroup) {
+        "SunThu" -> listOf(
+            DayOfWeek.SUNDAY, DayOfWeek.MONDAY, DayOfWeek.TUESDAY,
+            DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY
+        )
+        "Fri" -> listOf(DayOfWeek.FRIDAY)
+        "Sat" -> listOf(DayOfWeek.SATURDAY)
+        else -> emptyList()
+    }
+}

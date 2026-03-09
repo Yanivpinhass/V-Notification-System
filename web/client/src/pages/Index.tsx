@@ -1,0 +1,100 @@
+import React, { useState, useCallback } from 'react';
+import { AuthScreen } from '@/components/AuthScreen';
+import { AdminLayout } from '@/components/AdminLayout';
+import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
+import { PlaceholderPage } from '@/pages/PlaceholderPage';
+import { VolunteersImportPage } from '@/pages/VolunteersImportPage';
+import { SystemUsersPage } from '@/pages/SystemUsersPage';
+import { VolunteersManagementPage } from '@/pages/VolunteersManagementPage';
+import { ShiftsImportPage } from '@/pages/ShiftsImportPage';
+import { SmsLogsPage } from '@/pages/SmsLogsPage';
+import { SmsLogSummaryPage } from '@/pages/SmsLogSummaryPage';
+import { SchedulerSettingsPage } from '@/pages/SchedulerSettingsPage';
+import { SchedulerRunLogPage } from '@/pages/SchedulerRunLogPage';
+import { authService } from '@/services/authService';
+
+interface User {
+  name: string;
+}
+
+const Index = () => {
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
+  const [activeSubItem, setActiveSubItem] = useState('shifts-import');
+
+  const handleAuthentication = (authenticatedUser: User, needsPasswordChange: boolean) => {
+    setUser(authenticatedUser);
+    setIsAuthenticated(true);
+    setMustChangePassword(needsPasswordChange);
+  };
+
+  const handlePasswordChanged = () => {
+    setMustChangePassword(false);
+  };
+
+  // Refresh user info from localStorage (called after user edits)
+  const refreshUserInfo = useCallback(() => {
+    const currentUser = authService.getCurrentUser();
+    if (currentUser) {
+      setUser({ name: currentUser.name });
+    }
+  }, []);
+
+  const handleLogout = async () => {
+    await authService.logout();
+    setUser(null);
+    setIsAuthenticated(false);
+  };
+
+  // Function to render content based on active sub-item
+  const renderContent = () => {
+    switch (activeSubItem) {
+      case 'dashboard':
+        return <PlaceholderPage />;
+      case 'volunteers-import':
+        return <VolunteersImportPage />;
+      case 'system-users':
+        return <SystemUsersPage onUserUpdated={refreshUserInfo} />;
+      case 'sms-logs':
+        return <SmsLogsPage />;
+      case 'sms-summary':
+        return <SmsLogSummaryPage />;
+      case 'volunteers-management':
+        return <VolunteersManagementPage />;
+      case 'shifts-import':
+        return <ShiftsImportPage />;
+      case 'scheduler-settings':
+        return <SchedulerSettingsPage />;
+      case 'scheduler-run-log':
+        return <SchedulerRunLogPage />;
+      default:
+        return <PlaceholderPage />;
+    }
+  };
+
+  if (!isAuthenticated) {
+    return <AuthScreen onAuthenticated={handleAuthentication} />;
+  }
+
+  return (
+    <>
+      <AdminLayout
+        currentUser={user}
+        activeSubItem={activeSubItem}
+        onSubItemChange={setActiveSubItem}
+        onLogout={handleLogout}
+      >
+        {renderContent()}
+      </AdminLayout>
+
+      {/* Force password change dialog */}
+      <ChangePasswordDialog
+        open={mustChangePassword}
+        onPasswordChanged={handlePasswordChanged}
+      />
+    </>
+  );
+};
+
+export default Index;

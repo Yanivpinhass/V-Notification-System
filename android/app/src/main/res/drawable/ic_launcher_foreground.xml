@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Shield shape with "M" letter -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,24 L30,34 L30,54 C30,70 40,84 54,88 C68,84 78,70 78,54 L78,34 Z" />
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M54,28 L34,37 L34,54 C34,68 42,80 54,84 C66,80 74,68 74,54 L74,37 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M42,65 L42,45 L48,45 L54,57 L60,45 L66,45 L66,65 L61,65 L61,53 L55,65 L53,65 L47,53 L47,65 Z" />
+</vector>
