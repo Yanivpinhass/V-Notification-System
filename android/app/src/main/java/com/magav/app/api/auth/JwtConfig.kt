@@ -14,7 +14,7 @@ object JwtConfig {
     private const val ISSUER = "magav-app"
     private const val AUDIENCE = "magav-users"
     private const val ACCESS_TOKEN_EXPIRY_MINUTES = 15L
-    private const val REFRESH_TOKEN_EXPIRY_DAYS = 7L
+    private const val REFRESH_TOKEN_EXPIRY_DAYS = 3L
 
     private var secretKey: String = ""
 

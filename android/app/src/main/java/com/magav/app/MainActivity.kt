@@ -16,15 +16,23 @@ import android.webkit.WebViewClient
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.magav.app.auth.BiometricAuthHelper
+import com.magav.app.auth.NativeAuthBridge
+import com.magav.app.auth.SessionManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import org.koin.android.ext.android.inject
 
 class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var loadingSpinner: View
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
+
+    private val sessionManager: SessionManager by inject()
+    private val biometricHelper = BiometricAuthHelper()
 
     private val fileChooserLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -49,6 +57,13 @@ class MainActivity : AppCompatActivity() {
         startServerService()
         requestPermissions()
         waitForServerAndLoad()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (sessionManager.hasValidSession()) {
+            sessionManager.updateLastActivity()
+        }
     }
 
     private fun setupWebView() {
@@ -83,6 +98,7 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
         }
+        webView.addJavascriptInterface(NativeAuthBridge(sessionManager), "NativeAuth")
     }
 
     private fun startServerService() {
@@ -91,7 +107,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestPermissions() {
-        // SMS + phone state permissions
         val needed = mutableListOf<String>()
         if (checkSelfPermission(android.Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
             needed.add(android.Manifest.permission.SEND_SMS)
@@ -99,7 +114,6 @@ class MainActivity : AppCompatActivity() {
         if (checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
             needed.add(android.Manifest.permission.READ_PHONE_STATE)
         }
-        // Notification permission (Android 13+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 needed.add(android.Manifest.permission.POST_NOTIFICATIONS)
@@ -108,7 +122,6 @@ class MainActivity : AppCompatActivity() {
         if (needed.isNotEmpty()) {
             permissionLauncher.launch(needed.toTypedArray())
         }
-        // Exact alarm permission (Android 12+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager = getSystemService(AlarmManager::class.java)
             if (!alarmManager.canScheduleExactAlarms()) {
@@ -141,12 +154,9 @@ class MainActivity : AppCompatActivity() {
                 if (!ready) delay(500)
             }
             if (ready) {
-                loadingSpinner.visibility = View.GONE
-                webView.visibility = View.VISIBLE
-                webView.loadUrl("http://localhost:5015")
+                handleSessionAwareStartup()
             } else {
-                loadingSpinner.visibility = View.GONE
-                webView.visibility = View.VISIBLE
+                showWebView()
                 webView.loadDataWithBaseURL(null,
                     "<html dir='rtl'><body style='text-align:center;padding:40px;font-family:sans-serif'>" +
                     "<h2>שגיאה בהפעלת השרת</h2><p>יש לסגור ולהפעיל מחדש את האפליקציה</p></body></html>",
@@ -155,9 +165,118 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun handleSessionAwareStartup() {
+        if (!sessionManager.hasValidSession()) {
+            // No session — show login screen
+            showWebView()
+            webView.loadUrl("http://localhost:5015")
+        } else if (!sessionManager.needsBiometric()) {
+            // Recent activity — silent refresh (spinner stays visible)
+            silentRefreshAndLoad()
+        } else if (biometricHelper.isBiometricAvailable(this)) {
+            // Stale activity + biometric available — show prompt (spinner stays visible behind dialog)
+            biometricHelper.showBiometricPrompt(
+                activity = this,
+                onSuccess = { silentRefreshAndLoad() },
+                onFailure = {
+                    sessionManager.clearSession()
+                    showWebView()
+                    webView.loadUrl("http://localhost:5015")
+                }
+            )
+        } else {
+            // Stale activity + no biometric — silent refresh anyway
+            silentRefreshAndLoad()
+        }
+    }
+
+    private fun silentRefreshAndLoad() {
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                refreshTokenViaHttp()
+            }
+            if (result != null) {
+                sessionManager.updateRefreshToken(result.refreshToken)
+                sessionManager.updateLastActivity()
+                showWebView()
+                injectTokensAndLoad(result.accessToken, result.refreshToken, result.userJson)
+            } else {
+                sessionManager.clearSession()
+                showWebView()
+                webView.loadUrl("http://localhost:5015")
+            }
+        }
+    }
+
+    private fun refreshTokenViaHttp(): RefreshResult? {
+        val storedToken = sessionManager.getRefreshToken() ?: return null
+        return try {
+            val url = java.net.URL("http://localhost:5015/api/auth/refresh")
+            val conn = url.openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 5000
+            conn.readTimeout = 5000
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.doOutput = true
+
+            val body = JSONObject().put("refreshToken", storedToken).toString()
+            conn.outputStream.use { it.write(body.toByteArray()) }
+
+            if (conn.responseCode != 200) {
+                conn.disconnect()
+                return null
+            }
+
+            val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+            conn.disconnect()
+
+            val json = JSONObject(responseText)
+            if (!json.optBoolean("success", false)) return null
+
+            val data = json.getJSONObject("data")
+            RefreshResult(
+                accessToken = data.getString("accessToken"),
+                refreshToken = data.getString("refreshToken"),
+                userJson = data.getJSONObject("user").toString()
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Silent refresh failed", e)
+            null
+        }
+    }
+
+    private fun injectTokensAndLoad(accessToken: String, refreshToken: String, userJson: String) {
+        // Escape for JavaScript single-quote string context
+        val safeUserJson = userJson
+            .replace("\\", "\\\\")
+            .replace("'", "\\'")
+            .replace("\n", "\\n")
+            .replace("\r", "")
+        val html = """
+            <html><body><script>
+            localStorage.setItem('accessToken', '${accessToken}');
+            localStorage.setItem('refreshToken', '${refreshToken}');
+            localStorage.setItem('user', '${safeUserJson}');
+            window.location.replace('/');
+            </script></body></html>
+        """.trimIndent()
+        webView.loadDataWithBaseURL("http://localhost:5015", html, "text/html", "UTF-8", null)
+    }
+
+    private fun showWebView() {
+        loadingSpinner.visibility = View.GONE
+        webView.visibility = View.VISIBLE
+    }
+
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (webView.canGoBack()) webView.goBack()
         else @Suppress("DEPRECATION") super.onBackPressed()
     }
+
+    private data class RefreshResult(
+        val accessToken: String,
+        val refreshToken: String,
+        val userJson: String
+    )
 }

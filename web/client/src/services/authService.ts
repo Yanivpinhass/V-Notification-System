@@ -70,6 +70,14 @@ class AuthService {
       localStorage.setItem('refreshToken', result.data.refreshToken);
       localStorage.setItem('user', JSON.stringify(result.data.user));
 
+      // Notify native Android layer for session persistence
+      if ((window as any).NativeAuth) {
+        (window as any).NativeAuth.onLoginSuccess(
+          result.data.refreshToken,
+          JSON.stringify(result.data.user)
+        );
+      }
+
       return result.data;
     } catch (error) {
       console.error('Login error:', error);
@@ -108,6 +116,11 @@ class AuthService {
       localStorage.setItem('refreshToken', result.data.refreshToken);
       localStorage.setItem('user', JSON.stringify(result.data.user));
 
+      // Keep native session in sync after token rotation
+      if ((window as any).NativeAuth) {
+        (window as any).NativeAuth.onTokenRefresh(result.data.refreshToken);
+      }
+
       return result.data;
     } catch (error) {
       console.error('Token refresh error:', error);
@@ -134,6 +147,11 @@ class AuthService {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
+
+      // Clear native session
+      if ((window as any).NativeAuth) {
+        (window as any).NativeAuth.onLogout();
+      }
     }
   }
 

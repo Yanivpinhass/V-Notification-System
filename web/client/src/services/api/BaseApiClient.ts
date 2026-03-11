@@ -10,6 +10,8 @@ export interface ApiResponse<T = any> {
 export class BaseApiClient {
   protected baseUrl: string;
 
+  private static refreshPromise: Promise<void> | null = null;
+
   constructor() {
     this.baseUrl = authConfig.apiBaseUrl;
   }
@@ -37,6 +39,36 @@ export class BaseApiClient {
       'Content-Type': 'application/json',
       ...(token && { Authorization: `Bearer ${token}` }),
     };
+  }
+
+  private async fetchWithAuth(url: string, options: RequestInit): Promise<Response> {
+    const headers = await this.getAuthHeaders();
+    const mergedOptions = { ...options, headers: { ...headers, ...(options.headers || {}) } };
+
+    let response = await fetch(url, mergedOptions);
+
+    if (response.status === 401) {
+      // Try refreshing token (single attempt, deduplicated)
+      if (!BaseApiClient.refreshPromise) {
+        BaseApiClient.refreshPromise = import('@/services/authService')
+          .then(({ authService }) => authService.refreshToken())
+          .then(() => {})
+          .finally(() => { BaseApiClient.refreshPromise = null; });
+      }
+      try {
+        await BaseApiClient.refreshPromise;
+        // Retry with new token
+        const newHeaders = await this.getAuthHeaders();
+        response = await fetch(url, { ...options, headers: { ...newHeaders, ...(options.headers || {}) } });
+      } catch {
+        // Refresh failed — authService.refreshToken() already cleared localStorage
+        // Reload to show login screen
+        window.location.reload();
+        throw new Error('Session expired');
+      }
+    }
+
+    return response;
   }
 
   protected async handleResponse<T>(response: Response): Promise<T> {
@@ -91,9 +123,8 @@ export class BaseApiClient {
         ? this.buildUrlWithQuery(endpoint, params)
         : `${this.baseUrl}${endpoint}`;
 
-      const response = await fetch(url, {
+      const response = await this.fetchWithAuth(url, {
         method: 'GET',
-        headers: await this.getAuthHeaders(),
       });
 
       return await this.handleResponse<T>(response);
@@ -105,9 +136,8 @@ export class BaseApiClient {
 
   protected async post<T, U = any>(endpoint: string, data?: U): Promise<T> {
     try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      const response = await this.fetchWithAuth(`${this.baseUrl}${endpoint}`, {
         method: 'POST',
-        headers: await this.getAuthHeaders(),
         ...(data && { body: JSON.stringify(data) }),
       });
 
@@ -120,9 +150,8 @@ export class BaseApiClient {
 
   protected async put<T, U = any>(endpoint: string, data?: U): Promise<T> {
     try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      const response = await this.fetchWithAuth(`${this.baseUrl}${endpoint}`, {
         method: 'PUT',
-        headers: await this.getAuthHeaders(),
         ...(data && { body: JSON.stringify(data) }),
       });
 
@@ -135,9 +164,8 @@ export class BaseApiClient {
 
   protected async delete<T>(endpoint: string): Promise<T> {
     try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      const response = await this.fetchWithAuth(`${this.baseUrl}${endpoint}`, {
         method: 'DELETE',
-        headers: await this.getAuthHeaders(),
       });
 
       return await this.handleDeleteResponse<T>(response);

@@ -31,3 +31,8 @@
 # Keep SQLCipher
 -keep class net.sqlcipher.** { *; }
 -dontwarn net.sqlcipher.**
+
+# Keep JavaScript interface for WebView bridge
+-keepclassmembers class com.magav.app.auth.NativeAuthBridge {
+    @android.webkit.JavascriptInterface *;
+}

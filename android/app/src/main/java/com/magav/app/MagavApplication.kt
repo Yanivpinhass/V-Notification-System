@@ -8,6 +8,7 @@ import androidx.room.Room
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import com.magav.app.db.MagavDatabase
+import com.magav.app.auth.SessionManager
 import com.magav.app.service.AuthService
 import com.magav.app.sms.AndroidSmsProvider
 import com.magav.app.sms.SmsProvider
@@ -143,4 +144,5 @@ val appModule = module {
     single<SmsProvider> { AndroidSmsProvider(androidContext()) }
     single { AuthService(get()) }
     single { SmsReminderService(get(), get()) }
+    single { SessionManager(androidContext()) }
 }

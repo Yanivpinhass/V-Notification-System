@@ -19,8 +19,11 @@ interface User {
 }
 
 const Index = () => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState<User | null>(() => {
+    const currentUser = authService.getCurrentUser();
+    return currentUser ? { name: currentUser.name } : null;
+  });
+  const [isAuthenticated, setIsAuthenticated] = useState(() => authService.isAuthenticated());
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [activeSubItem, setActiveSubItem] = useState('shifts-import');
 
