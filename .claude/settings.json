@@ -18,7 +18,27 @@
       "Bash(where.exe adb:*)",
       "Read(//c/Users/**)",
       "Bash(/c/Users/yaniv/AppData/Local/Android/Sdk/platform-tools/adb.exe install:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(cmd //c build-apk.bat)",
+      "Bash(cmd //c \"cd /d c:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System && build-apk.bat\")",
+      "Bash(./gradlew.bat assembleDebug)",
+      "Bash(where adb.exe)",
+      "Bash(cmd.exe //c \"where adb\")",
+      "Read(//c/platform-tools/**)",
+      "Read(//c/Android/platform-tools/**)",
+      "Bash(bash build-apk.bat)",
+      "Bash(cmd.exe //c \".\\\\gradlew.bat assembleDebug\")",
+      "Bash(where adb:*)",
+      "Read(//c/MyData/Projects/Magav/V-Notification-System/$LOCALAPPDATA/Android/Sdk/platform-tools/**)",
+      "Read(//c/MyData/Projects/Magav/V-Notification-System/$HOME/AppData/Local/Android/Sdk/platform-tools/**)",
+      "Bash(\"$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe\" install:*)",
+      "Bash(cmd.exe /c \"cd /d c:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System && build-apk.bat\")",
+      "Bash(rm -rf android/app/src/main/assets/web)",
+      "Bash(mkdir -p android/app/src/main/assets/web)",
+      "Bash(cp -r web/client/dist/* android/app/src/main/assets/web/)",
+      "Bash(rm -rf \"c:/MyData/Projects/Magav/V-Notification-System/android/app/src/main/assets/web\")",
+      "Bash(mkdir -p \"c:/MyData/Projects/Magav/V-Notification-System/android/app/src/main/assets/web\")",
+      "Bash(cp -r \"c:/MyData/Projects/Magav/V-Notification-System/web/client/dist/\"* \"c:/MyData/Projects/Magav/V-Notification-System/android/app/src/main/assets/web/\")"
     ]
   }
 }

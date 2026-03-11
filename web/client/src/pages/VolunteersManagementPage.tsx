@@ -101,44 +101,46 @@ export const VolunteersManagementPage: React.FC = () => {
   };
 
   return (
-    <div className="p-4">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-4">
-          <CardTitle>ניהול מתנדבים</CardTitle>
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="חיפוש לפי שם..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pr-9 w-[200px]"
+    <div className="p-4 max-w-full overflow-hidden">
+      <Card className="overflow-hidden">
+        <CardHeader className="pb-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <CardTitle>ניהול מתנדבים</CardTitle>
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleImport}
+                className="hidden"
               />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isImporting}
+              >
+                {isImporting ? (
+                  <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4 ml-2" />
+                )}
+                ייבוא
+              </Button>
+              <Button size="sm" onClick={handleCreate}>
+                <Plus className="h-4 w-4 ml-2" />
+                חדש
+              </Button>
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleImport}
-              className="hidden"
+          </div>
+          <div className="relative">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="חיפוש לפי שם..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pr-9"
             />
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isImporting}
-            >
-              {isImporting ? (
-                <Loader2 className="h-4 w-4 ml-2 animate-spin" />
-              ) : (
-                <Upload className="h-4 w-4 ml-2" />
-              )}
-              ייבוא מאקסל
-            </Button>
-            <Button size="sm" onClick={handleCreate}>
-              <Plus className="h-4 w-4 ml-2" />
-              מתנדב חדש
-            </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -157,6 +159,7 @@ export const VolunteersManagementPage: React.FC = () => {
               {searchTerm ? 'לא נמצאו מתנדבים התואמים לחיפוש' : 'לא נמצאו מתנדבים'}
             </div>
           ) : (
+            <div className="overflow-x-auto -mx-6">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/60">
@@ -201,6 +204,7 @@ export const VolunteersManagementPage: React.FC = () => {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

@@ -335,6 +335,30 @@ android/app/src/main/java/com/magav/app/
 - **Dialog close buttons (X):** Must be positioned on the LEFT side (`left-4`) not the right, since RTL reverses the expected close button position. The Shadcn/UI `dialog.tsx` has been modified to reflect this.
 - **Directional UI primitives:** Components that use CSS `translate-x` for positioning (e.g., Switch thumb) break in RTL because the browser mirrors the entire component, causing the transform to move in the wrong direction. Fix: add `dir="ltr"` to the component root so it renders in a fixed LTR context. The Shadcn/UI `switch.tsx` has been modified with this fix. Apply the same pattern to any new components using directional transforms.
 
+### Android WebView Keyboard & Fixed Positioning
+
+**Critical:** `position: fixed` elements do NOT move when the soft keyboard opens in Android WebView. Unlike Chrome browser, Android WebView does not support `interactive-widget=resizes-content` (it's a Chrome-only feature), so the CSS layout viewport does NOT shrink when the keyboard appears. This means:
+
+- `position: fixed; bottom: 0` stays at the bottom of the full screen, hidden behind the keyboard
+- CSS `vh` units do NOT update when the keyboard opens
+- `window.visualViewport` resize events may not fire reliably
+- `window.innerHeight` / `window.resize` may not reflect the keyboard
+
+**The working solution for dialogs/modals with form inputs:**
+1. Position dialogs at the **top** of the screen (`top: 0` or `top: 8px`), NOT as a bottom sheet
+2. Make the dialog scrollable (`overflow-y: auto`) with generous bottom padding (`pb-[40vh]` on mobile) so the last inputs can be scrolled well above where the keyboard sits
+3. On `focusin`, use `scrollIntoView({ block: 'start' })` to scroll the focused input to the top of the dialog — far from the keyboard at the bottom
+4. Do NOT rely on CSS viewport units, `visualViewport` API, or `window.resize` for keyboard detection in WebView — none of these are reliable
+
+**What does NOT work in Android WebView:**
+- `interactive-widget=resizes-content` meta tag (Chrome-only)
+- `max-h-[85dvh]` or any `dvh`/`svh` units (not supported)
+- CSS variables set via `visualViewport.resize` events
+- `window.innerHeight`-based pixel calculations on resize
+- Bottom-sheet dialogs (`bottom: 0`) — keyboard covers them
+
+The Shadcn/UI `dialog.tsx` has been modified with this top-aligned + scroll approach.
+
 ## Shift Schedule Excel File Format
 
 The system processes volunteer shift schedule Excel files (`.xlsx`). Input files are placed in the `input/` directory.

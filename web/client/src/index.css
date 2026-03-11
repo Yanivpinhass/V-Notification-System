@@ -320,4 +320,25 @@
     background: linear-gradient(135deg, hsl(217 91% 30%), hsl(217 91% 20%));
     transform: scale(1.05);
   }
+
+  /* Mobile keyboard & viewport handling */
+  .h-screen-safe {
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .min-h-screen-safe {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  /* Safe area insets for notched devices */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
 }

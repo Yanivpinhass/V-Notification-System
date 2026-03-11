@@ -128,7 +128,15 @@ export const SchedulerSettingsPage: React.FC = () => {
 
   return (
     <div className="p-4 space-y-4">
-      <h2 className="text-lg font-semibold">הגדרות תזמון SMS</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">הגדרות תזמון SMS</h2>
+        {!isReadOnly && (
+          <Button onClick={handleSave} disabled={isSaving} className="h-11 px-6 text-base">
+            {isSaving && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+            שמור שינויים
+          </Button>
+        )}
+      </div>
 
       {error && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
@@ -146,15 +154,6 @@ export const SchedulerSettingsPage: React.FC = () => {
           onConfigChange={handleConfigChange}
         />
       ))}
-
-      {!isReadOnly && (
-        <div className="flex justify-start">
-          <Button onClick={handleSave} disabled={isSaving}>
-            {isSaving && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
-            שמור שינויים
-          </Button>
-        </div>
-      )}
     </div>
   );
 };

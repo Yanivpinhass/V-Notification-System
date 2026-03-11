@@ -82,7 +82,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   // Mobile Layout
   if (isMobile) {
     return (
-      <div className="h-screen bg-background font-hebrew flex flex-col" dir="rtl">
+      <div className="h-screen-safe bg-background font-hebrew flex flex-col" dir="rtl">
         {/* Header */}
         <div className="bg-background border-b border-border">
           <Header
@@ -118,7 +118,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
                 sidebarCollapsed={false}
                 isMobile={true}
               />
-              <div className="flex-1 p-4 overflow-auto">
+              <div className="flex-1 p-4 pb-8 overflow-auto">
                 {children}
               </div>
             </div>
@@ -130,7 +130,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
   // Desktop Layout
   return (
-    <div className="h-screen bg-background font-hebrew flex flex-col" dir="rtl">
+    <div className="h-screen-safe bg-background font-hebrew flex flex-col" dir="rtl">
       {/* Header */}
       <div className="bg-background border-b border-border">
         <Header currentUser={currentUser} isMobile={false} onLogout={onLogout} />

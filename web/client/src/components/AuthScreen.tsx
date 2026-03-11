@@ -58,84 +58,86 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4 font-hebrew" dir="rtl">
-      <Card className="w-full max-w-md bg-white">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-primary">
-            מערכת תזכורות
-          </CardTitle>
-          <CardDescription className="text-base text-muted-foreground">
-            הזן את פרטי ההתחברות שלך
-          </CardDescription>
-        </CardHeader>
+    <div className="min-h-screen-safe flex flex-col bg-background font-hebrew overflow-auto" dir="rtl">
+      <div className="flex-1 flex items-center justify-center p-4 pb-8">
+        <Card className="w-full max-w-md bg-white">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl font-bold text-primary">
+              מערכת תזכורות
+            </CardTitle>
+            <CardDescription className="text-base text-muted-foreground">
+              הזן את פרטי ההתחברות שלך
+            </CardDescription>
+          </CardHeader>
 
-        <CardContent className="space-y-4">
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription className="text-right">
-                {error}
-              </AlertDescription>
-            </Alert>
-          )}
+          <CardContent className="space-y-4">
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription className="text-right">
+                  {error}
+                </AlertDescription>
+              </Alert>
+            )}
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="username" className="text-right block">
-                שם משתמש
-              </Label>
-              <Input
-                id="username"
-                type="text"
-                placeholder="הזן שם משתמש"
-                {...register('username')}
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="username" className="text-right block">
+                  שם משתמש
+                </Label>
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="הזן שם משתמש"
+                  {...register('username')}
+                  disabled={isLoading}
+                  className="text-right"
+                  dir="rtl"
+                />
+                {errors.username && (
+                  <p className="text-sm text-destructive text-right">
+                    {errors.username.message}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-right block">
+                  סיסמה
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="הזן סיסמה"
+                  {...register('password')}
+                  disabled={isLoading}
+                  className="text-right"
+                  dir="rtl"
+                />
+                {errors.password && (
+                  <p className="text-sm text-destructive text-right">
+                    {errors.password.message}
+                  </p>
+                )}
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full h-12 text-base"
                 disabled={isLoading}
-                className="text-right"
-                dir="rtl"
-              />
-              {errors.username && (
-                <p className="text-sm text-destructive text-right">
-                  {errors.username.message}
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-right block">
-                סיסמה
-              </Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="הזן סיסמה"
-                {...register('password')}
-                disabled={isLoading}
-                className="text-right"
-                dir="rtl"
-              />
-              {errors.password && (
-                <p className="text-sm text-destructive text-right">
-                  {errors.password.message}
-                </p>
-              )}
-            </div>
-
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <div className="flex items-center justify-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>מתחבר...</span>
-                </div>
-              ) : (
-                'התחבר'
-              )}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+              >
+                {isLoading ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>מתחבר...</span>
+                  </div>
+                ) : (
+                  'התחבר'
+                )}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };
