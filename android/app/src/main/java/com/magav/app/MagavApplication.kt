@@ -67,6 +67,16 @@ class MagavApplication : Application() {
             description = getString(R.string.error_notification_channel_description)
         }
         manager.createNotificationChannel(errorChannel)
+
+        // SMS summary channel (default importance - icon in status bar + sound)
+        val smsSummaryChannel = NotificationChannel(
+            "magav_sms_summary_channel",
+            getString(R.string.sms_summary_channel_name),
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = getString(R.string.sms_summary_channel_description)
+        }
+        manager.createNotificationChannel(smsSummaryChannel)
     }
 
     private fun showErrorNotification(message: String) {

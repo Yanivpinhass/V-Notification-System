@@ -7,5 +7,6 @@
     android:tint="#FFFFFF">
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M12,22c1.1,0 2,-0.9 2,-2h-4c0,1.1 0.89,2 2,2zM18,16v-5c0,-3.07 -1.64,-5.64 -4.5,-6.32V4c0,-0.83 -0.67,-1.5 -1.5,-1.5s-1.5,0.67 -1.5,1.5v0.68C7.63,5.36 6,7.92 6,11v5l-2,2v1h16v-1l-2,-2z" />
+        android:fillType="evenOdd"
+        android:pathData="M12,1L3,5v6c0,5.55 3.84,10.74 9,12 5.16,-1.26 9,-6.45 9,-12V5L12,1z M8,16L8,7.5L12,12L16,7.5L16,16L14,16L14,10L12,14L10,10L10,16Z" />
 </vector>

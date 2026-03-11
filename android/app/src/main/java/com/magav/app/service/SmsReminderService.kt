@@ -11,11 +11,13 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
+data class SmsSummary(val totalEligible: Int, val smsSent: Int, val smsFailed: Int)
+
 class SmsReminderService(
     private val database: MagavDatabase,
     private val smsProvider: SmsProvider
 ) {
-    suspend fun execute(config: SchedulerConfigEntity, targetDate: LocalDate) {
+    suspend fun execute(config: SchedulerConfigEntity, targetDate: LocalDate): SmsSummary {
         val targetDateStart = targetDate.atStartOfDay(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT)
         val targetDateEnd = targetDate.plusDays(1).atStartOfDay(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT)
         val targetDateStr = targetDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
@@ -131,6 +133,8 @@ class SmsReminderService(
         } catch (_: Exception) {
             // UNIQUE constraint violation = already ran
         }
+
+        return SmsSummary(totalEligible, smsSent, smsFailed)
     }
 
     private fun buildMessage(

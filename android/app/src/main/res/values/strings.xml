@@ -6,4 +6,6 @@
     <string name="server_running">מערכת התזכורות פעילה</string>
     <string name="error_notification_channel_name">שגיאות מערכת</string>
     <string name="error_notification_channel_description">הודעות על שגיאות במערכת התזכורות</string>
+    <string name="sms_summary_channel_name">סיכום שליחת הודעות</string>
+    <string name="sms_summary_channel_description">הודעות סיכום לאחר שליחת תזכורות SMS</string>
 </resources>

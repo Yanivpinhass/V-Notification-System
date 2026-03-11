@@ -1,10 +1,17 @@
 package com.magav.app.scheduler
 
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.magav.app.MainActivity
 import com.magav.app.MagavApplication
+import com.magav.app.R
 import com.magav.app.db.MagavDatabase
+import com.magav.app.service.SmsSummary
 import com.magav.app.service.SmsReminderService
 import com.magav.app.sms.AndroidSmsProvider
 import java.time.DayOfWeek
@@ -42,9 +49,11 @@ class SmsSchedulerWorker(
                 }
                 val targetDate = LocalDate.now(israelTz).plusDays(config.daysBeforeShift.toLong())
                 android.util.Log.d("SmsWorker", "Executing config ${config.id} (${config.reminderType}, daysBeforeShift=${config.daysBeforeShift}) for targetDate=$targetDate")
-                reminderService.execute(config, targetDate)
+                val summary = reminderService.execute(config, targetDate)
+                showSmsSummaryNotification(summary)
             } else {
-                checkAllConfigs(database, reminderService)
+                val summary = checkAllConfigs(database, reminderService)
+                showSmsSummaryNotification(summary)
             }
             android.util.Log.d("SmsWorker", "doWork completed successfully")
             Result.success()
@@ -57,12 +66,16 @@ class SmsSchedulerWorker(
     private suspend fun checkAllConfigs(
         database: MagavDatabase,
         reminderService: SmsReminderService
-    ) {
+    ): SmsSummary {
         val now = ZonedDateTime.now(israelTz)
         val currentTime = String.format("%02d:%02d", now.hour, now.minute)
         val currentDayOfWeek = now.dayOfWeek
 
         val configs = database.schedulerConfigDao().getEnabled()
+
+        var totalEligible = 0
+        var totalSent = 0
+        var totalFailed = 0
 
         for (config in configs) {
             try {
@@ -78,11 +91,45 @@ class SmsSchedulerWorker(
                     )
                 ) continue
 
-                reminderService.execute(config, targetDate)
+                val summary = reminderService.execute(config, targetDate)
+                totalEligible += summary.totalEligible
+                totalSent += summary.smsSent
+                totalFailed += summary.smsFailed
             } catch (e: Exception) {
                 android.util.Log.e("SmsWorker", "Config ${config.id} failed, continuing", e)
             }
         }
+
+        return SmsSummary(totalEligible, totalSent, totalFailed)
+    }
+
+    private fun showSmsSummaryNotification(summary: SmsSummary) {
+        if (summary.totalEligible == 0) return
+
+        val contentText = when {
+            summary.smsFailed == 0 -> "נשלחו ${summary.smsSent} הודעות בהצלחה"
+            summary.smsSent == 0 -> "שליחת הודעות נכשלה (${summary.smsFailed} הודעות)"
+            else -> "נשלחו ${summary.smsSent} הודעות, ${summary.smsFailed} נכשלו"
+        }
+
+        val intent = Intent(applicationContext, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            applicationContext, 0, intent, PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(applicationContext, "magav_sms_summary_channel")
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("סיכום שליחת הודעות")
+            .setContentText(contentText)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+
+        val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(100, notification)
     }
 
     private fun getDaysForGroup(dayGroup: String): List<DayOfWeek> = when (dayGroup) {
