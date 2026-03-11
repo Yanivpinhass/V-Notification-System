@@ -4,6 +4,7 @@ import android.app.AlarmManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
@@ -33,8 +34,8 @@ class MainActivity : AppCompatActivity() {
         fileChooserCallback = null
     }
 
-    private val smsPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
     ) { /* granted or not */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,6 +56,7 @@ class MainActivity : AppCompatActivity() {
             javaScriptEnabled = true
             domStorageEnabled = true
             allowFileAccess = true
+            @Suppress("DEPRECATION")
             databaseEnabled = true
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             cacheMode = WebSettings.LOAD_DEFAULT
@@ -89,12 +91,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestPermissions() {
-        // SMS permission
+        // SMS + phone state permissions
+        val needed = mutableListOf<String>()
         if (checkSelfPermission(android.Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
-            smsPermissionLauncher.launch(android.Manifest.permission.SEND_SMS)
+            needed.add(android.Manifest.permission.SEND_SMS)
+        }
+        if (checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+            needed.add(android.Manifest.permission.READ_PHONE_STATE)
+        }
+        if (needed.isNotEmpty()) {
+            permissionLauncher.launch(needed.toTypedArray())
         }
         // Exact alarm permission (Android 12+)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager = getSystemService(AlarmManager::class.java)
             if (!alarmManager.canScheduleExactAlarms()) {
                 startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
@@ -131,6 +140,6 @@ class MainActivity : AppCompatActivity() {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (webView.canGoBack()) webView.goBack()
-        else super.onBackPressed()
+        else @Suppress("DEPRECATION") super.onBackPressed()
     }
 }

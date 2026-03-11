@@ -58,6 +58,7 @@ class MagavApplication : Application() {
 
         database = Room.databaseBuilder(this, MagavDatabase::class.java, "magav.db")
             .openHelperFactory(factory)
+            .fallbackToDestructiveMigration()
             .build()
     }
 

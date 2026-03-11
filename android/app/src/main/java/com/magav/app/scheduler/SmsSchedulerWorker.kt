@@ -22,6 +22,7 @@ class SmsSchedulerWorker(
     override suspend fun doWork(): Result {
         android.util.Log.d("SmsWorker", "doWork started")
         val database = MagavApplication.database
+
         val smsProvider = AndroidSmsProvider(applicationContext)
         val reminderService = SmsReminderService(database, smsProvider)
 

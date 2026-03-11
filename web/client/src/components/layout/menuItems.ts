@@ -38,6 +38,7 @@ export const mainMenuItems: MenuItem[] = [
     requiredRoles: ['Admin', 'SystemManager'],
     subItems: [
       { id: 'scheduler-settings', title: 'הגדרות תזמון', path: '/settings/scheduler' },
+      { id: 'sms-settings', title: 'הגדרות SMS', path: '/settings/sms' },
     ]
   },
   {

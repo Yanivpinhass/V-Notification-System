@@ -4,13 +4,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Megav is a Hebrew RTL volunteer shift management and SMS reminder system. The UI is entirely in Hebrew with right-to-left layout. It manages volunteer patrol shifts, sends SMS reminders via a background scheduler, and provides admin tools for user/volunteer/shift management.
+Magav is a Hebrew RTL volunteer shift management and SMS reminder system. It manages volunteer patrol shifts, sends SMS reminders, and provides admin tools for user/volunteer/shift management. The UI is entirely in Hebrew with right-to-left layout.
+
+The system has two deployment targets:
+1. **Web** — .NET 8 backend + React frontend, deployed to Ubuntu server
+2. **Android** — Kotlin app with embedded Ktor server + WebView, sends SMS natively via Android SmsManager
+
+Both targets share the same React frontend.
+
+## Repository Structure
+
+```
+├── web/
+│   ├── client/          # React 18 + TypeScript + Vite frontend
+│   └── server/          # .NET 8 Minimal API backend (3 projects)
+├── android/             # Kotlin Android app (Ktor server + Room DB + native SMS)
+├── build-apk.bat        # Builds React → copies to android assets → builds APK
+├── input/               # Shift schedule Excel files for import
+└── db/                  # Local SQLCipher database (web dev)
+```
 
 ## Security First
 
 **Security is the top priority.** Key rules:
-- Use parameterized queries only (`@0`, `@1`, ...) — never concatenate SQL
-- All new API endpoints MUST include `.RequireAuthorization()` unless intentionally public
+- Use parameterized queries only (`@0`, `@1`, ... for .NET; Room `@Query` params for Android) — never concatenate SQL
+- All new API endpoints MUST include `.RequireAuthorization()` (.NET) or `authenticate("auth-bearer")` (Ktor) unless intentionally public
 - Never expose exception details in API responses — use generic Hebrew error messages
 - Use `Results.Json()` with `ApiResponse<T>` instead of `Results.Problem()` (which can leak details in dev mode)
 - File uploads require CSRF header check, extension validation, and magic byte verification
@@ -18,37 +36,47 @@ Megav is a Hebrew RTL volunteer shift management and SMS reminder system. The UI
 
 ## Development Commands
 
-**Client** (from `client/` directory):
+### Web Client (from `web/client/`)
 ```bash
-cd client
+cd web/client
 npm install       # Install dependencies
 npm run dev       # Start dev server at http://localhost:8080
 npm run build     # Production build
 npm run lint      # Run ESLint
-npm run preview   # Preview production build
 ```
 
-**Server** (from `server/Magav.Api/` directory):
+### Web Server (from `web/server/Magav.Api/`)
 ```bash
-cd server/Magav.Api
+cd web/server/Magav.Api
 dotnet build      # Build server
 dotnet run        # Run server at http://localhost:5015
 ```
 
-Both must run simultaneously for development. Vite proxies `/api/*` requests to `localhost:5015`.
+Both must run simultaneously for web development. Vite proxies `/api/*` requests to `localhost:5015`.
+
+### Android App
+```bash
+# Full build: React → Android assets → APK
+build-apk.bat
+
+# Install to connected device
+adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+The build script: (1) builds React in `web/client/`, (2) copies `dist/` to `android/app/src/main/assets/web/`, (3) runs `gradlew assembleDebug`.
 
 There are no automated tests in this project.
 
-**Default dev credentials:** username `admin`, password `Admin123!` (seeded by DbInitializer on first run).
+**Default dev credentials:** username `admin`, password `Admin123!` (.NET) or `12345` (Android seeded by DatabaseInitializer).
 
-## Architecture
+## Web Architecture
 
-### Solution Structure
+### .NET Solution Structure
 
-Three .NET 8 projects:
+Three .NET 8 projects under `web/server/`:
 
 ```
-server/
+web/server/
 ├── Magav.Common/     # Shared: Models, DbHelper ORM wrapper, extensions, Excel utilities
 ├── Magav.Server/     # Business logic: Services, Repositories, SMS subsystem
 └── Magav.Api/        # Entry point: Program.cs (Minimal API endpoints, DI, middleware)
@@ -74,7 +102,7 @@ server/
 ### Client Key Directories
 
 ```
-client/src/
+web/client/src/
 ├── components/
 │   ├── ui/              # Shadcn/UI components (modified: switch.tsx, dialog.tsx for RTL)
 │   ├── layout/          # Header, Sidebar, SubNavigation, menuItems
@@ -96,9 +124,7 @@ The project uses relaxed TypeScript settings:
 - `strictNullChecks: false`
 - `noImplicitAny: false`
 
-These are set in `tsconfig.json` and affect how null/undefined and untyped values are handled.
-
-### Database Layer
+### Database Layer (.NET)
 
 **DbHelper** wraps NPoco and provides async CRUD operations. Key method names (these differ from NPoco defaults):
 - `FetchAsync<T>(expression)` — query with lambda predicate
@@ -202,7 +228,7 @@ All file upload endpoints must follow this pattern (see volunteers/shifts import
 4. **Magic bytes**: ZIP signature (`0x50 0x4B`) or OLE signature (`0xD0 0xCF`)
 5. Process in memory via `MemoryStream` — never save to disk
 
-### SMS Scheduler Subsystem
+### SMS Scheduler Subsystem (.NET)
 
 Background service that sends shift reminders to volunteers. Lives in `Magav.Server/Services/Sms/`:
 
@@ -210,12 +236,6 @@ Background service that sends shift reminders to volunteers. Lives in `Magav.Ser
 - **InforUMobileSmsProvider** — InforUMobile XML API implementation (registered via `AddHttpClient<ISmsProvider, InforUMobileSmsProvider>`)
 - **SmsSchedulerService** — `BackgroundService` polling every 60s, uses `IServiceScopeFactory` to resolve scoped services
 - **SmsReminderService** — Scoped service that queries eligible shifts, builds messages from templates, sends SMS, logs results
-
-**Key design decisions:**
-- Cross-platform timezone: `OperatingSystem.IsWindows() ? "Israel Standard Time" : "Asia/Jerusalem"`
-- Duplicate prevention: `SmsLog` table with `ReminderType` column — allows both Advance and SameDay reminders per shift
-- Race condition prevention: `UNIQUE(ConfigId, TargetDate, ReminderType)` on `SchedulerRunLog`
-- Template placeholders: `{שם}`, `{שם מלא}`, `{תאריך}`, `{יום}`, `{משמרת}`, `{רכב}`
 
 ### DI Registration Patterns
 
@@ -235,6 +255,78 @@ The `SmsSchedulerService` (singleton) resolves scoped services via `IServiceScop
 
 The SMS approval page (`/sms-approval/:accessKey`) is a public route that does not require authentication. Instead, it uses a secret access key configured in `appsettings.json` under `PublicPages:SmsApprovalAccessKey`. The server validates this key on every request. Rate limiting (3 requests/5 min per IP) is applied via `RequireRateLimiting("sms-approval")`.
 
+## Android Architecture
+
+### Hybrid Mobile-Server Design
+
+The Android app embeds a **Ktor HTTP server** (port 5015, localhost only) inside a foreground service. A WebView loads the same React UI from `http://localhost:5015`. The Ktor server serves both the static web files and REST API endpoints, mirroring the .NET API surface.
+
+### Key Components
+
+```
+android/app/src/main/java/com/magav/app/
+├── MagavApplication.kt          # App init: notification channel, SQLCipher DB, Koin DI
+├── MainActivity.kt              # WebView host, permissions, waits for server startup
+├── MagavServerService.kt        # Foreground service: starts Ktor, inits DB, schedules alarms
+├── api/
+│   ├── KtorServer.kt            # Ktor app: ContentNegotiation, CORS, JWT auth, routes, static files
+│   ├── auth/JwtConfig.kt        # JWT token generation/validation (HMAC256)
+│   ├── models/                   # ApiResponse<T>, request/response DTOs
+│   └── routes/                   # Route files mirroring .NET endpoints
+├── db/
+│   ├── MagavDatabase.kt          # Room database (SQLCipher encrypted)
+│   ├── DatabaseInitializer.kt    # Seeds admin user + scheduler configs
+│   ├── entity/                   # Room entities (User, Volunteer, Shift, SmsLog, etc.)
+│   └── dao/                      # Room DAOs
+├── scheduler/
+│   ├── AlarmScheduler.kt         # Schedules exact alarms per config + day group
+│   ├── SmsSchedulerWorker.kt     # WorkManager worker: executes SMS sending
+│   ├── SmsAlarmReceiver.kt       # Broadcast receiver: alarm → enqueue worker
+│   └── BootReceiver.kt           # Re-schedules alarms on device boot
+├── service/
+│   ├── AuthService.kt            # Login, token refresh, password management
+│   ├── SmsReminderService.kt     # Core SMS logic: query shifts, build messages, send, log
+│   ├── ShiftsImportService.kt    # Excel import + volunteer name matching
+│   └── ShiftScheduleParser.kt    # Apache POI Excel parsing
+└── sms/
+    ├── SmsProvider.kt            # Interface
+    └── AndroidSmsProvider.kt     # Native SmsManager: Mutex-serialized, 15s timeout, broadcast receiver
+```
+
+### Android Tech Stack
+
+- **Language:** Kotlin 1.9.22, Java 17
+- **HTTP Server:** Ktor 2.3.12 (CIO engine)
+- **Database:** Room 2.6.1 + SQLCipher 4.5.4 (encrypted with key in EncryptedSharedPreferences)
+- **DI:** Koin 3.5.6
+- **Excel parsing:** Apache POI 5.2.5
+- **Background work:** AlarmManager (exact alarms) + WorkManager
+- **SMS:** Android SmsManager (native, supports dual SIM via subscription ID)
+- **Min SDK:** 29, Target SDK: 35
+
+### Android SMS Flow
+
+1. **SchedulerConfig** in DB defines: day group (SunThu/Fri/Sat), reminder type (SameDay/Advance), trigger time, days before shift, message template
+2. **AlarmScheduler** schedules exact alarms (Israel timezone) for each enabled config
+3. **SmsAlarmReceiver** → enqueues **SmsSchedulerWorker** via WorkManager
+4. Worker queries eligible shifts, checks volunteer approval + phone + dedup via SmsLog, builds message from template (placeholders: `{שם}`, `{תאריך}`, `{יום}`, `{משמרת}`, `{רכב}`), calls **AndroidSmsProvider**
+5. AndroidSmsProvider sends via SmsManager with Mutex serialization, logs result
+
+### Android Settings (AppSetting table)
+
+- `sms_sim_subscription_id`: Which SIM card to use (-1 = system default)
+- Secrets (DB passphrase, JWT key) stored in EncryptedSharedPreferences (AES256-GCM)
+
+### Android Permissions
+
+`SEND_SMS`, `READ_PHONE_STATE`, `RECEIVE_BOOT_COMPLETED`, `FOREGROUND_SERVICE`, `SCHEDULE_EXACT_ALARM`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`
+
+## Shared Design Decisions
+
+- **Timezone:** Israel Standard Time (Windows) / Asia/Jerusalem (Linux/Android)
+- **Duplicate SMS prevention:** SmsLog table indexed on (ShiftId, ReminderType); SchedulerRunLog UNIQUE on (ConfigId, TargetDate, ReminderType)
+- **Template placeholders:** `{שם}`, `{שם מלא}`, `{תאריך}`, `{יום}`, `{משמרת}`, `{רכב}`
+
 ### RTL/Hebrew Considerations
 
 - All components use `dir="rtl"` and Hebrew font (Noto Sans Hebrew)
@@ -245,48 +337,28 @@ The SMS approval page (`/sms-approval/:accessKey`) is a public route that does n
 
 ## Shift Schedule Excel File Format
 
-The system processes volunteer shift schedule Excel files (`.xlsx`). These files contain weekly patrol/shift assignments for volunteer teams. Input files are placed in the `input/` directory.
+The system processes volunteer shift schedule Excel files (`.xlsx`). Input files are placed in the `input/` directory.
 
 ### File Structure
 
-- **Sheets:** 1 or more sheets per file. Each sheet typically covers a month (e.g., "1.26" = January 2026). **All sheets must be parsed.**
-- **Relevant columns:** Only columns **A through G** (7 days of the week, Sunday through Saturday).
-- **Row 1:** Title header row ("תוכנית פעילות מתמי״ד") — ignore during parsing.
+- **Sheets:** 1 or more per file. Each sheet typically covers a month (e.g., "1.26" = January 2026). **All sheets must be parsed.**
+- **Relevant columns:** Only columns **A through G** (7 days, Sunday through Saturday).
+- **Row 1:** Title header row — ignore during parsing.
 
 ### Weekly Block Layout
-
-Each sheet contains multiple **weekly blocks** stacked vertically, separated by empty rows:
 
 ```
 Row 1:  [Date Sun] [Date Mon] [Date Tue] [Date Wed] [Date Thu] [Date Fri] [Date Sat]
 Row 2:  [Day-of-week indicators — 1900-era Excel serial dates]
 Row 3:  [Empty separator]
---- Team Block (6 rows each, back-to-back, no separator between teams) ---
+--- Team Block (6 rows each, back-to-back) ---
 Row 4:  [Shift/team name — same value across all 7 columns]
 Row 5:  [Car number — same value across all 7 columns]
 Row 6-9: [4 volunteer name rows, some cells may be empty]
 --- Next Team Block ---
-...
-[Empty rows before next weekly block]
 ```
 
-Each team block is exactly **6 rows** (name + car + 4 volunteers). There are typically **4 teams per weekly block**.
-
-### Reading Shift Data
-
-Each column (A-G) = a day (A=Sunday ... G=Saturday). To extract a shift for a date:
-1. Find the dates row containing that date
-2. Read down that column within each team block: team name, car number, volunteer names (4 slots)
-
-### Day-of-Week Row Encoding
-
-Uses Excel serial dates from 1900: `01/01/1900` = Sunday through `07/01/1900` = Saturday.
-
-### Parsing Notes
-
-- Team names and car numbers may vary between files — always read from data, never hardcode
-- Some blocks have team structure but empty volunteer slots (unassigned weeks)
-- Each team always has exactly 4 volunteer rows (some cells may be empty)
+Each team block is exactly **6 rows** (name + car + 4 volunteers). Typically **4 teams per weekly block**. Day-of-week row uses Excel serial dates from 1900 (`01/01/1900` = Sunday through `07/01/1900` = Saturday).
 
 ## Production Deployment (Ubuntu Server)
 
@@ -304,22 +376,21 @@ Uses Excel serial dates from 1900: `01/01/1900` = Sunday through `07/01/1900` = 
 
 **Server** (from Windows, targets Linux):
 ```bash
-cd server/Magav.Api
-dotnet publish -c Release -r linux-x64 --self-contained false -o ../../publish/server
+cd web/server/Magav.Api
+dotnet publish -c Release -r linux-x64 --self-contained false -o ../../../publish/server
 ```
 
 **Client:**
 ```bash
-cd client
+cd web/client
 npm run build
-# Copy client/dist/* to publish/client/
+# Copy web/client/dist/* to publish/client/
 ```
 
 **Copy to server:**
 ```bash
 scp -r publish/* user@server-ip:/tmp/magav-deploy/
-# Then on server: sudo cp -r /tmp/magav-deploy/server/* /opt/magav/server/
-# And: sudo cp -r /tmp/magav-deploy/client/* /opt/magav/client/
+# Then on server: sudo cp -r /tmp/magav-deploy/* /opt/magav/
 ```
 
 ### Runtime
@@ -328,55 +399,6 @@ scp -r publish/* user@server-ip:/tmp/magav-deploy/
 - **Process manager:** systemd (`/etc/systemd/system/magav.service`)
 - **Reverse proxy:** Nginx serves client static files and proxies `/api/` to `http://localhost:5015`
 - **Service user:** `www-data`
-
-### systemd Service
-
-```ini
-[Unit]
-Description=Magav API Server
-After=network.target
-
-[Service]
-WorkingDirectory=/opt/magav/server
-ExecStart=/usr/bin/dotnet /opt/magav/server/Magav.Api.dll
-Restart=always
-RestartSec=10
-Environment=ASPNETCORE_ENVIRONMENT=Production
-Environment=DOTNET_PRINT_TELEMETRY_MESSAGE=false
-User=www-data
-Group=www-data
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### Nginx Config
-
-```nginx
-server {
-    listen 80;
-    server_name yourdomain.com;
-
-    root /opt/magav/client;
-    index index.html;
-
-    location /api/ {
-        proxy_pass http://localhost:5015;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection keep-alive;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-}
-```
 
 ### Common Server Commands
 
@@ -389,9 +411,8 @@ sudo chown -R www-data:www-data /opt/magav  # Fix permissions after deploy
 
 ### Database Reset
 
-To recreate the database with fresh schema (e.g., after schema changes), delete the DB file and restart:
+Delete DB file and restart — `DbInitializer` recreates all tables and seeds default data:
 ```bash
 sudo rm /opt/magav/db/magav.db
 sudo systemctl restart magav
 ```
-The `DbInitializer` will recreate all tables and seed default data on startup.

@@ -11,6 +11,7 @@ import { SmsLogsPage } from '@/pages/SmsLogsPage';
 import { SmsLogSummaryPage } from '@/pages/SmsLogSummaryPage';
 import { SchedulerSettingsPage } from '@/pages/SchedulerSettingsPage';
 import { SchedulerRunLogPage } from '@/pages/SchedulerRunLogPage';
+import { SmsSettingsPage } from '@/pages/SmsSettingsPage';
 import { authService } from '@/services/authService';
 
 interface User {
@@ -68,6 +69,8 @@ const Index = () => {
         return <SchedulerSettingsPage />;
       case 'scheduler-run-log':
         return <SchedulerRunLogPage />;
+      case 'sms-settings':
+        return <SmsSettingsPage />;
       default:
         return <PlaceholderPage />;
     }
