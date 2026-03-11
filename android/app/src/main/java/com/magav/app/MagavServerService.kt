@@ -1,5 +1,6 @@
 package com.magav.app
 
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
@@ -32,6 +33,13 @@ class MagavServerService : Service() {
         startForeground(1, notification)
 
         if (server == null) {
+            // Check if database is available before attempting server start
+            if (!MagavApplication.isDatabaseReady) {
+                android.util.Log.e("MagavServer", "Database not initialized, cannot start server")
+                updateNotification("שגיאה: מסד הנתונים לא אותחל - יש להפעיל מחדש")
+                return START_STICKY
+            }
+
             scope.launch {
                 try {
                     android.util.Log.i("MagavServer", "Starting server initialization...")
@@ -51,11 +59,28 @@ class MagavServerService : Service() {
                     server?.start(wait = true)
                 } catch (e: Exception) {
                     android.util.Log.e("MagavServer", "Server failed to start", e)
+                    server = null // Reset so server can be restarted on next onStartCommand
+                    updateNotification("שגיאה: השרת לא פעיל - יש להפעיל מחדש")
                 }
             }
         }
 
         return START_STICKY
+    }
+
+    private fun updateNotification(text: String) {
+        try {
+            val notification = NotificationCompat.Builder(this, "magav_server_channel")
+                .setContentTitle(getString(R.string.app_name))
+                .setContentText(text)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setOngoing(true)
+                .build()
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.notify(1, notification)
+        } catch (e: Exception) {
+            android.util.Log.e("MagavServer", "Failed to update notification", e)
+        }
     }
 
     private fun getOrCreateJwtKey(): String {

@@ -6,6 +6,7 @@ import android.content.Intent
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import com.magav.app.MagavApplication
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -29,7 +30,11 @@ class SmsAlarmReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
         GlobalScope.launch(Dispatchers.IO) {
             try {
-                AlarmScheduler(context).scheduleAllAlarms()
+                if (MagavApplication.isDatabaseReady) {
+                    AlarmScheduler(context).scheduleAllAlarms()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("SmsAlarmReceiver", "Failed to reschedule alarms", e)
             } finally {
                 pendingResult.finish()
             }

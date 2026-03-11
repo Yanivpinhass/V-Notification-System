@@ -4,4 +4,6 @@
     <string name="notification_channel_name">שירות מערכת תזכורות</string>
     <string name="notification_channel_description">הודעה כשמערכת התזכורות פעילה</string>
     <string name="server_running">מערכת התזכורות פעילה</string>
+    <string name="error_notification_channel_name">שגיאות מערכת</string>
+    <string name="error_notification_channel_description">הודעות על שגיאות במערכת התזכורות</string>
 </resources>

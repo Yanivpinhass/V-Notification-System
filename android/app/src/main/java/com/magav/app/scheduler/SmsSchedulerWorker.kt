@@ -21,6 +21,11 @@ class SmsSchedulerWorker(
 
     override suspend fun doWork(): Result {
         android.util.Log.d("SmsWorker", "doWork started")
+
+        if (!MagavApplication.isDatabaseReady) {
+            android.util.Log.e("SmsWorker", "Database not initialized, failing worker")
+            return Result.failure()
+        }
         val database = MagavApplication.database
 
         val smsProvider = AndroidSmsProvider(applicationContext)
@@ -60,19 +65,23 @@ class SmsSchedulerWorker(
         val configs = database.schedulerConfigDao().getEnabled()
 
         for (config in configs) {
-            val days = getDaysForGroup(config.dayGroup)
-            if (currentDayOfWeek !in days) continue
-            if (config.time != currentTime) continue
+            try {
+                val days = getDaysForGroup(config.dayGroup)
+                if (currentDayOfWeek !in days) continue
+                if (config.time != currentTime) continue
 
-            val targetDate = now.toLocalDate().plusDays(config.daysBeforeShift.toLong())
-            val targetDateStr = targetDate.toString()
+                val targetDate = now.toLocalDate().plusDays(config.daysBeforeShift.toLong())
+                val targetDateStr = targetDate.toString()
 
-            if (database.schedulerRunLogDao().existsForConfigAndDate(
-                    config.id, targetDateStr, config.reminderType
-                )
-            ) continue
+                if (database.schedulerRunLogDao().existsForConfigAndDate(
+                        config.id, targetDateStr, config.reminderType
+                    )
+                ) continue
 
-            reminderService.execute(config, targetDate)
+                reminderService.execute(config, targetDate)
+            } catch (e: Exception) {
+                android.util.Log.e("SmsWorker", "Config ${config.id} failed, continuing", e)
+            }
         }
     }
 

@@ -99,6 +99,12 @@ class MainActivity : AppCompatActivity() {
         if (checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
             needed.add(android.Manifest.permission.READ_PHONE_STATE)
         }
+        // Notification permission (Android 13+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                needed.add(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
         if (needed.isNotEmpty()) {
             permissionLauncher.launch(needed.toTypedArray())
         }
@@ -114,7 +120,10 @@ class MainActivity : AppCompatActivity() {
     private fun waitForServerAndLoad() {
         lifecycleScope.launch {
             var ready = false
-            while (!ready) {
+            var attempts = 0
+            val maxAttempts = 60 // 30 seconds at 500ms intervals
+            while (!ready && attempts < maxAttempts) {
+                attempts++
                 ready = withContext(Dispatchers.IO) {
                     try {
                         val url = java.net.URL("http://localhost:5015/api/health")
@@ -131,9 +140,18 @@ class MainActivity : AppCompatActivity() {
                 }
                 if (!ready) delay(500)
             }
-            loadingSpinner.visibility = View.GONE
-            webView.visibility = View.VISIBLE
-            webView.loadUrl("http://localhost:5015")
+            if (ready) {
+                loadingSpinner.visibility = View.GONE
+                webView.visibility = View.VISIBLE
+                webView.loadUrl("http://localhost:5015")
+            } else {
+                loadingSpinner.visibility = View.GONE
+                webView.visibility = View.VISIBLE
+                webView.loadDataWithBaseURL(null,
+                    "<html dir='rtl'><body style='text-align:center;padding:40px;font-family:sans-serif'>" +
+                    "<h2>שגיאה בהפעלת השרת</h2><p>יש לסגור ולהפעיל מחדש את האפליקציה</p></body></html>",
+                    "text/html", "UTF-8", null)
+            }
         }
     }
 

@@ -59,19 +59,12 @@ class AlarmScheduler(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (alarmManager.canScheduleExactAlarms()) {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent
-                )
-                android.util.Log.d("AlarmScheduler", "Alarm set: configId=$configId day=$dayOfWeek at $target (millis=$triggerAtMillis)")
-            } else {
-                android.util.Log.w("AlarmScheduler", "Cannot schedule exact alarms - permission not granted")
-            }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+            // Fallback to inexact alarm (may fire up to 15 min late - acceptable for SMS reminders)
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+            android.util.Log.w("AlarmScheduler", "Exact alarms denied, using inexact for configId=$configId day=$dayOfWeek at $target")
         } else {
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent
-            )
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
             android.util.Log.d("AlarmScheduler", "Alarm set: configId=$configId day=$dayOfWeek at $target")
         }
     }

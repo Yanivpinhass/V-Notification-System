@@ -3,6 +3,7 @@ package com.magav.app
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import androidx.core.app.NotificationCompat
 import androidx.room.Room
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
@@ -22,33 +23,66 @@ class MagavApplication : Application() {
     companion object {
         lateinit var database: MagavDatabase
             private set
+        @Volatile
+        var isDatabaseReady = false
+            private set
     }
 
     override fun onCreate() {
         super.onCreate()
         try {
             android.util.Log.i("MagavApp", "Application onCreate starting...")
-            createNotificationChannel()
-            android.util.Log.i("MagavApp", "Notification channel created")
+            createNotificationChannels()
+            android.util.Log.i("MagavApp", "Notification channels created")
             initializeDatabase()
+            isDatabaseReady = true
             android.util.Log.i("MagavApp", "Database initialized")
             initializeKoin()
             android.util.Log.i("MagavApp", "Koin initialized, application ready")
         } catch (e: Exception) {
             android.util.Log.e("MagavApp", "Application onCreate failed", e)
+            showErrorNotification("שגיאה באתחול המערכת - יש להפעיל מחדש")
         }
     }
 
-    private fun createNotificationChannel() {
-        val channel = NotificationChannel(
+    private fun createNotificationChannels() {
+        val manager = getSystemService(NotificationManager::class.java)
+
+        // Main service channel (low importance - silent background notification)
+        val serverChannel = NotificationChannel(
             "magav_server_channel",
             getString(R.string.notification_channel_name),
             NotificationManager.IMPORTANCE_LOW
         ).apply {
             description = getString(R.string.notification_channel_description)
         }
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(channel)
+        manager.createNotificationChannel(serverChannel)
+
+        // Error channel (high importance - heads-up notification for critical errors)
+        val errorChannel = NotificationChannel(
+            "magav_error_channel",
+            getString(R.string.error_notification_channel_name),
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = getString(R.string.error_notification_channel_description)
+        }
+        manager.createNotificationChannel(errorChannel)
+    }
+
+    private fun showErrorNotification(message: String) {
+        try {
+            val notification = NotificationCompat.Builder(this, "magav_error_channel")
+                .setContentTitle(getString(R.string.app_name))
+                .setContentText(message)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setOngoing(true)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .build()
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.notify(2, notification)
+        } catch (e: Exception) {
+            android.util.Log.e("MagavApp", "Failed to show error notification", e)
+        }
     }
 
     private fun initializeDatabase() {

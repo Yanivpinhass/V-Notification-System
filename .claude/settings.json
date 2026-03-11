@@ -3,7 +3,22 @@
     "allow": [
       "Bash(find:*)",
       "Bash(\"/c/Users/yaniv/AppData/Local/Android/Sdk/platform-tools/adb.exe\" install -r \"c:/MyData/Projects/Magav/V-Notification-System/android/app/build/outputs/apk/debug/app-debug.apk\")",
-      "Bash(\"/c/Users/yaniv/AppData/Local/Android/Sdk/platform-tools/adb.exe\" logcat -d -s AndroidSms:* SettingsRoutes:* SmsWorker:* SmsReminder:* KtorServer:*)"
+      "Bash(\"/c/Users/yaniv/AppData/Local/Android/Sdk/platform-tools/adb.exe\" logcat -d -s AndroidSms:* SettingsRoutes:* SmsWorker:* SmsReminder:* KtorServer:*)",
+      "Bash(cmd.exe /c \"build-apk.bat\")",
+      "Bash(ASSETS_WEB=\"c:/MyData/Projects/Magav/V-Notification-System/android/app/src/main/assets/web\")",
+      "Bash(rm -rf \"$ASSETS_WEB\")",
+      "Bash(mkdir -p \"$ASSETS_WEB\")",
+      "Bash(cp -r \"c:/MyData/Projects/Magav/V-Notification-System/web/client/dist/\"* \"$ASSETS_WEB/\")",
+      "Bash(cmd.exe /c \"gradlew.bat assembleDebug\")",
+      "Bash(cmd //c \"gradlew.bat assembleDebug 2>&1\")",
+      "Bash(cmd //c \".\\\\gradlew.bat assembleDebug\")",
+      "Bash(adb install:*)",
+      "Read(//c/MyData/Projects/Magav/V-Notification-System/android/$LOCALAPPDATA/Android/Sdk/platform-tools/**)",
+      "Read(//c/MyData/Projects/Magav/V-Notification-System/android/$HOME/AppData/Local/Android/Sdk/platform-tools/**)",
+      "Bash(where.exe adb:*)",
+      "Read(//c/Users/**)",
+      "Bash(/c/Users/yaniv/AppData/Local/Android/Sdk/platform-tools/adb.exe install:*)",
+      "Bash(pip install:*)"
     ]
   }
 }
