@@ -2,8 +2,11 @@ package com.magav.app.api.routes
 
 import android.content.Context
 import com.magav.app.api.models.ApiResponse
+import com.magav.app.api.models.CreateShiftRequest
+import com.magav.app.api.models.ShiftWithVolunteerDto
 import com.magav.app.api.requireRole
 import com.magav.app.db.MagavDatabase
+import com.magav.app.db.entity.ShiftEntity
 import com.magav.app.service.ShiftsImportService
 import io.ktor.http.*
 import io.ktor.http.content.*
@@ -12,10 +15,170 @@ import io.ktor.server.auth.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 
 fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
     authenticate("auth-bearer") {
         route("/api/shifts") {
+
+            // GET /api/shifts/by-date?date=YYYY-MM-DD
+            get("/by-date") {
+                call.requireRole("Admin", "SystemManager")
+
+                val dateStr = call.request.queryParameters["date"]
+                if (dateStr.isNullOrBlank()) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ApiResponse.fail<Unit>("פרמטר תאריך נדרש")
+                    )
+                    return@get
+                }
+
+                val date = try {
+                    LocalDate.parse(dateStr)
+                } catch (_: Exception) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ApiResponse.fail<Unit>("פורמט תאריך לא תקין")
+                    )
+                    return@get
+                }
+
+                val from = date.atStartOfDay(ZoneOffset.UTC)
+                    .format(DateTimeFormatter.ISO_INSTANT)
+                val to = date.plusDays(1).atStartOfDay(ZoneOffset.UTC)
+                    .format(DateTimeFormatter.ISO_INSTANT)
+
+                val shifts = database.shiftDao().getByDateRange(from, to)
+                val volunteers = database.volunteerDao().getAll()
+                val volunteerMap = volunteers.associateBy { it.id }
+
+                val dtos = shifts.map { shift ->
+                    val vol = volunteerMap[shift.volunteerId]
+                    ShiftWithVolunteerDto(
+                        id = shift.id,
+                        shiftDate = shift.shiftDate,
+                        shiftName = shift.shiftName,
+                        carId = shift.carId,
+                        volunteerId = shift.volunteerId,
+                        volunteerName = vol?.mappingName ?: "מתנדב לא ידוע",
+                        volunteerPhone = vol?.mobilePhone,
+                        volunteerApproved = vol?.approveToReceiveSms == 1
+                    )
+                }
+
+                call.respond(ApiResponse.ok(dtos))
+            }
+
+            // DELETE /api/shifts/{id}
+            delete("/{id}") {
+                call.requireRole("Admin", "SystemManager")
+
+                val id = call.parameters["id"]?.toIntOrNull()
+                if (id == null) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ApiResponse.fail<Unit>("מזהה לא תקין")
+                    )
+                    return@delete
+                }
+
+                val existing = database.shiftDao().getById(id)
+                if (existing == null) {
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        ApiResponse.fail<Unit>("שיבוץ לא נמצא")
+                    )
+                    return@delete
+                }
+
+                // Cascade: delete SMS logs first, then the shift
+                database.smsLogDao().deleteByShiftId(id)
+                database.shiftDao().deleteById(id)
+
+                call.respond(ApiResponse.ok("השיבוץ נמחק בהצלחה"))
+            }
+
+            // POST /api/shifts - create a new shift assignment
+            post {
+                call.requireRole("Admin", "SystemManager")
+
+                val request = call.receive<CreateShiftRequest>()
+
+                if (request.shiftName.isBlank()) {
+                    throw IllegalArgumentException("שם משמרת נדרש")
+                }
+
+                // Verify volunteer exists
+                val volunteer = database.volunteerDao().getById(request.volunteerId)
+                if (volunteer == null) {
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        ApiResponse.fail<Unit>("המתנדב לא נמצא")
+                    )
+                    return@post
+                }
+
+                // Convert date to ISO_INSTANT format (matching import format)
+                val shiftDateIso = try {
+                    LocalDate.parse(request.shiftDate)
+                        .atStartOfDay(ZoneOffset.UTC)
+                        .format(DateTimeFormatter.ISO_INSTANT)
+                } catch (_: Exception) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ApiResponse.fail<Unit>("פורמט תאריך לא תקין")
+                    )
+                    return@post
+                }
+
+                // Check for duplicates
+                val from = shiftDateIso
+                val to = LocalDate.parse(request.shiftDate)
+                    .plusDays(1).atStartOfDay(ZoneOffset.UTC)
+                    .format(DateTimeFormatter.ISO_INSTANT)
+                val existingShifts = database.shiftDao().getByDateRange(from, to)
+                val isDuplicate = existingShifts.any {
+                    it.shiftName == request.shiftName &&
+                    it.carId == request.carId &&
+                    it.volunteerId == request.volunteerId
+                }
+                if (isDuplicate) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ApiResponse.fail<Unit>("המתנדב כבר משובץ למשמרת זו")
+                    )
+                    return@post
+                }
+
+                val now = Instant.now().toString()
+                val entity = ShiftEntity(
+                    shiftDate = shiftDateIso,
+                    shiftName = request.shiftName,
+                    carId = request.carId,
+                    volunteerId = request.volunteerId,
+                    createdAt = now,
+                    updatedAt = now
+                )
+
+                val newId = database.shiftDao().insert(entity)
+
+                val dto = ShiftWithVolunteerDto(
+                    id = newId.toInt(),
+                    shiftDate = shiftDateIso,
+                    shiftName = request.shiftName,
+                    carId = request.carId,
+                    volunteerId = request.volunteerId,
+                    volunteerName = volunteer.mappingName,
+                    volunteerPhone = volunteer.mobilePhone,
+                    volunteerApproved = volunteer.approveToReceiveSms == 1
+                )
+
+                call.respond(HttpStatusCode.Created, ApiResponse.ok(dto))
+            }
 
             // POST /api/shifts/import - file upload
             post("/import") {

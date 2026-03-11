@@ -12,6 +12,7 @@ import { SmsLogSummaryPage } from '@/pages/SmsLogSummaryPage';
 import { SchedulerSettingsPage } from '@/pages/SchedulerSettingsPage';
 import { SchedulerRunLogPage } from '@/pages/SchedulerRunLogPage';
 import { SmsSettingsPage } from '@/pages/SmsSettingsPage';
+import { ShiftsManagementPage } from '@/pages/ShiftsManagementPage';
 import { authService } from '@/services/authService';
 
 interface User {
@@ -74,6 +75,8 @@ const Index = () => {
         return <SchedulerRunLogPage />;
       case 'sms-settings':
         return <SmsSettingsPage />;
+      case 'shifts-management':
+        return <ShiftsManagementPage />;
       default:
         return <PlaceholderPage />;
     }

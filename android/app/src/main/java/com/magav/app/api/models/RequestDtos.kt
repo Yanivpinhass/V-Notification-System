@@ -111,6 +111,28 @@ data class ImportResultDto(
     val errorMessages: List<String> = emptyList()
 )
 
+// ── Shifts ──────────────────────────────────────────────────────────────────
+
+@Serializable
+data class CreateShiftRequest(
+    val shiftDate: String,
+    val shiftName: String,
+    val carId: String,
+    val volunteerId: Int
+)
+
+@Serializable
+data class ShiftWithVolunteerDto(
+    val id: Int,
+    val shiftDate: String,
+    val shiftName: String,
+    val carId: String,
+    val volunteerId: Int,
+    val volunteerName: String,
+    val volunteerPhone: String?,
+    val volunteerApproved: Boolean
+)
+
 // ── Scheduler ────────────────────────────────────────────────────────────────
 
 @Serializable

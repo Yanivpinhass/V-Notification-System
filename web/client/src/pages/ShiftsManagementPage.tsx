@@ -1,0 +1,448 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { shiftsService, ShiftWithVolunteerDto } from '@/services/shiftsService';
+import { volunteersService, VolunteerDto } from '@/services/volunteersService';
+import { Loader2, Trash2, Plus, Search, Calendar as CalendarIcon } from 'lucide-react';
+import { toast } from 'sonner';
+import { format } from 'date-fns';
+import { he } from 'date-fns/locale';
+
+interface ShiftGroup {
+  shiftName: string;
+  carId: string;
+  shifts: ShiftWithVolunteerDto[];
+  isLocal?: boolean; // locally created, not yet saved
+}
+
+export const ShiftsManagementPage: React.FC = () => {
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [shifts, setShifts] = useState<ShiftWithVolunteerDto[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Local (unsaved) shift groups
+  const [localGroups, setLocalGroups] = useState<ShiftGroup[]>([]);
+
+  // Delete dialog
+  const [deleteTarget, setDeleteTarget] = useState<ShiftWithVolunteerDto | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Add volunteer dialog
+  const [addTarget, setAddTarget] = useState<{ shiftName: string; carId: string } | null>(null);
+  const [volunteers, setVolunteers] = useState<VolunteerDto[]>([]);
+  const [volunteersLoaded, setVolunteersLoaded] = useState(false);
+  const [volunteerSearch, setVolunteerSearch] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
+
+  // New shift group dialog
+  const [newGroupOpen, setNewGroupOpen] = useState(false);
+  const [newShiftName, setNewShiftName] = useState('');
+  const [newCarId, setNewCarId] = useState('');
+
+  const dateStr = format(selectedDate, 'yyyy-MM-dd');
+
+  const loadShifts = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await shiftsService.getByDate(dateStr);
+      console.log('[ShiftsManagement] loaded shifts:', data.length, 'shifts for', dateStr, data);
+      setShifts(data);
+      setLocalGroups([]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'אירעה שגיאה בטעינת השיבוצים');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [dateStr]);
+
+  useEffect(() => {
+    loadShifts();
+  }, [loadShifts]);
+
+  // Load volunteers once when add dialog opens
+  const loadVolunteers = useCallback(async () => {
+    if (volunteersLoaded) return;
+    try {
+      const data = await volunteersService.getAll();
+      setVolunteers(data);
+      setVolunteersLoaded(true);
+    } catch {
+      toast.error('שגיאה בטעינת רשימת המתנדבים');
+    }
+  }, [volunteersLoaded]);
+
+  // Group shifts by (shiftName, carId)
+  const groupedShifts: ShiftGroup[] = React.useMemo(() => {
+    const map = new Map<string, ShiftWithVolunteerDto[]>();
+    for (const s of shifts) {
+      const key = `${s.shiftName}||${s.carId}`;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(s);
+    }
+    const groups: ShiftGroup[] = [];
+    for (const [key, items] of map) {
+      const [shiftName, carId] = key.split('||');
+      groups.push({ shiftName, carId, shifts: items });
+    }
+    // Append local (empty) groups that don't overlap with server groups
+    for (const lg of localGroups) {
+      const exists = groups.some(g => g.shiftName === lg.shiftName && g.carId === lg.carId);
+      if (!exists) groups.push(lg);
+    }
+    return groups;
+  }, [shifts, localGroups]);
+
+  // ── Delete ──
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await shiftsService.deleteShift(deleteTarget.id);
+      toast.success('השיבוץ נמחק בהצלחה');
+      setDeleteTarget(null);
+      loadShifts();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'שגיאה במחיקת השיבוץ');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // ── Add volunteer to shift ──
+  const openAddDialog = (shiftName: string, carId: string) => {
+    setAddTarget({ shiftName, carId });
+    setVolunteerSearch('');
+    loadVolunteers();
+  };
+
+  const handleAddVolunteer = async (vol: VolunteerDto) => {
+    if (!addTarget) return;
+    setIsAdding(true);
+    try {
+      await shiftsService.createShift({
+        shiftDate: dateStr,
+        shiftName: addTarget.shiftName,
+        carId: addTarget.carId,
+        volunteerId: vol.id,
+      });
+      toast.success(`${vol.mappingName} שובץ בהצלחה`);
+      setAddTarget(null);
+      loadShifts();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'שגיאה בשיבוץ המתנדב');
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  // ── New shift group ──
+  const handleCreateGroup = () => {
+    if (!newShiftName.trim()) return;
+    const group: ShiftGroup = {
+      shiftName: newShiftName.trim(),
+      carId: newCarId.trim(),
+      shifts: [],
+      isLocal: true,
+    };
+    setLocalGroups(prev => [...prev, group]);
+    setNewGroupOpen(false);
+    setNewShiftName('');
+    setNewCarId('');
+    toast.success('קבוצת משמרת חדשה נוספה');
+  };
+
+  // Get volunteer status explanation
+  const getVolunteerIssue = (s: ShiftWithVolunteerDto): string | null => {
+    const noPhone = !s.volunteerPhone;
+    const notApproved = !s.volunteerApproved;
+    if (noPhone && notApproved) return 'למתנדב זה לא הוגדר מספר טלפון ולא אישר קבלת הודעות SMS';
+    if (noPhone) return 'למתנדב זה לא הוגדר מספר טלפון';
+    if (notApproved) return 'המתנדב לא אישר קבלת הודעות SMS';
+    return null;
+  };
+
+  const getVolunteerDtoIssue = (v: VolunteerDto): string | null => {
+    const noPhone = !v.mobilePhone;
+    const notApproved = !v.approveToReceiveSms;
+    if (noPhone && notApproved) return 'למתנדב זה לא הוגדר מספר טלפון ולא אישר קבלת הודעות SMS';
+    if (noPhone) return 'למתנדב זה לא הוגדר מספר טלפון';
+    if (notApproved) return 'המתנדב לא אישר קבלת הודעות SMS';
+    return null;
+  };
+
+  // Filter volunteers for the add dialog
+  const filteredVolunteers = volunteers.filter(v =>
+    v.mappingName.includes(volunteerSearch)
+  );
+
+  // Assigned volunteer IDs for current group (to disable in picker)
+  const assignedVolunteerIds = addTarget
+    ? new Set(
+        groupedShifts
+          .find(g => g.shiftName === addTarget.shiftName && g.carId === addTarget.carId)
+          ?.shifts.map(s => s.volunteerId) ?? []
+      )
+    : new Set<number>();
+
+  return (
+    <div className="space-y-4 p-4" dir="rtl">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold">ניהול שיבוצים</h1>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setNewGroupOpen(true)} className="min-h-[44px]">
+            <Plus className="h-4 w-4 ml-2" />
+            משמרת חדשה
+          </Button>
+          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="min-h-[44px] min-w-[140px]">
+                <CalendarIcon className="h-4 w-4 ml-2" />
+                {format(selectedDate, 'dd/MM/yyyy')}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-3" align="end">
+              <Calendar
+                dir="rtl"
+                locale={he}
+                mode="single"
+                selected={selectedDate}
+                onSelect={(date) => {
+                  if (date) {
+                    setSelectedDate(date);
+                    setCalendarOpen(false);
+                  }
+                }}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
+
+      {/* Loading */}
+      {isLoading && (
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {/* Error */}
+      {error && !isLoading && (
+        <Card>
+          <CardContent className="py-8 text-center text-red-600">{error}</CardContent>
+        </Card>
+      )}
+
+      {/* Empty state */}
+      {!isLoading && !error && groupedShifts.length === 0 && (
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            לא נמצאו שיבוצים לתאריך זה
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Shift groups */}
+      {!isLoading && !error && groupedShifts.map((group, idx) => (
+        <Card key={`${group.shiftName}-${group.carId}-${idx}`} className="max-w-full">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <span>{group.shiftName}</span>
+              {group.carId && (
+                <span className="text-sm font-normal text-muted-foreground">
+                  / רכב {group.carId}
+                </span>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {group.shifts.length === 0 && (
+              <p className="text-sm text-muted-foreground">אין מתנדבים</p>
+            )}
+            {group.shifts.map((shift) => {
+              const issue = getVolunteerIssue(shift);
+              return (
+                <div
+                  key={shift.id}
+                  className="flex items-center justify-between gap-2 rounded-md border p-3"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {issue ? (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button className="text-red-600 font-medium text-sm text-right cursor-pointer hover:underline truncate">
+                            {shift.volunteerName}
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 text-sm" dir="rtl">
+                          {issue}
+                        </PopoverContent>
+                      </Popover>
+                    ) : (
+                      <span className="text-sm font-medium truncate">{shift.volunteerName}</span>
+                    )}
+                    {shift.volunteerPhone && (
+                      <span className="text-sm text-muted-foreground whitespace-nowrap">
+                        {shift.volunteerPhone}
+                      </span>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="min-h-[44px] min-w-[44px] text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0"
+                    onClick={() => setDeleteTarget(shift)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              );
+            })}
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2 min-h-[44px]"
+              onClick={() => openAddDialog(group.shiftName, group.carId)}
+            >
+              <Plus className="h-4 w-4 ml-1" />
+              הוסף מתנדב
+            </Button>
+          </CardContent>
+        </Card>
+      ))}
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>מחיקת שיבוץ</AlertDialogTitle>
+            <AlertDialogDescription>
+              האם למחוק את השיבוץ של {deleteTarget?.volunteerName}?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2">
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'מחק'}
+            </AlertDialogAction>
+            <AlertDialogCancel disabled={isDeleting}>ביטול</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Add volunteer dialog */}
+      <Dialog open={!!addTarget} onOpenChange={(open) => !open && setAddTarget(null)}>
+        <DialogContent dir="rtl" className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              הוסף מתנדב ל{addTarget?.shiftName}
+              {addTarget?.carId ? ` / רכב ${addTarget.carId}` : ''}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="חיפוש מתנדב..."
+                value={volunteerSearch}
+                onChange={(e) => setVolunteerSearch(e.target.value)}
+                className="pr-10"
+              />
+            </div>
+            <div className="max-h-[50vh] overflow-y-auto space-y-1 border rounded-md p-2">
+              {!volunteersLoaded && (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              )}
+              {volunteersLoaded && filteredVolunteers.length === 0 && (
+                <p className="text-sm text-center text-muted-foreground py-4">לא נמצאו מתנדבים</p>
+              )}
+              {filteredVolunteers.map((vol) => {
+                const isAssigned = assignedVolunteerIds.has(vol.id);
+                const issue = getVolunteerDtoIssue(vol);
+                return (
+                  <button
+                    key={vol.id}
+                    disabled={isAssigned || isAdding}
+                    onClick={() => handleAddVolunteer(vol)}
+                    className={`w-full text-right rounded-md px-3 py-3 text-sm transition-colors min-h-[44px] ${
+                      isAssigned
+                        ? 'opacity-40 cursor-not-allowed bg-muted'
+                        : 'hover:bg-accent cursor-pointer'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={issue ? 'text-red-600' : ''}>
+                        {vol.mappingName}
+                      </span>
+                      <span className="text-xs text-muted-foreground mr-2">
+                        {isAssigned ? 'כבר משובץ' : vol.mobilePhone || ''}
+                      </span>
+                    </div>
+                    {issue && (
+                      <p className="text-xs text-red-500 mt-0.5">{issue}</p>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* New shift group dialog */}
+      <Dialog open={newGroupOpen} onOpenChange={setNewGroupOpen}>
+        <DialogContent dir="rtl" className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>משמרת חדשה</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium mb-1 block">שם משמרת *</label>
+              <Input
+                value={newShiftName}
+                onChange={(e) => setNewShiftName(e.target.value)}
+                placeholder="לדוגמה: צוות א"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">מספר רכב</label>
+              <Input
+                value={newCarId}
+                onChange={(e) => setNewCarId(e.target.value)}
+                placeholder="לדוגמה: 101"
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex-row-reverse gap-2 mt-4">
+            <Button
+              onClick={handleCreateGroup}
+              disabled={!newShiftName.trim()}
+            >
+              צור משמרת
+            </Button>
+            <Button variant="outline" onClick={() => setNewGroupOpen(false)}>
+              ביטול
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};

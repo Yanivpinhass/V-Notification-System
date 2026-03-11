@@ -276,6 +276,31 @@ app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", timestamp =
 // VOLUNTEERS ENDPOINTS
 // ============================================
 
+app.MapGet("/api/volunteers", async (MagavDbManager db) =>
+{
+    try
+    {
+        var volunteers = await db.Volunteers.GetAllAsync();
+        var dtos = volunteers.Select(v => new
+        {
+            v.Id,
+            v.MappingName,
+            v.MobilePhone,
+            v.ApproveToReceiveSms,
+            v.CreatedAt,
+            v.UpdatedAt
+        }).ToList();
+        return Results.Ok(ApiResponse<object>.Ok(dtos));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error fetching volunteers: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בטעינת הנתונים"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
 app.MapPost("/api/volunteers/import", async (HttpRequest request, MagavDbManager db) =>
 {
     const long MaxFileSize = 10 * 1024 * 1024; // 10MB
@@ -401,6 +426,131 @@ app.MapPost("/api/shifts/import", async (HttpRequest request, MagavDbManager db)
 })
 .RequireAuthorization("CanImportVolunteers")
 .DisableAntiforgery(); // Required for file uploads
+
+// GET /api/shifts/by-date?date=YYYY-MM-DD
+app.MapGet("/api/shifts/by-date", async (string? date, MagavDbManager db) =>
+{
+    try
+    {
+        if (string.IsNullOrWhiteSpace(date))
+            return Results.BadRequest(ApiResponse<object>.Fail("פרמטר תאריך נדרש"));
+
+        if (!DateTime.TryParse((string)date, out var parsedDate))
+            return Results.BadRequest(ApiResponse<object>.Fail("פורמט תאריך לא תקין"));
+
+        var shifts = await db.Shifts.GetByDateAsync(parsedDate);
+        var volunteers = await db.Volunteers.GetAllAsync();
+        var volunteerMap = volunteers.ToDictionary(v => v.Id);
+
+        var dtos = shifts.Select(s =>
+        {
+            volunteerMap.TryGetValue(s.VolunteerId, out var vol);
+            return new ShiftWithVolunteerDto(
+                s.Id,
+                s.ShiftDate.ToString("yyyy-MM-dd"),
+                s.ShiftName,
+                s.CarId,
+                s.VolunteerId,
+                vol?.MappingName ?? "מתנדב לא ידוע",
+                vol?.MobilePhone,
+                vol?.ApproveToReceiveSms ?? false
+            );
+        }).ToList();
+
+        return Results.Ok(ApiResponse<object>.Ok(dtos));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error fetching shifts by date: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// DELETE /api/shifts/{id}
+app.MapDelete("/api/shifts/{id:int}", async (int id, MagavDbManager db) =>
+{
+    try
+    {
+        var shift = await db.Shifts.GetByIdAsync(id);
+        if (shift == null)
+            return Results.NotFound(ApiResponse<object>.Fail("שיבוץ לא נמצא"));
+
+        // Cascade: delete related SMS logs first
+        await db.Db.ExecuteQueryAsync("DELETE FROM SmsLog WHERE ShiftId = @0", id);
+        await db.Shifts.DeleteAsync(shift);
+
+        return Results.Ok(ApiResponse<object>.Ok(null!, "השיבוץ נמחק בהצלחה"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error deleting shift: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה במחיקת השיבוץ"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// POST /api/shifts - create a new shift assignment
+app.MapPost("/api/shifts", async (CreateShiftRequest request, MagavDbManager db) =>
+{
+    try
+    {
+        if (string.IsNullOrWhiteSpace(request.ShiftName))
+            return Results.BadRequest(ApiResponse<object>.Fail("שם משמרת נדרש"));
+
+        if (!DateTime.TryParse((string)request.ShiftDate, out var parsedDate))
+            return Results.BadRequest(ApiResponse<object>.Fail("פורמט תאריך לא תקין"));
+
+        // Verify volunteer exists
+        var volunteer = await db.Volunteers.GetByIdAsync(request.VolunteerId);
+        if (volunteer == null)
+            return Results.NotFound(ApiResponse<object>.Fail("המתנדב לא נמצא"));
+
+        // Check for duplicates
+        var existingShifts = await db.Shifts.GetByDateAsync(parsedDate);
+        var isDuplicate = existingShifts.Any(s =>
+            s.ShiftName == request.ShiftName &&
+            s.CarId == (request.CarId ?? "") &&
+            s.VolunteerId == request.VolunteerId);
+        if (isDuplicate)
+            return Results.BadRequest(ApiResponse<object>.Fail("המתנדב כבר משובץ למשמרת זו"));
+
+        var now = DateTime.UtcNow;
+        var shift = new Shift
+        {
+            ShiftDate = parsedDate,
+            ShiftName = request.ShiftName,
+            CarId = request.CarId ?? "",
+            VolunteerId = request.VolunteerId,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+
+        await db.Shifts.InsertAsync(shift);
+
+        var dto = new ShiftWithVolunteerDto(
+            shift.Id,
+            parsedDate.ToString("yyyy-MM-dd"),
+            shift.ShiftName,
+            shift.CarId,
+            shift.VolunteerId,
+            volunteer.MappingName,
+            volunteer.MobilePhone,
+            volunteer.ApproveToReceiveSms
+        );
+
+        return Results.Ok(ApiResponse<object>.Ok(dto));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error creating shift: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה ביצירת השיבוץ"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
 
 // ============================================
 // PUBLIC SMS APPROVAL ENDPOINTS (No Auth Required)
@@ -1090,3 +1240,8 @@ public class SmsLogSummaryDto
 
 // Scheduler Config DTO (editable fields only)
 public record SchedulerConfigUpdateDto(int Id, string Time, int DaysBeforeShift, int IsEnabled, string MessageTemplate);
+
+// Shift Management DTOs
+public record CreateShiftRequest(string ShiftDate, string ShiftName, string CarId, int VolunteerId);
+public record ShiftWithVolunteerDto(int Id, string ShiftDate, string ShiftName, string CarId,
+    int VolunteerId, string VolunteerName, string? VolunteerPhone, bool VolunteerApproved);

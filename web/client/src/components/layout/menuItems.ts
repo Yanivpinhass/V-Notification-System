@@ -1,4 +1,4 @@
-import { Home, Users, MessageSquare, Settings, Search } from 'lucide-react';
+import { Home, Users, MessageSquare, Settings, Search, Calendar } from 'lucide-react';
 import { MenuItem } from './types';
 
 export const mainMenuItems: MenuItem[] = [
@@ -9,6 +9,15 @@ export const mainMenuItems: MenuItem[] = [
     subItems: [
       { id: 'shifts-import', title: 'קליטת קובץ משמרות', path: '/data-import/shifts' },
       { id: 'volunteers-import', title: 'קליטת קובץ מתנדבים', path: '/data-import/volunteers' },
+    ]
+  },
+  {
+    id: 'shift-management',
+    title: 'ניהול שיבוצים',
+    icon: Calendar,
+    requiredRoles: ['Admin', 'SystemManager'],
+    subItems: [
+      { id: 'shifts-management', title: 'ניהול שיבוצים', path: '/shift-management/shifts' },
     ]
   },
   {
