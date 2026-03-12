@@ -9,9 +9,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { shiftsService, ShiftWithVolunteerDto } from '@/services/shiftsService';
+import { shiftsService, ShiftWithVolunteerDto, UpdateShiftGroupRequest } from '@/services/shiftsService';
 import { volunteersService, VolunteerDto } from '@/services/volunteersService';
-import { Loader2, Trash2, Plus, Search, Calendar as CalendarIcon, MessageSquare, Phone } from 'lucide-react';
+import { Loader2, Trash2, Plus, Search, Calendar as CalendarIcon, MessageSquare, Phone, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { he } from 'date-fns/locale';
@@ -54,6 +54,12 @@ export const ShiftsManagementPage: React.FC = () => {
   const [newGroupOpen, setNewGroupOpen] = useState(false);
   const [newShiftName, setNewShiftName] = useState('');
   const [newCarId, setNewCarId] = useState('');
+
+  // Edit shift group dialog
+  const [editTarget, setEditTarget] = useState<ShiftGroup | null>(null);
+  const [editShiftName, setEditShiftName] = useState('');
+  const [editCarId, setEditCarId] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
@@ -208,6 +214,28 @@ export const ShiftsManagementPage: React.FC = () => {
     toast.success('קבוצת משמרת חדשה נוספה');
   };
 
+  // ── Edit shift group ──
+  const handleEditGroup = async () => {
+    if (!editTarget || !editShiftName.trim()) return;
+    setIsEditing(true);
+    try {
+      await shiftsService.updateShiftGroup({
+        date: dateStr,
+        oldShiftName: editTarget.shiftName,
+        oldCarId: editTarget.carId,
+        newShiftName: editShiftName.trim(),
+        newCarId: editCarId.trim(),
+      });
+      toast.success('פרטי המשמרת עודכנו בהצלחה');
+      setEditTarget(null);
+      loadShifts();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'שגיאה בעדכון המשמרת');
+    } finally {
+      setIsEditing(false);
+    }
+  };
+
   // Get volunteer status explanation
   const getVolunteerIssue = (s: ShiftWithVolunteerDto): string | null => {
     const noPhone = !s.volunteerPhone;
@@ -310,6 +338,20 @@ export const ShiftsManagementPage: React.FC = () => {
                 <span className="text-sm font-normal text-muted-foreground">
                   / רכב {group.carId}
                 </span>
+              )}
+              {!group.isLocal && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setEditTarget(group);
+                    setEditShiftName(group.shiftName);
+                    setEditCarId(group.carId);
+                  }}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
               )}
             </CardTitle>
           </CardHeader>
@@ -571,6 +613,45 @@ export const ShiftsManagementPage: React.FC = () => {
               צור משמרת
             </Button>
             <Button variant="outline" onClick={() => setNewGroupOpen(false)}>
+              ביטול
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit shift group dialog */}
+      <Dialog open={!!editTarget} onOpenChange={(open) => !open && !isEditing && setEditTarget(null)}>
+        <DialogContent dir="rtl" className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>עריכת משמרת</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium mb-1 block">שם משמרת *</label>
+              <Input
+                value={editShiftName}
+                onChange={(e) => setEditShiftName(e.target.value)}
+                placeholder="לדוגמה: צוות א"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">מספר רכב</label>
+              <Input
+                value={editCarId}
+                onChange={(e) => setEditCarId(e.target.value)}
+                placeholder="לדוגמה: 101"
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex-row-reverse gap-2 mt-4">
+            <Button
+              onClick={handleEditGroup}
+              disabled={!editShiftName.trim() || isEditing}
+            >
+              {isEditing ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
+              שמור
+            </Button>
+            <Button variant="outline" onClick={() => setEditTarget(null)} disabled={isEditing}>
               ביטול
             </Button>
           </DialogFooter>

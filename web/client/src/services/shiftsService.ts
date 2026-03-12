@@ -19,6 +19,14 @@ export interface CreateShiftRequest {
   volunteerId: number;
 }
 
+export interface UpdateShiftGroupRequest {
+  date: string;
+  oldShiftName: string;
+  oldCarId: string;
+  newShiftName: string;
+  newCarId: string;
+}
+
 class ShiftsService extends BaseApiClient {
   async uploadShiftsFile(file: File): Promise<ImportResult> {
     const formData = new FormData();
@@ -40,6 +48,10 @@ class ShiftsService extends BaseApiClient {
 
   async sendShiftSms(shiftId: number, templateId?: number): Promise<void> {
     return this.post<void>(`/shifts/${shiftId}/send-sms`, { templateId: templateId ?? null });
+  }
+
+  async updateShiftGroup(data: UpdateShiftGroupRequest): Promise<void> {
+    return this.put<void, UpdateShiftGroupRequest>('/shifts/update-group', data);
   }
 }
 

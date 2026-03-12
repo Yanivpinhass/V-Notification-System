@@ -122,6 +122,15 @@ data class CreateShiftRequest(
 )
 
 @Serializable
+data class UpdateShiftGroupRequest(
+    val date: String,
+    val oldShiftName: String,
+    val oldCarId: String,
+    val newShiftName: String,
+    val newCarId: String
+)
+
+@Serializable
 data class ShiftWithVolunteerDto(
     val id: Int,
     val shiftDate: String,

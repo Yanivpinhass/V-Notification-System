@@ -5,6 +5,7 @@ import com.magav.app.api.models.ApiResponse
 import com.magav.app.api.models.CreateShiftRequest
 import com.magav.app.api.models.SendShiftSmsRequest
 import com.magav.app.api.models.ShiftWithVolunteerDto
+import com.magav.app.api.models.UpdateShiftGroupRequest
 import com.magav.app.api.requireRole
 import com.magav.app.db.MagavDatabase
 import com.magav.app.db.entity.ShiftEntity
@@ -264,6 +265,62 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                 )
 
                 call.respond(HttpStatusCode.Created, ApiResponse.ok(dto))
+            }
+
+            // PUT /api/shifts/update-group - update shift name and car for a group
+            put("/update-group") {
+                call.requireRole("Admin", "SystemManager")
+
+                val request = call.receive<UpdateShiftGroupRequest>()
+
+                if (request.newShiftName.isBlank()) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ApiResponse.fail<Unit>("שם משמרת נדרש")
+                    )
+                    return@put
+                }
+
+                val date = try {
+                    LocalDate.parse(request.date)
+                } catch (_: Exception) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ApiResponse.fail<Unit>("פורמט תאריך לא תקין")
+                    )
+                    return@put
+                }
+
+                val newShiftName = request.newShiftName.trim()
+                val newCarId = request.newCarId.trim()
+
+                // No-op if nothing changed
+                if (request.oldShiftName == newShiftName && request.oldCarId == newCarId) {
+                    call.respond(ApiResponse.ok("לא בוצעו שינויים"))
+                    return@put
+                }
+
+                val from = date.atStartOfDay(ZoneOffset.UTC)
+                    .format(DateTimeFormatter.ISO_INSTANT)
+                val to = date.plusDays(1).atStartOfDay(ZoneOffset.UTC)
+                    .format(DateTimeFormatter.ISO_INSTANT)
+
+                // Conflict check
+                val existingCount = database.shiftDao().countShiftGroup(newShiftName, newCarId, from, to)
+                if (existingCount > 0) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ApiResponse.fail<Unit>("קבוצת משמרת עם שם ורכב זהים כבר קיימת לתאריך זה")
+                    )
+                    return@put
+                }
+
+                database.shiftDao().updateShiftGroup(
+                    newShiftName, newCarId, Instant.now().toString(), from, to,
+                    request.oldShiftName, request.oldCarId
+                )
+
+                call.respond(ApiResponse.ok("פרטי המשמרת עודכנו בהצלחה"))
             }
 
             // POST /api/shifts/import - file upload

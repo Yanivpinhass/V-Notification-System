@@ -31,4 +31,26 @@ public class ShiftsRepository : Repository<Shift>
         await UpdateAsync(shift);
         return true;
     }
+
+    public async Task<bool> HasShiftGroupAsync(DateTime date, string shiftName, string carId)
+    {
+        var shifts = await GetByDateAsync(date);
+        return shifts.Any(s => s.ShiftName == shiftName && s.CarId == carId);
+    }
+
+    public async Task<int> UpdateShiftGroupAsync(DateTime date, string oldShiftName, string oldCarId, string newShiftName, string newCarId)
+    {
+        var shifts = await GetByDateAsync(date);
+        var matching = shifts.Where(s => s.ShiftName == oldShiftName && s.CarId == oldCarId).ToList();
+
+        foreach (var shift in matching)
+        {
+            shift.ShiftName = newShiftName;
+            shift.CarId = newCarId;
+            shift.UpdatedAt = DateTime.UtcNow;
+            await UpdateAsync(shift);
+        }
+
+        return matching.Count;
+    }
 }

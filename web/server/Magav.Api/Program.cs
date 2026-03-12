@@ -637,6 +637,46 @@ app.MapPost("/api/shifts", async (CreateShiftRequest request, MagavDbManager db)
     }
 }).RequireAuthorization("CanManageMessages");
 
+// PUT /api/shifts/update-group - update shift name and car for a group
+app.MapPut("/api/shifts/update-group", async (UpdateShiftGroupRequest request, MagavDbManager db) =>
+{
+    try
+    {
+        if (string.IsNullOrWhiteSpace(request.NewShiftName))
+            return Results.BadRequest(ApiResponse<object>.Fail("שם משמרת נדרש"));
+
+        if (!DateTime.TryParse((string)request.Date, out var parsedDate))
+            return Results.BadRequest(ApiResponse<object>.Fail("פורמט תאריך לא תקין"));
+
+        // No-op if nothing changed
+        if (request.OldShiftName == request.NewShiftName.Trim() &&
+            (request.OldCarId ?? "") == (request.NewCarId ?? "").Trim())
+            return Results.Ok(ApiResponse<object>.Ok(null!, "לא בוצעו שינויים"));
+
+        // Conflict check: does the new (name, car) already exist for this date?
+        var newShiftName = request.NewShiftName.Trim();
+        var newCarId = (request.NewCarId ?? "").Trim();
+
+        if (await db.Shifts.HasShiftGroupAsync(parsedDate, newShiftName, newCarId))
+            return Results.BadRequest(ApiResponse<object>.Fail("קבוצת משמרת עם שם ורכב זהים כבר קיימת לתאריך זה"));
+
+        var updated = await db.Shifts.UpdateShiftGroupAsync(
+            parsedDate, request.OldShiftName, request.OldCarId ?? "", newShiftName, newCarId);
+
+        if (updated == 0)
+            return Results.NotFound(ApiResponse<object>.Fail("לא נמצאו שיבוצים לעדכון"));
+
+        return Results.Ok(ApiResponse<object>.Ok(null!, "פרטי המשמרת עודכנו בהצלחה"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error updating shift group: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בעדכון המשמרת"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
 // ============================================
 // PUBLIC SMS APPROVAL ENDPOINTS (No Auth Required)
 // ============================================
@@ -1449,5 +1489,6 @@ public record UpdateMessageTemplateRequest(string Name, string Content);
 // Shift Management DTOs
 public record SendShiftSmsRequest(int? TemplateId);
 public record CreateShiftRequest(string ShiftDate, string ShiftName, string CarId, int VolunteerId);
+public record UpdateShiftGroupRequest(string Date, string OldShiftName, string OldCarId, string NewShiftName, string NewCarId);
 public record ShiftWithVolunteerDto(int Id, string ShiftDate, string ShiftName, string CarId,
     int VolunteerId, string VolunteerName, string? VolunteerPhone, bool VolunteerApproved);
