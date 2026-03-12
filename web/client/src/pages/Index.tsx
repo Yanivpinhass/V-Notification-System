@@ -26,7 +26,7 @@ const Index = () => {
   });
   const [isAuthenticated, setIsAuthenticated] = useState(() => authService.isAuthenticated());
   const [mustChangePassword, setMustChangePassword] = useState(false);
-  const [activeSubItem, setActiveSubItem] = useState('shifts-import');
+  const [activeSubItem, setActiveSubItem] = useState('shifts-management');
 
   const handleAuthentication = (authenticatedUser: User, needsPasswordChange: boolean) => {
     setUser(authenticatedUser);

@@ -1,23 +1,15 @@
-import { Home, Users, MessageSquare, Settings, Search, Calendar } from 'lucide-react';
+import { Users, Settings, Search, Calendar } from 'lucide-react';
 import { MenuItem } from './types';
 
 export const mainMenuItems: MenuItem[] = [
   {
-    id: 'data-import',
-    title: 'קליטת נתונים',
-    icon: Home,
-    subItems: [
-      { id: 'shifts-import', title: 'קליטת קובץ משמרות', path: '/data-import/shifts' },
-      { id: 'volunteers-import', title: 'קליטת קובץ מתנדבים', path: '/data-import/volunteers' },
-    ]
-  },
-  {
     id: 'shift-management',
-    title: 'ניהול שיבוצים',
+    title: 'ניהול משמרות',
     icon: Calendar,
     requiredRoles: ['Admin', 'SystemManager'],
     subItems: [
-      { id: 'shifts-management', title: 'ניהול שיבוצים', path: '/shift-management/shifts' },
+      { id: 'shifts-management', title: 'משמרות', path: '/shift-management/shifts' },
+      { id: 'shifts-import', title: 'קליטת קובץ משמרות', path: '/shift-management/import' },
     ]
   },
   {
@@ -27,6 +19,7 @@ export const mainMenuItems: MenuItem[] = [
     requiredRoles: ['Admin', 'SystemManager'],
     subItems: [
       { id: 'volunteers-management', title: 'ניהול מתנדבים', path: '/volunteer-management/volunteers' },
+      { id: 'volunteers-import', title: 'קליטת קובץ מתנדבים', path: '/volunteer-management/import' },
     ]
   },
   {

@@ -38,7 +38,13 @@
       "Bash(cp -r web/client/dist/* android/app/src/main/assets/web/)",
       "Bash(rm -rf \"c:/MyData/Projects/Magav/V-Notification-System/android/app/src/main/assets/web\")",
       "Bash(mkdir -p \"c:/MyData/Projects/Magav/V-Notification-System/android/app/src/main/assets/web\")",
-      "Bash(cp -r \"c:/MyData/Projects/Magav/V-Notification-System/web/client/dist/\"* \"c:/MyData/Projects/Magav/V-Notification-System/android/app/src/main/assets/web/\")"
+      "Bash(cp -r \"c:/MyData/Projects/Magav/V-Notification-System/web/client/dist/\"* \"c:/MyData/Projects/Magav/V-Notification-System/android/app/src/main/assets/web/\")",
+      "Bash(grep -r \"shiftRoutes\\\\|/api/shifts\" /c/MyData/Projects/Magav/V-Notification-System/web/server --include=*.cs)",
+      "Bash(cmd //c \"gradlew.bat assembleDebug\")",
+      "Bash(\"$LOCALAPPDATA/Android/Sdk/platform-tools/adb\" devices:*)",
+      "Bash(scp -r web/client/dist/* yaniv@magav:/opt/magav/client/)",
+      "Bash(ASSETS_WEB=\"/c/MyData/Projects/Magav/V-Notification-System/android/app/src/main/assets/web\")",
+      "Bash(cp -r /c/MyData/Projects/Magav/V-Notification-System/web/client/dist/* \"$ASSETS_WEB/\")"
     ]
   }
 }
