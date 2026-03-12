@@ -287,7 +287,7 @@ export const ShiftsManagementPage: React.FC = () => {
       {/* Error */}
       {error && !isLoading && (
         <Card>
-          <CardContent className="py-8 text-center text-red-600">{error}</CardContent>
+          <CardContent className="py-8 text-center text-destructive">{error}</CardContent>
         </Card>
       )}
 
@@ -332,7 +332,7 @@ export const ShiftsManagementPage: React.FC = () => {
                     {issue ? (
                       <Popover>
                         <PopoverTrigger asChild>
-                          <button className="text-red-600 font-medium text-sm text-right cursor-pointer hover:underline">
+                          <button className="text-destructive font-medium text-sm text-right cursor-pointer hover:underline">
                             {shift.volunteerName}
                           </button>
                         </PopoverTrigger>
@@ -353,7 +353,7 @@ export const ShiftsManagementPage: React.FC = () => {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="min-h-[44px] min-w-[44px] text-blue-500 hover:text-blue-700 hover:bg-blue-50"
+                      className="min-h-[44px] min-w-[44px] text-primary hover:text-primary hover:bg-primary/10"
                       disabled={!canSms || isPast || sendingSmsId === shift.id}
                       onClick={() => setSmsConfirmTarget(shift)}
                     >
@@ -366,7 +366,7 @@ export const ShiftsManagementPage: React.FC = () => {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="min-h-[44px] min-w-[44px] text-green-500 hover:text-green-700 hover:bg-green-50"
+                      className="min-h-[44px] min-w-[44px] text-success hover:text-success hover:bg-success/10"
                       disabled={!shift.volunteerPhone}
                       onClick={() => setCallConfirmTarget(shift)}
                     >
@@ -375,7 +375,7 @@ export const ShiftsManagementPage: React.FC = () => {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="min-h-[44px] min-w-[44px] text-red-500 hover:text-red-700 hover:bg-red-50"
+                      className="min-h-[44px] min-w-[44px] text-destructive hover:text-destructive hover:bg-destructive/10"
                       onClick={() => setDeleteTarget(shift)}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -414,7 +414,7 @@ export const ShiftsManagementPage: React.FC = () => {
                 isDeleting || deletingWithNotify ||
                 !deleteTarget?.volunteerPhone || !deleteTarget?.volunteerApproved
               }
-              className="bg-amber-600 hover:bg-amber-700 text-white"
+              className="bg-warning hover:bg-warning/90 text-white"
             >
               {deletingWithNotify ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
               מחק ועדכן את המתנדב
@@ -422,7 +422,7 @@ export const ShiftsManagementPage: React.FC = () => {
             <AlertDialogAction
               onClick={handleDelete}
               disabled={isDeleting || deletingWithNotify}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-destructive hover:bg-destructive/90"
             >
               {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'מחק'}
             </AlertDialogAction>
@@ -521,7 +521,7 @@ export const ShiftsManagementPage: React.FC = () => {
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className={issue ? 'text-red-600' : ''}>
+                      <span className={issue ? 'text-destructive' : ''}>
                         {vol.mappingName}
                       </span>
                       <span className="text-xs text-muted-foreground mr-2">
@@ -529,7 +529,7 @@ export const ShiftsManagementPage: React.FC = () => {
                       </span>
                     </div>
                     {issue && (
-                      <p className="text-xs text-red-500 mt-0.5">{issue}</p>
+                      <p className="text-xs text-destructive mt-0.5">{issue}</p>
                     )}
                   </button>
                 );

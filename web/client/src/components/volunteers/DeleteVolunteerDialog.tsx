@@ -61,7 +61,7 @@ export const DeleteVolunteerDialog: React.FC<DeleteVolunteerDialogProps> = ({
         </AlertDialogHeader>
 
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
+          <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md text-destructive text-sm">
             {error}
           </div>
         )}

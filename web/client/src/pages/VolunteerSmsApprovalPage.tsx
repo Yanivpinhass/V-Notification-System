@@ -199,9 +199,9 @@ const VolunteerSmsApprovalPage: React.FC = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Alert className="border-blue-200 bg-blue-50">
-                <Info className="h-4 w-4 text-blue-600" />
-                <AlertDescription className="text-right mr-2 text-blue-800">
+              <Alert className="border-primary/20 bg-primary/10">
+                <Info className="h-4 w-4 text-primary" />
+                <AlertDescription className="text-right mr-2 text-primary">
                   קיים אישור לקבלת SMS - להסרה יש לצור קשר עם המב"ס
                 </AlertDescription>
               </Alert>
@@ -333,9 +333,9 @@ const VolunteerSmsApprovalPage: React.FC = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Alert className="border-green-200 bg-green-50">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                <AlertDescription className="text-right mr-2 text-green-800">
+              <Alert className="border-success/40 bg-success/10">
+                <CheckCircle2 className="h-4 w-4 text-success" />
+                <AlertDescription className="text-right mr-2 text-success">
                   האישור נקלט בהצלחה
                 </AlertDescription>
               </Alert>

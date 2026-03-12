@@ -111,7 +111,7 @@ export const VolunteerDialog: React.FC<VolunteerDialogProps> = ({
 
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
+            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md text-destructive text-sm">
               {error}
             </div>
           )}
@@ -119,7 +119,7 @@ export const VolunteerDialog: React.FC<VolunteerDialogProps> = ({
           {/* Name */}
           <div className="space-y-2">
             <Label htmlFor="mappingName">
-              שם <span className="text-red-500">*</span>
+              שם <span className="text-destructive">*</span>
             </Label>
             <Input
               id="mappingName"
@@ -128,7 +128,7 @@ export const VolunteerDialog: React.FC<VolunteerDialogProps> = ({
               autoComplete="off"
             />
             {errors.mappingName && (
-              <p className="text-sm text-red-500">{errors.mappingName.message}</p>
+              <p className="text-sm text-destructive">{errors.mappingName.message}</p>
             )}
           </div>
 

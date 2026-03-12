@@ -25,9 +25,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div
           onClick={toggleSidebar}
           className="h-[56px] cursor-pointer flex items-center justify-end px-4 border-b transition-all duration-300"
-          style={{ background: 'linear-gradient(135deg, hsl(210 100% 92%), hsl(210 100% 85%))' }}
+          style={{ background: 'linear-gradient(135deg, hsl(143 30% 90%), hsl(143 30% 83%))' }}
         >
-          <div className="w-6 h-6 rounded flex items-center justify-center text-gray-600 text-xs font-bold transition-all duration-300 hover:bg-white/20">
+          <div className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground text-xs font-bold transition-all duration-300 hover:bg-white/20">
             {sidebarCollapsed ? '◀' : '▶'}
           </div>
         </div>
@@ -37,9 +37,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {isMobile && (
         <div
           className="h-[56px] flex items-center justify-center px-4 border-b"
-          style={{ background: 'linear-gradient(135deg, hsl(210 100% 92%), hsl(210 100% 85%))' }}
+          style={{ background: 'linear-gradient(135deg, hsl(143 30% 90%), hsl(143 30% 83%))' }}
         >
-          <h2 className="font-semibold text-gray-700">תפריט ניווט</h2>
+          <h2 className="font-semibold text-foreground">תפריט ניווט</h2>
         </div>
       )}
 

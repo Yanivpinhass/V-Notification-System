@@ -50,17 +50,17 @@ export const SmsLogSummaryPage: React.FC = () => {
         </CardHeader>
         <CardContent>
           {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
+            <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-md text-destructive">
               {error}
             </div>
           )}
 
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : summary.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-muted-foreground">
               לא נמצאו נתוני משמרות
             </div>
           ) : (
@@ -81,10 +81,10 @@ export const SmsLogSummaryPage: React.FC = () => {
                     <TableCell className="text-center">{formatDate(row.shiftDate)}</TableCell>
                     <TableCell className="text-right">{row.shiftName}</TableCell>
                     <TableCell className="text-center">{row.totalVolunteers}</TableCell>
-                    <TableCell className="text-center text-green-600 font-medium">
+                    <TableCell className="text-center text-success font-medium">
                       {row.sentSuccess}
                     </TableCell>
-                    <TableCell className={`text-center ${row.sentFail > 0 ? 'text-red-600 font-medium' : ''}`}>
+                    <TableCell className={`text-center ${row.sentFail > 0 ? 'text-destructive font-medium' : ''}`}>
                       {row.sentFail}
                     </TableCell>
                     <TableCell className={`text-center ${row.notSent > 0 ? 'text-orange-600 font-medium' : ''}`}>

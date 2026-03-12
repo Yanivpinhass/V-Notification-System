@@ -59,17 +59,17 @@ export const SmsLogsPage: React.FC = () => {
         </CardHeader>
         <CardContent>
           {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
+            <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-md text-destructive">
               {error}
             </div>
           )}
 
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : logs.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-muted-foreground">
               לא נמצאו הודעות שנשלחו
             </div>
           ) : (
@@ -96,12 +96,12 @@ export const SmsLogsPage: React.FC = () => {
                     <TableCell className="text-center">
                       <Badge
                         variant={log.status === 'Success' ? 'default' : 'destructive'}
-                        className={log.status === 'Success' ? 'bg-green-600 hover:bg-green-700' : ''}
+                        className={log.status === 'Success' ? 'bg-primary hover:bg-primary-hover' : ''}
                       >
                         {log.status === 'Success' ? 'נשלח' : 'נכשל'}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right text-red-600">
+                    <TableCell className="text-right text-destructive">
                       {log.error || '-'}
                     </TableCell>
                   </TableRow>

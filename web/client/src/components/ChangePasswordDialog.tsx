@@ -97,14 +97,14 @@ export const ChangePasswordDialog: React.FC<ChangePasswordDialogProps> = ({
 
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
+            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md text-destructive text-sm">
               {error}
             </div>
           )}
 
           <div className="space-y-2">
             <Label htmlFor="newPassword">
-              סיסמה חדשה <span className="text-red-500">*</span>
+              סיסמה חדשה <span className="text-destructive">*</span>
             </Label>
             <div className="flex gap-2">
               <Input
@@ -128,18 +128,18 @@ export const ChangePasswordDialog: React.FC<ChangePasswordDialogProps> = ({
               </Button>
             </div>
             {generatedPassword && (
-              <p className="text-sm text-green-600 font-mono bg-green-50 p-2 rounded">
+              <p className="text-sm text-success font-mono bg-success/10 p-2 rounded">
                 סיסמה שנוצרה: {generatedPassword}
               </p>
             )}
             {errors.newPassword && (
-              <p className="text-sm text-red-500">{errors.newPassword.message}</p>
+              <p className="text-sm text-destructive">{errors.newPassword.message}</p>
             )}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="confirmPassword">
-              אימות סיסמה <span className="text-red-500">*</span>
+              אימות סיסמה <span className="text-destructive">*</span>
             </Label>
             <Input
               id="confirmPassword"
@@ -151,11 +151,11 @@ export const ChangePasswordDialog: React.FC<ChangePasswordDialogProps> = ({
               autoComplete="new-password"
             />
             {errors.confirmPassword && (
-              <p className="text-sm text-red-500">{errors.confirmPassword.message}</p>
+              <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>
             )}
           </div>
 
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             הסיסמה חייבת להכיל לפחות 4 ספרות
           </p>
 

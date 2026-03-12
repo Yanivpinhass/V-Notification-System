@@ -166,17 +166,17 @@ export const MessageTemplatesPage: React.FC = () => {
         </CardHeader>
         <CardContent>
           {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
+            <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-md text-destructive">
               {error}
             </div>
           )}
 
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : templates.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-muted-foreground">
               לא נמצאו תבניות הודעה
             </div>
           ) : (
@@ -208,7 +208,7 @@ export const MessageTemplatesPage: React.FC = () => {
                             disabled={templates.length <= 1}
                             title={templates.length <= 1 ? 'לא ניתן למחוק את התבנית האחרונה' : undefined}
                           >
-                            <Trash2 className="h-4 w-4 text-red-500" />
+                            <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </div>
                       </TableCell>
@@ -241,7 +241,7 @@ export const MessageTemplatesPage: React.FC = () => {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="template-content">תוכן ההודעה</Label>
-                <span className={`text-xs ${formContent.length > CONTENT_MAX_LENGTH ? 'text-red-500' : 'text-muted-foreground'}`}>
+                <span className={`text-xs ${formContent.length > CONTENT_MAX_LENGTH ? 'text-destructive' : 'text-muted-foreground'}`}>
                   {formContent.length}/{CONTENT_MAX_LENGTH} תווים
                 </span>
               </div>

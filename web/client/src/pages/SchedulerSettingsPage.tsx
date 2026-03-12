@@ -117,7 +117,7 @@ export const SchedulerSettingsPage: React.FC = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -142,7 +142,7 @@ export const SchedulerSettingsPage: React.FC = () => {
       </div>
 
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
+        <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-md text-destructive">
           {error}
         </div>
       )}

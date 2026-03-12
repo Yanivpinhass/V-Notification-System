@@ -123,17 +123,17 @@ export const SystemUsersPage: React.FC<SystemUsersPageProps> = ({ onUserUpdated 
         </CardHeader>
         <CardContent>
           {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
+            <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-md text-destructive">
               {error}
             </div>
           )}
 
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : users.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-muted-foreground">
               לא נמצאו משתמשים
             </div>
           ) : (
@@ -164,7 +164,7 @@ export const SystemUsersPage: React.FC<SystemUsersPageProps> = ({ onUserUpdated 
                     <TableCell className="text-center">
                       <Badge
                         variant={user.isActive ? 'default' : 'destructive'}
-                        className={user.isActive ? 'bg-green-600 hover:bg-green-700' : ''}
+                        className={user.isActive ? 'bg-primary hover:bg-primary-hover' : ''}
                       >
                         {user.isActive ? 'פעיל' : 'לא פעיל'}
                       </Badge>
@@ -185,7 +185,7 @@ export const SystemUsersPage: React.FC<SystemUsersPageProps> = ({ onUserUpdated 
                           size="sm"
                           onClick={() => handleDeleteClick(user)}
                         >
-                          <Trash2 className="h-4 w-4 text-red-500" />
+                          <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
                     </TableCell>

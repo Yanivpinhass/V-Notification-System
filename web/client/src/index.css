@@ -6,108 +6,116 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 90 15.4% 94.9%;
+    --foreground: 217.2 32.6% 17.5%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 217.2 32.6% 17.5%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 217.2 32.6% 17.5%;
 
-    /* Professional blue primary theme */
-    --primary: 217 91% 60%;
+    /* Magav olive/green primary theme */
+    --primary: 143 35.6% 35.3%;
     --primary-foreground: 0 0% 100%;
-    --primary-hover: 217 91% 55%;
+    --primary-hover: 144 38.7% 29.4%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 143 15% 95%;
+    --secondary-foreground: 217.2 32.6% 17.5%;
 
-    --muted: 210 40% 96.1%;
+    --muted: 143 15% 95%;
     --muted-foreground: 215.4 16.3% 46.9%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 143 15% 95%;
+    --accent-foreground: 217.2 32.6% 17.5%;
+
+    /* Gold accent for emblem/badges */
+    --gold: 44 53.6% 54.3%;
+    --gold-foreground: 0 0% 100%;
 
     /* Semantic colors for admin interface */
-    --success: 142 76% 36%;
+    --success: 161 93.5% 30.4%;
     --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
+    --warning: 32 94.6% 43.7%;
     --warning-foreground: 0 0% 100%;
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 72.2% 50.6%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Professional admin borders and inputs */
+    /* Borders and inputs */
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 217 91% 60%;
+    --ring: 143 35.6% 35.3%;
 
     /* Tab navigation colors */
-    --tab-unselected: 220 100% 15%;
+    --tab-unselected: 155 36.5% 16.7%;
 
     /* Header and navigation */
     --header-background: 0 0% 100%;
     --header-border: 214.3 31.8% 91.4%;
     --sidebar-background: 0 0% 100%;
-    --sidebar-hover: 210 40% 96.1%;
-    --sidebar-active: 217 91% 95%;
+    --sidebar-hover: 143 15% 95%;
+    --sidebar-active: 143 35% 92%;
 
-    /* Professional spacing and sizing */
+    /* Spacing and sizing */
     --radius: 0.5rem;
     --header-height: 64px;
     --sidebar-width-collapsed: 56px;
     --sidebar-width-expanded: 280px;
 
-    /* Admin card styling */
+    /* Card styling */
     --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     --card-padding: 24px;
 
-    /* Professional transitions */
+    /* Transitions */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-    /* Modern tab styling */
-    --tab-gradient: linear-gradient(135deg, 217 91% 60% 0%, 217 91% 45% 100%);
-    --tab-container-gradient: linear-gradient(135deg, 210 100% 92% 0%, 210 100% 85% 100%);
-    --tab-shadow: 0 -2px 12px rgba(33, 150, 243, 0.4);
-    --tab-border-accent: 217 91% 35%;
+    /* Tab styling */
+    --tab-gradient: linear-gradient(135deg, 143 35.6% 35.3% 0%, 144 38.7% 29.4% 100%);
+    --tab-container-gradient: linear-gradient(135deg, 143 30% 90% 0%, 143 30% 83% 100%);
+    --tab-shadow: 0 -2px 12px rgba(58, 122, 82, 0.4);
+    --tab-border-accent: 155 36.5% 16.7%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
+    --background: 155 20% 5%;
     --foreground: 210 40% 98%;
 
-    --card: 222.2 84% 4.9%;
+    --card: 155 20% 5%;
     --card-foreground: 210 40% 98%;
 
-    --popover: 222.2 84% 4.9%;
+    --popover: 155 20% 5%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 143 35.6% 35.3%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 144 38.7% 29.4%;
 
-    --secondary: 217.2 32.6% 17.5%;
+    --secondary: 155 20% 15%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 217.2 32.6% 17.5%;
+    --muted: 155 20% 15%;
     --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 217.2 32.6% 17.5%;
+    --accent: 155 20% 15%;
     --accent-foreground: 210 40% 98%;
+
+    --gold: 44 53.6% 54.3%;
+    --gold-foreground: 0 0% 100%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
+    --border: 155 20% 15%;
+    --input: 155 20% 15%;
+    --ring: 143 35.6% 35.3%;
+    --sidebar-background: 155 30% 8%;
     --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary: 143 35.6% 45%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent: 155 20% 15%;
     --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-border: 155 20% 15%;
+    --sidebar-ring: 143 35.6% 35.3%;
   }
 }
 
@@ -216,7 +224,7 @@
 
   /* Modern tab styling */
   .tab-container {
-    background: linear-gradient(135deg, hsl(210 100% 92%), hsl(210 100% 85%));
+    background: linear-gradient(135deg, hsl(143 30% 90%), hsl(143 30% 83%));
     border-radius: 12px 12px 0 0;
   }
 
@@ -234,7 +242,7 @@
   /* General improved scrollbar styling for the app */
   * {
     scrollbar-width: thin;
-    scrollbar-color: hsl(217 91% 60%) hsl(210 40% 96.1%);
+    scrollbar-color: hsl(143 35.6% 35.3%) hsl(143 15% 95%);
   }
 
   *::-webkit-scrollbar {
@@ -243,22 +251,22 @@
   }
 
   *::-webkit-scrollbar-track {
-    background: hsl(210 40% 96.1%);
+    background: hsl(143 15% 95%);
     border-radius: 4px;
   }
 
   *::-webkit-scrollbar-thumb {
-    background: hsl(217 91% 60%);
+    background: hsl(143 35.6% 35.3%);
     border-radius: 4px;
     transition: background-color 0.3s ease;
   }
 
   *::-webkit-scrollbar-thumb:hover {
-    background: hsl(217 91% 45%);
+    background: hsl(144 38.7% 29.4%);
   }
 
   *::-webkit-scrollbar-corner {
-    background: hsl(210 40% 96.1%);
+    background: hsl(143 15% 95%);
   }
 
   .tab-item {
@@ -287,7 +295,7 @@
   }
 
   .tab-item.selected {
-    background: linear-gradient(135deg, hsl(217 91% 60%), hsl(217 91% 45%));
+    background: linear-gradient(135deg, hsl(143 35.6% 35.3%), hsl(144 38.7% 29.4%));
     color: white;
     font-weight: 600;
     border-radius: 8px 8px 0 0;
@@ -297,27 +305,27 @@
   }
 
   .tab-item.selected:hover {
-    background: linear-gradient(135deg, hsl(217 91% 65%), hsl(217 91% 50%));
+    background: linear-gradient(135deg, hsl(143 35.6% 40%), hsl(143 35.6% 35.3%));
     color: white;
   }
 
   /* Sidebar header styling */
   .sidebar-header {
-    background: linear-gradient(135deg, hsl(217 91% 60%), hsl(217 91% 45%));
-    border-bottom: 1px solid hsl(217 91% 45%);
+    background: linear-gradient(135deg, hsl(155 36.5% 16.7%), hsl(141 34.3% 27.5%));
+    border-bottom: 1px solid hsl(141 34.3% 27.5%);
   }
 
   .sidebar-header:hover {
-    background: linear-gradient(135deg, hsl(217 91% 45%), hsl(217 91% 35%));
+    background: linear-gradient(135deg, hsl(141 34.3% 27.5%), hsl(143 35.6% 35.3%));
   }
 
   .collapse-icon {
-    background: linear-gradient(135deg, hsl(217 91% 45%), hsl(217 91% 30%));
+    background: linear-gradient(135deg, hsl(141 34.3% 27.5%), hsl(155 36.5% 16.7%));
     box-shadow: 0 1px 3px rgba(0,0,0,0.2);
   }
 
   .collapse-icon:hover {
-    background: linear-gradient(135deg, hsl(217 91% 30%), hsl(217 91% 20%));
+    background: linear-gradient(135deg, hsl(155 36.5% 16.7%), hsl(155 36.5% 12%));
     transform: scale(1.05);
   }
 

@@ -93,7 +93,7 @@ export const VolunteersManagementPage: React.FC = () => {
             </div>
           </div>
           <div className="relative">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="חיפוש לפי שם..."
               value={searchTerm}
@@ -104,17 +104,17 @@ export const VolunteersManagementPage: React.FC = () => {
         </CardHeader>
         <CardContent>
           {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
+            <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-md text-destructive">
               {error}
             </div>
           )}
 
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : filteredVolunteers.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-muted-foreground">
               {searchTerm ? 'לא נמצאו מתנדבים התואמים לחיפוש' : 'לא נמצאו מתנדבים'}
             </div>
           ) : (
@@ -136,7 +136,7 @@ export const VolunteersManagementPage: React.FC = () => {
                     <TableCell className="text-center">
                       <Badge
                         variant={volunteer.approveToReceiveSms ? 'default' : 'destructive'}
-                        className={volunteer.approveToReceiveSms ? 'bg-green-600 hover:bg-green-700' : ''}
+                        className={volunteer.approveToReceiveSms ? 'bg-primary hover:bg-primary-hover' : ''}
                       >
                         {volunteer.approveToReceiveSms ? 'מאושר' : 'לא מאושר'}
                       </Badge>
@@ -155,7 +155,7 @@ export const VolunteersManagementPage: React.FC = () => {
                           size="sm"
                           onClick={() => handleDeleteClick(volunteer)}
                         >
-                          <Trash2 className="h-4 w-4 text-red-500" />
+                          <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
                     </TableCell>

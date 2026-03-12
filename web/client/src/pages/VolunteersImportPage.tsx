@@ -85,10 +85,10 @@ export const VolunteersImportPage: React.FC = () => {
 
           {/* Success Alert */}
           {isSuccess && (
-            <Alert className="border-green-500 bg-green-50">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <AlertTitle className="text-green-800">הייבוא הושלם בהצלחה</AlertTitle>
-              <AlertDescription className="text-green-700">
+            <Alert className="border-success/40 bg-success/10">
+              <CheckCircle2 className="h-4 w-4 text-success" />
+              <AlertTitle className="text-success">הייבוא הושלם בהצלחה</AlertTitle>
+              <AlertDescription className="text-success">
                 <div className="mt-2 space-y-1">
                   <p>סה"כ שורות: {result.totalRows}</p>
                   <p>נוספו: {result.inserted}</p>
@@ -100,25 +100,25 @@ export const VolunteersImportPage: React.FC = () => {
 
           {/* Partial Success Alert (with errors) */}
           {hasWarnings && (
-            <Alert className="border-yellow-500 bg-yellow-50">
-              <AlertCircle className="h-4 w-4 text-yellow-600" />
-              <AlertTitle className="text-yellow-800">הייבוא הושלם עם שגיאות</AlertTitle>
-              <AlertDescription className="text-yellow-700">
+            <Alert className="border-warning/50 bg-warning/10">
+              <AlertCircle className="h-4 w-4 text-warning" />
+              <AlertTitle className="text-warning">הייבוא הושלם עם שגיאות</AlertTitle>
+              <AlertDescription className="text-warning">
                 <div className="mt-2 space-y-1">
                   <p>סה"כ שורות: {result.totalRows}</p>
                   <p>נוספו: {result.inserted}</p>
                   <p>עודכנו: {result.updated}</p>
-                  <p className="text-red-600">שגיאות: {result.errors}</p>
+                  <p className="text-destructive">שגיאות: {result.errors}</p>
                 </div>
                 {result.errorMessages && result.errorMessages.length > 0 && (
-                  <div className="mt-3 p-2 bg-white rounded border border-yellow-300 max-h-40 overflow-y-auto">
+                  <div className="mt-3 p-2 bg-white rounded border border-warning/30 max-h-40 overflow-y-auto">
                     <p className="font-medium mb-1">פירוט שגיאות:</p>
                     <ul className="text-sm space-y-1 list-disc list-inside">
                       {result.errorMessages.slice(0, 20).map((msg, idx) => (
                         <li key={idx}>{msg}</li>
                       ))}
                       {result.errorMessages.length > 20 && (
-                        <li className="text-gray-500">
+                        <li className="text-muted-foreground">
                           ...ועוד {result.errorMessages.length - 20} שגיאות
                         </li>
                       )}
@@ -140,14 +140,14 @@ export const VolunteersImportPage: React.FC = () => {
                   <p>שגיאות: {result.errors}</p>
                 </div>
                 {result.errorMessages && result.errorMessages.length > 0 && (
-                  <div className="mt-3 p-2 bg-red-50 rounded border border-red-300 max-h-40 overflow-y-auto">
+                  <div className="mt-3 p-2 bg-destructive/10 rounded border border-destructive/20 max-h-40 overflow-y-auto">
                     <p className="font-medium mb-1">פירוט שגיאות:</p>
                     <ul className="text-sm space-y-1 list-disc list-inside">
                       {result.errorMessages.slice(0, 20).map((msg, idx) => (
                         <li key={idx}>{msg}</li>
                       ))}
                       {result.errorMessages.length > 20 && (
-                        <li className="text-gray-500">
+                        <li className="text-muted-foreground">
                           ...ועוד {result.errorMessages.length - 20} שגיאות
                         </li>
                       )}

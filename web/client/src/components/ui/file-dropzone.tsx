@@ -141,17 +141,17 @@ const FileDropzone = React.forwardRef<HTMLDivElement, FileDropzoneProps>(
             "relative border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
             isDragOver && !disabled
               ? "border-primary bg-primary/5"
-              : "border-gray-300 hover:border-gray-400",
+              : "border-border hover:border-muted-foreground/40",
             disabled && "opacity-50 cursor-not-allowed",
             displayError && "border-destructive"
           )}
         >
           {selectedFile ? (
             <div className="flex items-center justify-center gap-3">
-              <FileSpreadsheet className="h-10 w-10 text-green-600" />
+              <FileSpreadsheet className="h-10 w-10 text-success" />
               <div className="text-right">
-                <p className="font-medium text-gray-900">{selectedFile.name}</p>
-                <p className="text-sm text-gray-500">
+                <p className="font-medium text-foreground">{selectedFile.name}</p>
+                <p className="text-sm text-muted-foreground">
                   {formatFileSize(selectedFile.size)}
                 </p>
               </div>
@@ -171,17 +171,17 @@ const FileDropzone = React.forwardRef<HTMLDivElement, FileDropzoneProps>(
               <Upload
                 className={cn(
                   "mx-auto h-12 w-12",
-                  isDragOver ? "text-primary" : "text-gray-400"
+                  isDragOver ? "text-primary" : "text-muted-foreground"
                 )}
               />
               <div>
-                <p className="font-medium text-gray-700">
+                <p className="font-medium text-foreground">
                   גרור קובץ אקסל לכאן
                 </p>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-muted-foreground mt-1">
                   או לחץ לבחירת קובץ
                 </p>
-                <p className="text-xs text-gray-400 mt-2">
+                <p className="text-xs text-muted-foreground mt-2">
                   ({acceptedTypes.join(", ")})
                 </p>
               </div>

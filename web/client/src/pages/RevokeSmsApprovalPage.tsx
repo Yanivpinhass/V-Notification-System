@@ -90,10 +90,10 @@ export const RevokeSmsApprovalPage: React.FC = () => {
           )}
 
           {success && (
-            <Alert className="border-green-500 bg-green-50">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <AlertTitle className="text-green-800">בוצע בהצלחה</AlertTitle>
-              <AlertDescription className="text-green-700">{success}</AlertDescription>
+            <Alert className="border-success/40 bg-success/10">
+              <CheckCircle2 className="h-4 w-4 text-success" />
+              <AlertTitle className="text-success">בוצע בהצלחה</AlertTitle>
+              <AlertDescription className="text-success">{success}</AlertDescription>
             </Alert>
           )}
         </CardContent>

@@ -50,10 +50,10 @@ export const SmsSettingsPage: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-muted-foreground">
             הודעות SMS נשלחות מכרטיס ה-SIM שמוגדר כברירת מחדל להודעות בהגדרות הטלפון.
           </p>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             לשינוי: הגדרות הטלפון &larr; חיבורים &larr; מנהל SIM &larr; הודעות
           </p>
         </CardContent>
@@ -68,7 +68,7 @@ export const SmsSettingsPage: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-600 mb-3">
+          <p className="text-sm text-muted-foreground mb-3">
             שלח הודעת SMS לבדיקה כדי לוודא שהשליחה עובדת.
           </p>
           <Button variant="outline" onClick={() => setTestDialogOpen(true)}>

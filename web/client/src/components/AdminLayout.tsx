@@ -161,7 +161,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           {/* Content Panel */}
           <ResizablePanel defaultSize={sidebarCollapsed ? 92 : 80} className="flex flex-col">
             {/* Page Content - Scrollable with reduced padding */}
-            <div className="flex-1 overflow-auto bg-gray-50">
+            <div className="flex-1 overflow-auto bg-background">
               <div className="p-2 h-full">
                 <div className="admin-card h-full flex flex-col p-0 overflow-hidden">
                   <SubNavigation

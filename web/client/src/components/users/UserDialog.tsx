@@ -190,7 +190,7 @@ export const UserDialog: React.FC<UserDialogProps> = ({
 
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
+            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md text-destructive text-sm">
               {error}
             </div>
           )}
@@ -198,7 +198,7 @@ export const UserDialog: React.FC<UserDialogProps> = ({
           {/* Full Name */}
           <div className="space-y-2">
             <Label htmlFor="fullName">
-              שם מלא <span className="text-red-500">*</span>
+              שם מלא <span className="text-destructive">*</span>
             </Label>
             <Input
               id="fullName"
@@ -207,14 +207,14 @@ export const UserDialog: React.FC<UserDialogProps> = ({
               autoComplete="off"
             />
             {errors.fullName && (
-              <p className="text-sm text-red-500">{errors.fullName.message}</p>
+              <p className="text-sm text-destructive">{errors.fullName.message}</p>
             )}
           </div>
 
           {/* Username */}
           <div className="space-y-2">
             <Label htmlFor="userName">
-              שם משתמש <span className="text-red-500">*</span>
+              שם משתמש <span className="text-destructive">*</span>
             </Label>
             <Input
               id="userName"
@@ -225,7 +225,7 @@ export const UserDialog: React.FC<UserDialogProps> = ({
               autoComplete="off"
             />
             {errors.userName && (
-              <p className="text-sm text-red-500">{errors.userName.message}</p>
+              <p className="text-sm text-destructive">{errors.userName.message}</p>
             )}
           </div>
 
@@ -233,7 +233,7 @@ export const UserDialog: React.FC<UserDialogProps> = ({
           <div className="space-y-2">
             <Label htmlFor={isEditing ? 'newPassword' : 'password'}>
               {isEditing ? 'סיסמה חדשה (השאר ריק לשמירת הקיימת)' : (
-                <>סיסמה <span className="text-red-500">*</span></>
+                <>סיסמה <span className="text-destructive">*</span></>
               )}
             </Label>
             <div className="flex gap-2">
@@ -262,12 +262,12 @@ export const UserDialog: React.FC<UserDialogProps> = ({
               </Button>
             </div>
             {generatedPassword && (
-              <p className="text-sm text-green-600 font-mono bg-green-50 p-2 rounded">
+              <p className="text-sm text-success font-mono bg-success/10 p-2 rounded">
                 סיסמה שנוצרה: {generatedPassword}
               </p>
             )}
             {(isEditing ? (errors as any).newPassword : (errors as any).password) && (
-              <p className="text-sm text-red-500">
+              <p className="text-sm text-destructive">
                 {(isEditing ? (errors as any).newPassword : (errors as any).password)?.message}
               </p>
             )}
@@ -291,7 +291,7 @@ export const UserDialog: React.FC<UserDialogProps> = ({
               </SelectContent>
             </Select>
             {errors.role && (
-              <p className="text-sm text-red-500">{errors.role.message}</p>
+              <p className="text-sm text-destructive">{errors.role.message}</p>
             )}
           </div>
 
