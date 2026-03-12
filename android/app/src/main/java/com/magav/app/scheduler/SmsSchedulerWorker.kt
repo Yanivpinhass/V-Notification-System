@@ -4,6 +4,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -119,8 +120,10 @@ class SmsSchedulerWorker(
             applicationContext, 0, intent, PendingIntent.FLAG_IMMUTABLE
         )
 
+        val appIcon = BitmapFactory.decodeResource(applicationContext.resources, R.mipmap.ic_launcher)
         val notification = NotificationCompat.Builder(applicationContext, "magav_sms_summary_channel")
             .setSmallIcon(R.drawable.ic_notification)
+            .setLargeIcon(appIcon)
             .setContentTitle("סיכום שליחת הודעות")
             .setContentText(contentText)
             .setContentIntent(pendingIntent)

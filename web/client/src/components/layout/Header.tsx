@@ -19,7 +19,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   return (
     <header className="admin-header flex items-center justify-between px-4 md:px-6">
-      {/* Right side in RTL - Hamburger menu (mobile) */}
+      {/* Right side in RTL - Hamburger menu + title */}
       <div className="flex items-center gap-2">
         {isMobile && (
           <Button
@@ -31,11 +31,10 @@ export const Header: React.FC<HeaderProps> = ({
             <Menu size={20} />
           </Button>
         )}
+        <h1 className="font-bold text-foreground text-lg md:text-2xl">
+          מג"ב מרחבים
+        </h1>
       </div>
-
-      <h1 className="font-bold text-foreground text-lg md:text-2xl text-center flex-1 md:flex-none">
-        מערכת תזכורות
-      </h1>
 
       {/* Left side in RTL - User account */}
       <div className="flex items-center gap-2">

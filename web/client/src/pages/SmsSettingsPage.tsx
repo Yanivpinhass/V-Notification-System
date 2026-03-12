@@ -12,7 +12,7 @@ export const SmsSettingsPage: React.FC = () => {
   // Test SMS dialog
   const [testDialogOpen, setTestDialogOpen] = useState(false);
   const [testPhone, setTestPhone] = useState('');
-  const [testMessage, setTestMessage] = useState('הודעת בדיקה ממערכת מגב');
+  const [testMessage, setTestMessage] = useState('בדיקת שליחת הודעה');
   const [isSendingTest, setIsSendingTest] = useState(false);
 
   const handleSendTest = async () => {

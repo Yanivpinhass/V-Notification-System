@@ -3,6 +3,7 @@ package com.magav.app
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -23,10 +24,12 @@ class MagavServerService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val appIcon = BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
         val notification = NotificationCompat.Builder(this, "magav_server_channel")
             .setContentTitle(getString(R.string.app_name))
             .setContentText(getString(R.string.server_running))
             .setSmallIcon(R.drawable.ic_notification)
+            .setLargeIcon(appIcon)
             .setOngoing(true)
             .build()
 
@@ -70,10 +73,12 @@ class MagavServerService : Service() {
 
     private fun updateNotification(text: String) {
         try {
+            val appIcon = BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
             val notification = NotificationCompat.Builder(this, "magav_server_channel")
                 .setContentTitle(getString(R.string.app_name))
                 .setContentText(text)
                 .setSmallIcon(R.drawable.ic_notification)
+                .setLargeIcon(appIcon)
                 .setOngoing(true)
                 .build()
             val manager = getSystemService(NotificationManager::class.java)

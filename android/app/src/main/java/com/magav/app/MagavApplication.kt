@@ -3,6 +3,7 @@ package com.magav.app
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.graphics.BitmapFactory
 import androidx.core.app.NotificationCompat
 import androidx.room.Room
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -82,10 +83,12 @@ class MagavApplication : Application() {
 
     private fun showErrorNotification(message: String) {
         try {
+            val appIcon = BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
             val notification = NotificationCompat.Builder(this, "magav_error_channel")
                 .setContentTitle(getString(R.string.app_name))
                 .setContentText(message)
                 .setSmallIcon(R.drawable.ic_notification)
+                .setLargeIcon(appIcon)
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .build()

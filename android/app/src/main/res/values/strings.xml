@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">מערכת תזכורות</string>
+    <string name="app_name">מג\"ב מרחבים</string>
     <string name="notification_channel_name">שירות מערכת תזכורות</string>
     <string name="notification_channel_description">הודעה כשמערכת התזכורות פעילה</string>
     <string name="server_running">מערכת התזכורות פעילה</string>

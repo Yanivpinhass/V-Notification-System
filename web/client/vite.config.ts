@@ -30,9 +30,9 @@ export default defineConfig(({ mode }) => ({
         VitePWA({
             registerType: 'autoUpdate',
             manifest: {
-                name: 'מערכת תזכורות',
-                short_name: 'תזכורות',
-                description: 'מערכת תזכורות',
+                name: 'מג"ב מרחבים',
+                short_name: 'מג"ב מרחבים',
+                description: 'מג"ב מרחבים',
                 dir: 'rtl',
                 lang: 'he',
                 display: 'standalone',

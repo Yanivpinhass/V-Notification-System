@@ -69,7 +69,18 @@
       "Bash(cp -r /c/MyData/Projects/Magav/V-Notification-System/web/client/dist/* /c/MyData/Projects/Magav/V-Notification-System/android/app/src/main/assets/web/)",
       "Bash(powershell.exe -Command \"Set-Location ''C:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android''; & .\\\\gradlew.bat assembleDebug 2>&1 | Select-Object -Last 5\")",
       "Bash(powershell.exe -Command \"& ''C:\\\\Users\\\\yaniv\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe'' devices\")",
-      "Bash(powershell.exe -Command \"Set-Location ''C:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android''; & .\\\\gradlew.bat assembleDebug 2>&1 | Select-Object -Last 3\")"
+      "Bash(powershell.exe -Command \"Set-Location ''C:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android''; & .\\\\gradlew.bat assembleDebug 2>&1 | Select-Object -Last 3\")",
+      "Bash(grep -E \"hsl\\\\\\(|rgb\\\\\\(|#[0-9a-fA-F]{3,6}\")",
+      "Bash(grep -r \"style=\\\\|#[0-9a-fA-F]\\\\{3,6\\\\}\\\\|rgb\\\\|hsl\" /c/MyData/Projects/Magav/V-Notification-System/web/client/src --include=\"*.tsx\" --include=\"*.ts\")",
+      "Bash(node -e \":*)",
+      "Bash(node -e \"try{require\\(''sharp''\\);console.log\\(''sharp available''\\)}catch\\(e\\){console.log\\(''sharp not available''\\)}\")",
+      "Bash(magick --version)",
+      "Bash(\"/c/Program Files/ImageMagick-7.1.1-Q16-HDRI/magick.exe\" --version)",
+      "Bash(ls /c/Program*/ImageMagick*)",
+      "Read(//c/MyData/Projects/Magav/V-Notification-System/web/client/$TEMP/**)",
+      "Bash(npx eslint:*)",
+      "Bash(npm run:*)",
+      "Bash(start \"\" \"c:\\\\tmp\\\\icon_preview.html\")"
     ]
   }
 }
