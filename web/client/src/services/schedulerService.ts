@@ -7,7 +7,7 @@ export interface SchedulerConfigEntry {
   time: string;
   daysBeforeShift: number;
   isEnabled: number;
-  messageTemplate: string;
+  messageTemplateId: number;
   updatedAt: string | null;
   updatedBy: string | null;
 }
@@ -17,7 +17,7 @@ export interface SchedulerConfigUpdate {
   time: string;
   daysBeforeShift: number;
   isEnabled: number;
-  messageTemplate: string;
+  messageTemplateId: number;
 }
 
 export interface SchedulerRunLogEntry {

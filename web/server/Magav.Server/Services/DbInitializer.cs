@@ -125,6 +125,23 @@ public class DbInitializer
             await using var smsLogCmd = new SqliteCommand(createSmsLogSql, connection);
             await smsLogCmd.ExecuteNonQueryAsync();
 
+            // Create MessageTemplate table (must be before SchedulerConfig — FK dependency)
+            var createMessageTemplateSql = @"
+                CREATE TABLE MessageTemplate (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Name TEXT NOT NULL,
+                    Content TEXT NOT NULL,
+                    CreatedAt TEXT NULL,
+                    UpdatedAt TEXT NULL
+                );
+            ";
+
+            await using var messageTemplateCmd = new SqliteCommand(createMessageTemplateSql, connection);
+            await messageTemplateCmd.ExecuteNonQueryAsync();
+
+            // Seed default message templates
+            await SeedMessageTemplatesAsync(connection);
+
             // Create SchedulerConfig table
             var createSchedulerConfigSql = @"
                 CREATE TABLE SchedulerConfig (
@@ -134,7 +151,7 @@ public class DbInitializer
                     Time TEXT NOT NULL,
                     DaysBeforeShift INTEGER NOT NULL DEFAULT 0,
                     IsEnabled INTEGER NOT NULL DEFAULT 1,
-                    MessageTemplate TEXT NOT NULL DEFAULT '',
+                    MessageTemplateId INTEGER NOT NULL DEFAULT 1,
                     UpdatedAt TEXT NULL,
                     UpdatedBy TEXT NULL,
                     UNIQUE(DayGroup, ReminderType)
@@ -212,29 +229,56 @@ public class DbInitializer
         return $"Data Source={fullPath};Password={_dbPassword};Default Timeout=30";
     }
 
-    private static async Task SeedSchedulerConfigAsync(SqliteConnection connection)
+    private static async Task SeedMessageTemplatesAsync(SqliteConnection connection)
     {
-        var configs = new[]
+        var templates = new[]
         {
-            ("SunThu", "SameDay", "13:00", 0, "שלום {שם}, תזכורת למשמרת היום ({יום}, {תאריך}), משמרת {משמרת}, רכב {רכב}."),
-            ("SunThu", "Advance", "18:30", 2, "שלום {שם}, תזכורת: יש לך משמרת ביום {יום} {תאריך}, משמרת {משמרת}, רכב {רכב}."),
-            ("Fri",    "SameDay", "10:00", 0, "שלום {שם}, תזכורת למשמרת היום ({יום}, {תאריך}), משמרת {משמרת}, רכב {רכב}."),
-            ("Fri",    "Advance", "12:00", 2, "שלום {שם}, תזכורת: יש לך משמרת ביום {יום} {תאריך}, משמרת {משמרת}, רכב {רכב}."),
-            ("Sat",    "SameDay", "10:00", 0, "שלום {שם}, תזכורת למשמרת היום ({יום}, {תאריך}), משמרת {משמרת}, רכב {רכב}."),
-            ("Sat",    "Advance", "12:00", 2, "שלום {שם}, תזכורת: יש לך משמרת ביום {יום} {תאריך}, משמרת {משמרת}, רכב {רכב}."),
+            ("תזכורת ליום המשמרת", "שלום {שם},\nתזכורת למשמרת היום ({יום}, {תאריך}),\nמשמרת {משמרת}, רכב {רכב}."),
+            ("תזכורת מוקדמת", "שלום {שם},\nתזכורת למשמרת ביום {יום} {תאריך},\nמשמרת {משמרת}."),
+            ("ביטול משמרת", "שלום {שם},\nהמשמרת שלך ביום {יום} {תאריך} בוטלה."),
         };
 
-        var sql = @"INSERT INTO SchedulerConfig (DayGroup, ReminderType, Time, DaysBeforeShift, IsEnabled, MessageTemplate)
-                    VALUES (@DayGroup, @ReminderType, @Time, @DaysBeforeShift, 1, @MessageTemplate)";
+        var now = DateTime.UtcNow.ToString("o");
+        var sql = @"INSERT INTO MessageTemplate (Name, Content, CreatedAt, UpdatedAt)
+                    VALUES (@Name, @Content, @CreatedAt, @UpdatedAt)";
 
-        foreach (var (dayGroup, reminderType, time, daysBefore, template) in configs)
+        foreach (var (name, content) in templates)
+        {
+            await using var cmd = new SqliteCommand(sql, connection);
+            cmd.Parameters.AddWithValue("@Name", name);
+            cmd.Parameters.AddWithValue("@Content", content);
+            cmd.Parameters.AddWithValue("@CreatedAt", now);
+            cmd.Parameters.AddWithValue("@UpdatedAt", now);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        Console.WriteLine("Message templates seeded with 3 default entries.");
+    }
+
+    private static async Task SeedSchedulerConfigAsync(SqliteConnection connection)
+    {
+        // MessageTemplateId 1 = "תזכורת ליום המשמרת" (SameDay), 2 = "תזכורת מוקדמת" (Advance)
+        var configs = new[]
+        {
+            ("SunThu", "SameDay", "13:00", 0, 1),
+            ("SunThu", "Advance", "18:30", 2, 2),
+            ("Fri",    "SameDay", "10:00", 0, 1),
+            ("Fri",    "Advance", "12:00", 2, 2),
+            ("Sat",    "SameDay", "10:00", 0, 1),
+            ("Sat",    "Advance", "12:00", 2, 2),
+        };
+
+        var sql = @"INSERT INTO SchedulerConfig (DayGroup, ReminderType, Time, DaysBeforeShift, IsEnabled, MessageTemplateId)
+                    VALUES (@DayGroup, @ReminderType, @Time, @DaysBeforeShift, 1, @MessageTemplateId)";
+
+        foreach (var (dayGroup, reminderType, time, daysBefore, templateId) in configs)
         {
             await using var cmd = new SqliteCommand(sql, connection);
             cmd.Parameters.AddWithValue("@DayGroup", dayGroup);
             cmd.Parameters.AddWithValue("@ReminderType", reminderType);
             cmd.Parameters.AddWithValue("@Time", time);
             cmd.Parameters.AddWithValue("@DaysBeforeShift", daysBefore);
-            cmd.Parameters.AddWithValue("@MessageTemplate", template);
+            cmd.Parameters.AddWithValue("@MessageTemplateId", templateId);
             await cmd.ExecuteNonQueryAsync();
         }
 

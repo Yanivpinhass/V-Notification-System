@@ -80,6 +80,7 @@ fun createKtorServer(database: MagavDatabase, context: Context): ApplicationEngi
             shiftRoutes(database, context)
             smsLogRoutes(database)
             schedulerRoutes(database, context)
+            messageTemplateRoutes(database)
             settingsRoutes(database, context)
 
             // Static file serving from assets/web/ for non-API paths

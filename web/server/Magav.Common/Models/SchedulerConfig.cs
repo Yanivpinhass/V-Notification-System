@@ -12,7 +12,7 @@ public class SchedulerConfig
     public string Time { get; set; } = string.Empty;
     public int DaysBeforeShift { get; set; }
     public int IsEnabled { get; set; } = 1;
-    public string MessageTemplate { get; set; } = string.Empty;
+    public int MessageTemplateId { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public string? UpdatedBy { get; set; }
 }

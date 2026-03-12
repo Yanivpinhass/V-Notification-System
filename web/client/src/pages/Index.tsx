@@ -13,6 +13,7 @@ import { SchedulerSettingsPage } from '@/pages/SchedulerSettingsPage';
 import { SchedulerRunLogPage } from '@/pages/SchedulerRunLogPage';
 import { SmsSettingsPage } from '@/pages/SmsSettingsPage';
 import { ShiftsManagementPage } from '@/pages/ShiftsManagementPage';
+import { MessageTemplatesPage } from '@/pages/MessageTemplatesPage';
 import { authService } from '@/services/authService';
 
 interface User {
@@ -77,6 +78,8 @@ const Index = () => {
         return <SmsSettingsPage />;
       case 'shifts-management':
         return <ShiftsManagementPage />;
+      case 'message-templates':
+        return <MessageTemplatesPage />;
       default:
         return <PlaceholderPage />;
     }

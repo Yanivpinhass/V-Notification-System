@@ -25,6 +25,13 @@ class SmsReminderService(
 
         android.util.Log.d("SmsReminder", "execute: config=${config.id}, type=$reminderType, target=$targetDateStr, range=[$targetDateStart, $targetDateEnd)")
 
+        // Resolve message template once before the loop
+        val messageTemplate = database.messageTemplateDao().getById(config.messageTemplateId)
+        if (messageTemplate == null) {
+            android.util.Log.e("SmsReminder", "MessageTemplate ${config.messageTemplateId} not found for config ${config.id}")
+            return SmsSummary(0, 0, 0)
+        }
+
         val shifts = database.shiftDao().getByDateRange(targetDateStart, targetDateEnd)
         android.util.Log.d("SmsReminder", "Found ${shifts.size} shifts for $targetDateStr")
 
@@ -58,7 +65,7 @@ class SmsReminderService(
 
             try {
                 val message = buildMessage(
-                    config.messageTemplate, shift.shiftName, shift.carId,
+                    messageTemplate.content, shift.shiftName, shift.carId,
                     volunteer.mappingName, targetDate
                 )
                 android.util.Log.d("SmsReminder", "Sending SMS #$totalEligible to ${volunteer.mappingName} (${volunteer.mobilePhone})")

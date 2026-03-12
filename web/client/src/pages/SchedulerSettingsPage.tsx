@@ -8,6 +8,7 @@ import {
   SchedulerConfigEntry,
   SchedulerConfigUpdate,
 } from '@/services/schedulerService';
+import { messageTemplateService, MessageTemplateEntry } from '@/services/messageTemplateService';
 
 const DAY_GROUP_TITLES: Record<string, string> = {
   SunThu: "ימים א׳–ה׳ (ראשון עד חמישי)",
@@ -33,6 +34,7 @@ const isUserAdmin = (): boolean => {
 
 export const SchedulerSettingsPage: React.FC = () => {
   const [configs, setConfigs] = useState<SchedulerConfigEntry[]>([]);
+  const [templates, setTemplates] = useState<MessageTemplateEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,8 +45,12 @@ export const SchedulerSettingsPage: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const configData = await schedulerService.getConfig();
+      const [configData, templateData] = await Promise.all([
+        schedulerService.getConfig(),
+        messageTemplateService.getAll(),
+      ]);
       setConfigs(configData);
+      setTemplates(templateData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'אירעה שגיאה בטעינת הנתונים');
     } finally {
@@ -69,11 +75,8 @@ export const SchedulerSettingsPage: React.FC = () => {
       if (!timeRegex.test(config.time)) {
         return 'פורמט שעה לא תקין (HH:mm)';
       }
-      if (!config.messageTemplate || config.messageTemplate.length > 200) {
-        return 'תבנית הודעה חייבת להכיל 1-200 תווים';
-      }
-      if (!config.messageTemplate.includes('{שם}') || !config.messageTemplate.includes('{תאריך}')) {
-        return 'תבנית הודעה חייבת להכיל {שם} ו-{תאריך}';
+      if (!config.messageTemplateId || config.messageTemplateId <= 0) {
+        return 'יש לבחור תבנית הודעה לכל תזכורת';
       }
       if (config.reminderType === 'SameDay' && config.daysBeforeShift !== 0) {
         return 'תזכורת ליום המשמרת חייבת להיות 0 ימים לפני';
@@ -99,7 +102,7 @@ export const SchedulerSettingsPage: React.FC = () => {
         time: c.time,
         daysBeforeShift: c.daysBeforeShift,
         isEnabled: c.isEnabled,
-        messageTemplate: c.messageTemplate,
+        messageTemplateId: c.messageTemplateId,
       }));
       await schedulerService.updateConfig(updates);
       toast.success('ההגדרות נשמרו בהצלחה');
@@ -151,6 +154,7 @@ export const SchedulerSettingsPage: React.FC = () => {
           sameDayConfig={sameDay!}
           advanceConfig={advance!}
           isReadOnly={isReadOnly}
+          templates={templates}
           onConfigChange={handleConfigChange}
         />
       ))}

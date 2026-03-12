@@ -141,5 +141,19 @@ data class SchedulerConfigUpdateDto(
     val time: String,
     val daysBeforeShift: Int,
     val isEnabled: Int,
-    val messageTemplate: String
+    val messageTemplateId: Int
+)
+
+// ── Message Templates ───────────────────────────────────────────────────────
+
+@Serializable
+data class CreateMessageTemplateRequest(
+    val name: String,
+    val content: String
+)
+
+@Serializable
+data class UpdateMessageTemplateRequest(
+    val name: String,
+    val content: String
 )

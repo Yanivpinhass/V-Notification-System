@@ -1133,11 +1133,10 @@ app.MapPut("/api/scheduler/config", async (
             if (existing.ReminderType == "Advance" && config.DaysBeforeShift < 1)
                 return Results.BadRequest(ApiResponse<object>.Fail("תזכורת מוקדמת חייבת להיות לפחות יום אחד לפני"));
 
-            if (string.IsNullOrWhiteSpace(config.MessageTemplate) || config.MessageTemplate.Length > 200)
-                return Results.BadRequest(ApiResponse<object>.Fail("תבנית הודעה חייבת להכיל 1-200 תווים"));
-
-            if (!config.MessageTemplate.Contains("{שם}") || !config.MessageTemplate.Contains("{תאריך}"))
-                return Results.BadRequest(ApiResponse<object>.Fail("תבנית הודעה חייבת להכיל {שם} ו-{תאריך}"));
+            // Validate MessageTemplateId references an existing template
+            var template = await db.MessageTemplates.GetByIdAsync(config.MessageTemplateId);
+            if (template == null)
+                return Results.BadRequest(ApiResponse<object>.Fail("תבנית הודעה לא נמצאה"));
 
             existingConfigs.Add(existing);
         }
@@ -1154,7 +1153,7 @@ app.MapPut("/api/scheduler/config", async (
             existing.Time = config.Time;
             existing.DaysBeforeShift = config.DaysBeforeShift;
             existing.IsEnabled = config.IsEnabled;
-            existing.MessageTemplate = config.MessageTemplate;
+            existing.MessageTemplateId = config.MessageTemplateId;
             existing.UpdatedAt = DateTime.UtcNow;
             existing.UpdatedBy = username;
             await db.SchedulerConfig.UpdateAsync(existing);
@@ -1187,6 +1186,123 @@ app.MapGet("/api/scheduler/run-log", async (MagavDbManager db) =>
             statusCode: StatusCodes.Status500InternalServerError);
     }
 }).RequireAuthorization("CanManageMessages");
+
+// ============================================
+// MESSAGE TEMPLATE ENDPOINTS
+// ============================================
+
+// GET all message templates (Admin + SystemManager can view)
+app.MapGet("/api/message-templates", async (MagavDbManager db) =>
+{
+    try
+    {
+        var templates = await db.MessageTemplates.GetAllAsync();
+        return Results.Ok(ApiResponse<List<MessageTemplate>>.Ok(templates));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error fetching message templates: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בטעינת תבניות ההודעות"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// POST create message template (Admin only)
+app.MapPost("/api/message-templates", async (CreateMessageTemplateRequest request, MagavDbManager db) =>
+{
+    try
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+            return Results.BadRequest(ApiResponse<object>.Fail("שם התבנית נדרש"));
+
+        if (string.IsNullOrWhiteSpace(request.Content) || request.Content.Length > 500)
+            return Results.BadRequest(ApiResponse<object>.Fail("תוכן התבנית חייב להכיל 1-500 תווים"));
+
+        if (!request.Content.Contains("{שם}") || !request.Content.Contains("{תאריך}"))
+            return Results.BadRequest(ApiResponse<object>.Fail("תבנית חייבת להכיל {שם} ו-{תאריך}"));
+
+        var template = new MessageTemplate
+        {
+            Name = request.Name.Trim(),
+            Content = request.Content,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await db.MessageTemplates.InsertAsync(template);
+        return Results.Created($"/api/message-templates/{template.Id}", ApiResponse<MessageTemplate>.Ok(template));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error creating message template: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה ביצירת התבנית"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("AdminOnly");
+
+// PUT update message template (Admin only)
+app.MapPut("/api/message-templates/{id:int}", async (int id, UpdateMessageTemplateRequest request, MagavDbManager db) =>
+{
+    try
+    {
+        var existing = await db.MessageTemplates.GetByIdAsync(id);
+        if (existing == null)
+            return Results.NotFound(ApiResponse<object>.Fail("תבנית לא נמצאה"));
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+            return Results.BadRequest(ApiResponse<object>.Fail("שם התבנית נדרש"));
+
+        if (string.IsNullOrWhiteSpace(request.Content) || request.Content.Length > 500)
+            return Results.BadRequest(ApiResponse<object>.Fail("תוכן התבנית חייב להכיל 1-500 תווים"));
+
+        if (!request.Content.Contains("{שם}") || !request.Content.Contains("{תאריך}"))
+            return Results.BadRequest(ApiResponse<object>.Fail("תבנית חייבת להכיל {שם} ו-{תאריך}"));
+
+        existing.Name = request.Name.Trim();
+        existing.Content = request.Content;
+        existing.UpdatedAt = DateTime.UtcNow;
+        await db.MessageTemplates.UpdateAsync(existing);
+
+        return Results.Ok(ApiResponse<MessageTemplate>.Ok(existing));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error updating message template: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בעדכון התבנית"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("AdminOnly");
+
+// DELETE message template (Admin only)
+app.MapDelete("/api/message-templates/{id:int}", async (int id, MagavDbManager db) =>
+{
+    try
+    {
+        var existing = await db.MessageTemplates.GetByIdAsync(id);
+        if (existing == null)
+            return Results.NotFound(ApiResponse<object>.Fail("תבנית לא נמצאה"));
+
+        var totalTemplates = await db.MessageTemplates.CountAsync();
+        if (totalTemplates <= 1)
+            return Results.BadRequest(ApiResponse<object>.Fail("לא ניתן למחוק את התבנית האחרונה"));
+
+        if (await db.MessageTemplates.IsInUseAsync(id))
+            return Results.BadRequest(ApiResponse<object>.Fail("לא ניתן למחוק תבנית שמשויכת להגדרות תזמון"));
+
+        await db.MessageTemplates.DeleteAsync(existing);
+        return Results.Ok(ApiResponse<object>.Ok(null!, "התבנית נמחקה בהצלחה"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error deleting message template: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה במחיקת התבנית"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("AdminOnly");
 
 // ============================================
 // RUN
@@ -1239,7 +1355,11 @@ public class SmsLogSummaryDto
 }
 
 // Scheduler Config DTO (editable fields only)
-public record SchedulerConfigUpdateDto(int Id, string Time, int DaysBeforeShift, int IsEnabled, string MessageTemplate);
+public record SchedulerConfigUpdateDto(int Id, string Time, int DaysBeforeShift, int IsEnabled, int MessageTemplateId);
+
+// Message Template DTOs
+public record CreateMessageTemplateRequest(string Name, string Content);
+public record UpdateMessageTemplateRequest(string Name, string Content);
 
 // Shift Management DTOs
 public record CreateShiftRequest(string ShiftDate, string ShiftName, string CarId, int VolunteerId);

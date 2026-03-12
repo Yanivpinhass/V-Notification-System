@@ -58,13 +58,34 @@ public class SmsReminderService
         _logger.LogInformation("Found {Count} eligible shifts for {ReminderType} on {TargetDate}",
             totalEligible, reminderType, targetDateStr);
 
+        // Resolve message template once before the loop
+        var template = await _db.MessageTemplates.GetByIdAsync(config.MessageTemplateId);
+        if (template == null)
+        {
+            _logger.LogError("MessageTemplate {Id} not found for config {ConfigId}",
+                config.MessageTemplateId, config.Id);
+            await _db.SchedulerRunLog.InsertAsync(new SchedulerRunLog
+            {
+                ConfigId = config.Id,
+                ReminderType = config.ReminderType,
+                RanAt = DateTime.UtcNow.ToString("o"),
+                TargetDate = targetDate.Date.ToString("yyyy-MM-dd"),
+                TotalEligible = 0,
+                SmsSent = 0,
+                SmsFailed = 0,
+                Status = "Failed",
+                Error = "תבנית הודעה לא נמצאה"
+            });
+            return;
+        }
+
         foreach (var shift in eligibleShifts)
         {
             if (ct.IsCancellationRequested) break;
 
             try
             {
-                var message = BuildMessage(config.MessageTemplate, shift, targetDate);
+                var message = BuildMessage(template.Content, shift, targetDate);
                 var result = await _smsProvider.SendSmsAsync(shift.MobilePhone!, message);
 
                 // Write SmsLog entry

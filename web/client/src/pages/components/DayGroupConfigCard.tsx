@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -12,27 +11,26 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { SchedulerConfigEntry } from '@/services/schedulerService';
+import { MessageTemplateEntry } from '@/services/messageTemplateService';
 
 interface DayGroupConfigCardProps {
   title: string;
   sameDayConfig: SchedulerConfigEntry;
   advanceConfig: SchedulerConfigEntry;
   isReadOnly: boolean;
+  templates: MessageTemplateEntry[];
   onConfigChange: (updated: SchedulerConfigEntry) => void;
 }
-
-const TEMPLATE_MAX_LENGTH = 200;
 
 const ReminderSection: React.FC<{
   label: string;
   config: SchedulerConfigEntry;
   isReadOnly: boolean;
   showDaysBefore: boolean;
+  templates: MessageTemplateEntry[];
   onChange: (updated: SchedulerConfigEntry) => void;
-}> = ({ label, config, isReadOnly, showDaysBefore, onChange }) => {
-  const templateLength = config.messageTemplate.length;
-  const templateValid = templateLength > 0 && templateLength <= TEMPLATE_MAX_LENGTH
-    && config.messageTemplate.includes('{שם}') && config.messageTemplate.includes('{תאריך}');
+}> = ({ label, config, isReadOnly, showDaysBefore, templates, onChange }) => {
+  const selectedTemplate = templates.find((t) => t.id === config.messageTemplateId);
 
   return (
     <div className="space-y-3 p-4 border rounded-lg">
@@ -92,28 +90,28 @@ const ReminderSection: React.FC<{
       </div>
 
       <div className="space-y-1">
-        <div className="flex items-center justify-between">
-          <Label htmlFor={`template-${config.id}`} className="text-xs">תבנית הודעה</Label>
-          <span className={`text-xs ${templateLength > TEMPLATE_MAX_LENGTH ? 'text-red-500' : 'text-muted-foreground'}`}>
-            {templateLength}/{TEMPLATE_MAX_LENGTH} תווים
-          </span>
-        </div>
-        <Textarea
-          id={`template-${config.id}`}
-          value={config.messageTemplate}
+        <Label htmlFor={`template-${config.id}`} className="text-xs">תבנית הודעה</Label>
+        <Select
+          value={config.messageTemplateId.toString()}
           disabled={isReadOnly}
-          onChange={(e) => onChange({ ...config, messageTemplate: e.target.value })}
-          rows={2}
-          className="text-sm resize-none"
-          dir="rtl"
-        />
-        {!isReadOnly && !templateValid && templateLength > 0 && (
-          <p className="text-xs text-red-500">
-            {templateLength > TEMPLATE_MAX_LENGTH
-              ? 'חריגה ממגבלת התווים'
-              : !config.messageTemplate.includes('{שם}') || !config.messageTemplate.includes('{תאריך}')
-              ? 'תבנית חייבת להכיל {שם} ו-{תאריך}'
-              : ''}
+          onValueChange={(val) =>
+            onChange({ ...config, messageTemplateId: parseInt(val, 10) })
+          }
+        >
+          <SelectTrigger id={`template-${config.id}`}>
+            <SelectValue placeholder="בחר תבנית הודעה" />
+          </SelectTrigger>
+          <SelectContent>
+            {templates.map((t) => (
+              <SelectItem key={t.id} value={t.id.toString()}>
+                {t.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {selectedTemplate && (
+          <p className="text-xs text-muted-foreground mt-1 p-2 bg-muted/40 rounded" dir="rtl">
+            {selectedTemplate.content}
           </p>
         )}
       </div>
@@ -126,6 +124,7 @@ export const DayGroupConfigCard: React.FC<DayGroupConfigCardProps> = ({
   sameDayConfig,
   advanceConfig,
   isReadOnly,
+  templates,
   onConfigChange,
 }) => {
   return (
@@ -139,6 +138,7 @@ export const DayGroupConfigCard: React.FC<DayGroupConfigCardProps> = ({
           config={sameDayConfig}
           isReadOnly={isReadOnly}
           showDaysBefore={false}
+          templates={templates}
           onChange={onConfigChange}
         />
         <ReminderSection
@@ -146,13 +146,9 @@ export const DayGroupConfigCard: React.FC<DayGroupConfigCardProps> = ({
           config={advanceConfig}
           isReadOnly={isReadOnly}
           showDaysBefore={true}
+          templates={templates}
           onChange={onConfigChange}
         />
-        {!isReadOnly && (
-          <p className="text-xs text-muted-foreground">
-            מילות מפתח: {'{שם}'} {'{שם מלא}'} {'{תאריך}'} {'{יום}'} {'{משמרת}'} {'{רכב}'}
-          </p>
-        )}
       </CardContent>
     </Card>
   );

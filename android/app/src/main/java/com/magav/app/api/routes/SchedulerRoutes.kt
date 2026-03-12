@@ -24,7 +24,7 @@ data class SchedulerConfigDto(
     val time: String,
     val daysBeforeShift: Int,
     val isEnabled: Int,
-    val messageTemplate: String,
+    val messageTemplateId: Int,
     val updatedAt: String?,
     val updatedBy: String?
 )
@@ -62,7 +62,7 @@ fun Route.schedulerRoutes(database: MagavDatabase, context: Context) {
                         time = entity.time,
                         daysBeforeShift = entity.daysBeforeShift,
                         isEnabled = entity.isEnabled,
-                        messageTemplate = entity.messageTemplate,
+                        messageTemplateId = entity.messageTemplateId,
                         updatedAt = entity.updatedAt,
                         updatedBy = entity.updatedBy
                     )
@@ -105,17 +105,10 @@ fun Route.schedulerRoutes(database: MagavDatabase, context: Context) {
                         throw IllegalArgumentException("ימים לפני משמרת חייב להיות בין 0 ל-7")
                     }
 
-                    // MessageTemplate 1-200 chars
-                    if (update.messageTemplate.isEmpty() || update.messageTemplate.length > 200) {
-                        throw IllegalArgumentException("תבנית הודעה חייבת להכיל 1-200 תווים")
-                    }
-
-                    // Template must contain required placeholders
-                    if ("{שם}" !in update.messageTemplate) {
-                        throw IllegalArgumentException("תבנית הודעה חייבת להכיל {שם}")
-                    }
-                    if ("{תאריך}" !in update.messageTemplate) {
-                        throw IllegalArgumentException("תבנית הודעה חייבת להכיל {תאריך}")
+                    // Validate MessageTemplateId exists
+                    val template = database.messageTemplateDao().getById(update.messageTemplateId)
+                    if (template == null) {
+                        throw IllegalArgumentException("תבנית הודעה לא נמצאה")
                     }
 
                     // Cross-validate: fetch existing config to check reminderType
@@ -142,7 +135,7 @@ fun Route.schedulerRoutes(database: MagavDatabase, context: Context) {
                         time = update.time,
                         daysBeforeShift = update.daysBeforeShift,
                         isEnabled = update.isEnabled,
-                        messageTemplate = update.messageTemplate,
+                        messageTemplateId = update.messageTemplateId,
                         updatedAt = now,
                         updatedBy = updatedBy
                     )
@@ -162,7 +155,7 @@ fun Route.schedulerRoutes(database: MagavDatabase, context: Context) {
                         time = entity.time,
                         daysBeforeShift = entity.daysBeforeShift,
                         isEnabled = entity.isEnabled,
-                        messageTemplate = entity.messageTemplate,
+                        messageTemplateId = entity.messageTemplateId,
                         updatedAt = entity.updatedAt,
                         updatedBy = entity.updatedBy
                     )
