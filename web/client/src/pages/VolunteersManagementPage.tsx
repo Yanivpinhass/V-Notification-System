@@ -14,7 +14,7 @@ import {
 import { volunteersService, VolunteerDto } from '@/services/volunteersService';
 import { VolunteerDialog } from '@/components/volunteers/VolunteerDialog';
 import { DeleteVolunteerDialog } from '@/components/volunteers/DeleteVolunteerDialog';
-import { Plus, Pencil, Trash2, Loader2, Upload, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const VolunteersManagementPage: React.FC = () => {
@@ -29,9 +29,6 @@ export const VolunteersManagementPage: React.FC = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deletingVolunteer, setDeletingVolunteer] = useState<VolunteerDto | null>(null);
 
-  // Import state
-  const [isImporting, setIsImporting] = useState(false);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const loadVolunteers = useCallback(async () => {
     setIsLoading(true);
@@ -50,9 +47,9 @@ export const VolunteersManagementPage: React.FC = () => {
     loadVolunteers();
   }, [loadVolunteers]);
 
-  const filteredVolunteers = volunteers.filter(v =>
-    v.mappingName.includes(searchTerm)
-  );
+  const filteredVolunteers = volunteers
+    .filter(v => v.mappingName.includes(searchTerm))
+    .sort((a, b) => a.mappingName.localeCompare(b.mappingName, 'he'));
 
   const handleCreate = () => {
     setEditingVolunteer(null);
@@ -81,24 +78,6 @@ export const VolunteersManagementPage: React.FC = () => {
     loadVolunteers();
   };
 
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsImporting(true);
-    try {
-      const result = await volunteersService.uploadVolunteersFile(file);
-      toast.success(`ייבוא הושלם: ${result.inserted} חדשים, ${result.updated} עודכנו`);
-      if (result.errorMessages.length > 0) {
-        result.errorMessages.forEach(msg => toast.error(msg));
-      }
-      loadVolunteers();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'אירעה שגיאה בייבוא');
-    } finally {
-      setIsImporting(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
 
   return (
     <div className="p-4 max-w-full overflow-hidden">
@@ -107,26 +86,6 @@ export const VolunteersManagementPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <CardTitle>ניהול מתנדבים</CardTitle>
             <div className="flex items-center gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleImport}
-                className="hidden"
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isImporting}
-              >
-                {isImporting ? (
-                  <Loader2 className="h-4 w-4 ml-2 animate-spin" />
-                ) : (
-                  <Upload className="h-4 w-4 ml-2" />
-                )}
-                ייבוא
-              </Button>
               <Button size="sm" onClick={handleCreate}>
                 <Plus className="h-4 w-4 ml-2" />
                 חדש
