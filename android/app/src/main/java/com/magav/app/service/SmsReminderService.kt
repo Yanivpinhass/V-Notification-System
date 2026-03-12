@@ -144,30 +144,32 @@ class SmsReminderService(
         return SmsSummary(totalEligible, smsSent, smsFailed)
     }
 
-    private fun buildMessage(
-        template: String, shiftName: String, carId: String,
-        volunteerName: String, targetDate: LocalDate
-    ): String {
-        val dateStr = "${targetDate.dayOfMonth.toString().padStart(2, '0')}/" +
-            "${targetDate.monthValue.toString().padStart(2, '0')}/${targetDate.year}"
-        val dayName = getHebrewDayName(targetDate.dayOfWeek)
+    companion object {
+        fun buildMessage(
+            template: String, shiftName: String, carId: String,
+            volunteerName: String, targetDate: LocalDate
+        ): String {
+            val dateStr = "${targetDate.dayOfMonth.toString().padStart(2, '0')}/" +
+                "${targetDate.monthValue.toString().padStart(2, '0')}/${targetDate.year}"
+            val dayName = getHebrewDayName(targetDate.dayOfWeek)
 
-        return template
-            .replace("{שם}", volunteerName)
-            .replace("{שם מלא}", volunteerName)
-            .replace("{תאריך}", dateStr)
-            .replace("{יום}", dayName)
-            .replace("{משמרת}", shiftName)
-            .replace("{רכב}", carId)
-    }
+            return template
+                .replace("{שם}", volunteerName)
+                .replace("{שם מלא}", volunteerName)
+                .replace("{תאריך}", dateStr)
+                .replace("{יום}", dayName)
+                .replace("{משמרת}", shiftName)
+                .replace("{רכב}", carId)
+        }
 
-    private fun getHebrewDayName(day: DayOfWeek): String = when (day) {
-        DayOfWeek.SUNDAY -> "יום א׳"
-        DayOfWeek.MONDAY -> "יום ב׳"
-        DayOfWeek.TUESDAY -> "יום ג׳"
-        DayOfWeek.WEDNESDAY -> "יום ד׳"
-        DayOfWeek.THURSDAY -> "יום ה׳"
-        DayOfWeek.FRIDAY -> "יום ו׳"
-        DayOfWeek.SATURDAY -> "שבת"
+        fun getHebrewDayName(day: DayOfWeek): String = when (day) {
+            DayOfWeek.SUNDAY -> "יום א׳"
+            DayOfWeek.MONDAY -> "יום ב׳"
+            DayOfWeek.TUESDAY -> "יום ג׳"
+            DayOfWeek.WEDNESDAY -> "יום ד׳"
+            DayOfWeek.THURSDAY -> "יום ה׳"
+            DayOfWeek.FRIDAY -> "יום ו׳"
+            DayOfWeek.SATURDAY -> "שבת"
+        }
     }
 }

@@ -175,7 +175,7 @@ public class SmsReminderService
             config.Id, status, smsSent, smsFailed);
     }
 
-    private static string BuildMessage(string template, ShiftVolunteerDto shift, DateTime targetDate)
+    public static string BuildMessage(string template, ShiftVolunteerDto shift, DateTime targetDate)
     {
         var firstName = shift.FirstName ?? "";
         var fullName = !string.IsNullOrEmpty(shift.FirstName) && !string.IsNullOrEmpty(shift.LastName)
@@ -193,7 +193,7 @@ public class SmsReminderService
             .Replace("{רכב}", shift.CarId);
     }
 
-    private static string GetHebrewDayName(DayOfWeek day) => day switch
+    public static string GetHebrewDayName(DayOfWeek day) => day switch
     {
         DayOfWeek.Sunday => "יום א׳",
         DayOfWeek.Monday => "יום ב׳",

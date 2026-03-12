@@ -44,7 +44,32 @@
       "Bash(\"$LOCALAPPDATA/Android/Sdk/platform-tools/adb\" devices:*)",
       "Bash(scp -r web/client/dist/* yaniv@magav:/opt/magav/client/)",
       "Bash(ASSETS_WEB=\"/c/MyData/Projects/Magav/V-Notification-System/android/app/src/main/assets/web\")",
-      "Bash(cp -r /c/MyData/Projects/Magav/V-Notification-System/web/client/dist/* \"$ASSETS_WEB/\")"
+      "Bash(cp -r /c/MyData/Projects/Magav/V-Notification-System/web/client/dist/* \"$ASSETS_WEB/\")",
+      "Bash(grep -r \"211\\\\|212\\\\|221\\\\|222\" /c/MyData/Projects/Magav/V-Notification-System --include=*.ts --include=*.tsx --include=*.cs --include=*.kt)",
+      "Bash(cmd //c \"cd c:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System && build-apk.bat\")",
+      "Bash(C:/Users/yaniv/AppData/Local/Android/Sdk/platform-tools/adb.exe install:*)",
+      "Bash(C:/Users/yaniv/AppData/Local/Android/Sdk/platform-tools/adb.exe logcat:*)",
+      "Bash(C:/Users/yaniv/AppData/Local/Android/Sdk/platform-tools/adb.exe shell:*)",
+      "Bash(C:/Users/yaniv/AppData/Local/Android/Sdk/platform-tools/adb.exe devices:*)",
+      "Bash(./build-apk.bat)",
+      "Bash(adb shell:*)",
+      "Bash(grep -r \"test-sms\\\\|testSms\" /c/MyData/Projects/Magav/V-Notification-System/android/ --include=*.kt)",
+      "Bash(cmd.exe /c build-apk.bat)",
+      "Bash(cmd.exe /c \"cd web/client && npm run build\")",
+      "Bash(cmd.exe /c \"cd C:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android && gradlew.bat assembleDebug 2>&1\")",
+      "Bash(cmd.exe /c \"C:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\build-apk.bat\")",
+      "Bash(cmd.exe /c \"call gradlew.bat assembleDebug 2>&1\")",
+      "Bash(cmd.exe /c \"cd /d C:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android && call gradlew.bat assembleDebug\")",
+      "Bash(cmd.exe //c \"gradlew.bat assembleDebug > build_log.txt 2>&1\")",
+      "Bash(cmd.exe /c \"gradlew.bat assembleDebug 1>C:\\\\tmp\\\\build_log.txt 2>&1\")",
+      "Bash(cmd.exe /c \"cd /d C:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android && gradlew.bat assembleDebug 2>&1 | findstr /i \"\"build error success fail\"\"\")",
+      "Bash(powershell.exe -Command \"Set-Location ''C:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android''; & .\\\\gradlew.bat assembleDebug 2>&1 | Select-Object -Last 20\")",
+      "Bash(powershell.exe -Command \"adb install -r ''C:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android\\\\app\\\\build\\\\outputs\\\\apk\\\\debug\\\\app-debug.apk''\")",
+      "Bash(powershell.exe -Command \"& ''C:\\\\Users\\\\yaniv\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe'' install -r ''C:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android\\\\app\\\\build\\\\outputs\\\\apk\\\\debug\\\\app-debug.apk''\")",
+      "Bash(cp -r /c/MyData/Projects/Magav/V-Notification-System/web/client/dist/* /c/MyData/Projects/Magav/V-Notification-System/android/app/src/main/assets/web/)",
+      "Bash(powershell.exe -Command \"Set-Location ''C:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android''; & .\\\\gradlew.bat assembleDebug 2>&1 | Select-Object -Last 5\")",
+      "Bash(powershell.exe -Command \"& ''C:\\\\Users\\\\yaniv\\\\AppData\\\\Local\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe'' devices\")",
+      "Bash(powershell.exe -Command \"Set-Location ''C:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android''; & .\\\\gradlew.bat assembleDebug 2>&1 | Select-Object -Last 3\")"
     ]
   }
 }

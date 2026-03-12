@@ -3,11 +3,15 @@ package com.magav.app.api.routes
 import android.content.Context
 import com.magav.app.api.models.ApiResponse
 import com.magav.app.api.models.CreateShiftRequest
+import com.magav.app.api.models.SendShiftSmsRequest
 import com.magav.app.api.models.ShiftWithVolunteerDto
 import com.magav.app.api.requireRole
 import com.magav.app.db.MagavDatabase
 import com.magav.app.db.entity.ShiftEntity
+import com.magav.app.db.entity.SmsLogEntity
 import com.magav.app.service.ShiftsImportService
+import com.magav.app.service.SmsReminderService
+import com.magav.app.sms.AndroidSmsProvider
 import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.server.application.*
@@ -17,6 +21,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
@@ -100,6 +105,87 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                 database.shiftDao().deleteById(id)
 
                 call.respond(ApiResponse.ok("השיבוץ נמחק בהצלחה"))
+            }
+
+            // POST /api/shifts/{id}/send-sms - send SMS to a shift volunteer
+            post("/{id}/send-sms") {
+                call.requireRole("Admin", "SystemManager")
+
+                val id = call.parameters["id"]?.toIntOrNull()
+                    ?: throw IllegalArgumentException("מזהה לא תקין")
+
+                val shift = database.shiftDao().getById(id) ?: run {
+                    call.respond(HttpStatusCode.NotFound, ApiResponse.fail<Unit>("שיבוץ לא נמצא"))
+                    return@post
+                }
+
+                val volunteer = database.volunteerDao().getById(shift.volunteerId) ?: run {
+                    call.respond(HttpStatusCode.NotFound, ApiResponse.fail<Unit>("מתנדב לא נמצא"))
+                    return@post
+                }
+
+                if (volunteer.mobilePhone.isNullOrBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, ApiResponse.fail<Unit>("למתנדב אין מספר טלפון"))
+                    return@post
+                }
+                if (volunteer.approveToReceiveSms != 1) {
+                    call.respond(HttpStatusCode.BadRequest, ApiResponse.fail<Unit>("המתנדב לא אישר קבלת הודעות SMS"))
+                    return@post
+                }
+
+                val request = call.receive<SendShiftSmsRequest>()
+
+                val israelTz = ZoneId.of("Asia/Jerusalem")
+                val shiftDate = Instant.parse(shift.shiftDate).atZone(israelTz).toLocalDate()
+                val today = LocalDate.now(israelTz)
+
+                val templateId = request.templateId ?: run {
+                    if (shiftDate.isBefore(today)) {
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ApiResponse.fail<Unit>("לא ניתן לשלוח תזכורת למשמרת שעברה")
+                        )
+                        return@post
+                    }
+                    if (shiftDate == today) 1 else 2
+                }
+
+                val template = database.messageTemplateDao().getById(templateId) ?: run {
+                    call.respond(HttpStatusCode.BadRequest, ApiResponse.fail<Unit>("תבנית הודעה לא נמצאה"))
+                    return@post
+                }
+
+                val message = SmsReminderService.buildMessage(
+                    template.content, shift.shiftName, shift.carId, volunteer.mappingName, shiftDate
+                )
+
+                val smsProvider = AndroidSmsProvider(context)
+                val result = smsProvider.sendSms(volunteer.mobilePhone, message)
+
+                val reminderType = when (templateId) { 1 -> "SameDay"; 2 -> "Advance"; else -> "Manual" }
+                database.smsLogDao().insert(
+                    SmsLogEntity(
+                        shiftId = shift.id,
+                        sentAt = Instant.now().toString(),
+                        status = if (result.success) "Success" else "Fail",
+                        error = result.error,
+                        reminderType = reminderType
+                    )
+                )
+
+                if (result.success) {
+                    database.shiftDao().update(shift.copy(smsSentAt = Instant.now().toString()))
+                }
+
+                if (!result.success) {
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        ApiResponse.fail<Unit>(result.error ?: "שליחת SMS נכשלה")
+                    )
+                    return@post
+                }
+
+                call.respond(ApiResponse.ok("הודעת SMS נשלחה בהצלחה"))
             }
 
             // POST /api/shifts - create a new shift assignment

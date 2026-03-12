@@ -492,6 +492,91 @@ app.MapDelete("/api/shifts/{id:int}", async (int id, MagavDbManager db) =>
     }
 }).RequireAuthorization("CanManageMessages");
 
+// POST /api/shifts/{id}/send-sms - send SMS to a shift volunteer
+app.MapPost("/api/shifts/{id:int}/send-sms", async (int id, SendShiftSmsRequest request,
+    MagavDbManager db, ISmsProvider smsProvider) =>
+{
+    try
+    {
+        var shift = await db.Shifts.GetByIdAsync(id);
+        if (shift == null)
+            return Results.NotFound(ApiResponse<object>.Fail("שיבוץ לא נמצא"));
+
+        var volunteer = await db.Volunteers.GetByIdAsync(shift.VolunteerId);
+        if (volunteer == null)
+            return Results.NotFound(ApiResponse<object>.Fail("מתנדב לא נמצא"));
+
+        if (string.IsNullOrEmpty(volunteer.MobilePhone))
+            return Results.BadRequest(ApiResponse<object>.Fail("למתנדב אין מספר טלפון"));
+        if (!volunteer.ApproveToReceiveSms)
+            return Results.BadRequest(ApiResponse<object>.Fail("המתנדב לא אישר קבלת הודעות SMS"));
+
+        var templateId = request.TemplateId;
+        if (templateId == null)
+        {
+            var israelTz = TimeZoneInfo.FindSystemTimeZoneById(
+                OperatingSystem.IsWindows() ? "Israel Standard Time" : "Asia/Jerusalem");
+            var today = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, israelTz).Date;
+            var shiftDate = shift.ShiftDate.Date;
+
+            if (shiftDate < today)
+                return Results.BadRequest(ApiResponse<object>.Fail("לא ניתן לשלוח תזכורת למשמרת שעברה"));
+            templateId = shiftDate == today ? 1 : 2;
+        }
+
+        var template = await db.MessageTemplates.GetByIdAsync(templateId.Value);
+        if (template == null)
+            return Results.BadRequest(ApiResponse<object>.Fail("תבנית הודעה לא נמצאה"));
+
+        var shiftDto = new ShiftVolunteerDto
+        {
+            ShiftId = shift.Id,
+            ShiftDate = shift.ShiftDate,
+            ShiftName = shift.ShiftName,
+            CarId = shift.CarId,
+            VolunteerId = volunteer.Id,
+            FirstName = volunteer.FirstName,
+            LastName = volunteer.LastName,
+            MappingName = volunteer.MappingName,
+            MobilePhone = volunteer.MobilePhone
+        };
+        var message = SmsReminderService.BuildMessage(template.Content, shiftDto, shift.ShiftDate);
+
+        var result = await smsProvider.SendSmsAsync(volunteer.MobilePhone, message);
+
+        var reminderType = templateId.Value switch { 1 => "SameDay", 2 => "Advance", _ => "Manual" };
+        await db.SmsLog.InsertAsync(new SmsLog
+        {
+            ShiftId = shift.Id,
+            SentAt = DateTime.UtcNow,
+            Status = result.Success ? "Success" : "Fail",
+            Error = result.Error,
+            ReminderType = reminderType
+        });
+
+        if (result.Success)
+        {
+            await db.Db.ExecuteQueryAsync(
+                "UPDATE Shifts SET SmsSentAt = @0 WHERE Id = @1",
+                DateTime.UtcNow.ToString("o"), shift.Id);
+        }
+
+        if (!result.Success)
+            return Results.Json(
+                ApiResponse<object>.Fail(result.Error ?? "שליחת SMS נכשלה"),
+                statusCode: StatusCodes.Status500InternalServerError);
+
+        return Results.Ok(ApiResponse<object>.Ok(null!, "הודעת SMS נשלחה בהצלחה"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error sending shift SMS: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בשליחת SMS"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
 // POST /api/shifts - create a new shift assignment
 app.MapPost("/api/shifts", async (CreateShiftRequest request, MagavDbManager db) =>
 {
@@ -1362,6 +1447,7 @@ public record CreateMessageTemplateRequest(string Name, string Content);
 public record UpdateMessageTemplateRequest(string Name, string Content);
 
 // Shift Management DTOs
+public record SendShiftSmsRequest(int? TemplateId);
 public record CreateShiftRequest(string ShiftDate, string ShiftName, string CarId, int VolunteerId);
 public record ShiftWithVolunteerDto(int Id, string ShiftDate, string ShiftName, string CarId,
     int VolunteerId, string VolunteerName, string? VolunteerPhone, bool VolunteerApproved);

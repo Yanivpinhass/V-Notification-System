@@ -133,6 +133,11 @@ data class ShiftWithVolunteerDto(
     val volunteerApproved: Boolean
 )
 
+@Serializable
+data class SendShiftSmsRequest(
+    val templateId: Int? = null
+)
+
 // ── Scheduler ────────────────────────────────────────────────────────────────
 
 @Serializable

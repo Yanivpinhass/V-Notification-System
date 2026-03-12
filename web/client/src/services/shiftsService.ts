@@ -37,6 +37,10 @@ class ShiftsService extends BaseApiClient {
   async deleteShift(id: number): Promise<void> {
     return this.delete<void>(`/shifts/${id}`);
   }
+
+  async sendShiftSms(shiftId: number, templateId?: number): Promise<void> {
+    return this.post<void>(`/shifts/${shiftId}/send-sms`, { templateId: templateId ?? null });
+  }
 }
 
 export const shiftsService = new ShiftsService();

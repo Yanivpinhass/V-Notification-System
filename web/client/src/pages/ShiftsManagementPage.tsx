@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { shiftsService, ShiftWithVolunteerDto } from '@/services/shiftsService';
 import { volunteersService, VolunteerDto } from '@/services/volunteersService';
-import { Loader2, Trash2, Plus, Search, Calendar as CalendarIcon } from 'lucide-react';
+import { Loader2, Trash2, Plus, Search, Calendar as CalendarIcon, MessageSquare, Phone } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { he } from 'date-fns/locale';
@@ -36,6 +36,12 @@ export const ShiftsManagementPage: React.FC = () => {
   // Delete dialog
   const [deleteTarget, setDeleteTarget] = useState<ShiftWithVolunteerDto | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingWithNotify, setDeletingWithNotify] = useState(false);
+
+  // SMS sending
+  const [sendingSmsId, setSendingSmsId] = useState<number | null>(null);
+  const [smsConfirmTarget, setSmsConfirmTarget] = useState<ShiftWithVolunteerDto | null>(null);
+  const [callConfirmTarget, setCallConfirmTarget] = useState<ShiftWithVolunteerDto | null>(null);
 
   // Add volunteer dialog
   const [addTarget, setAddTarget] = useState<{ shiftName: string; carId: string } | null>(null);
@@ -100,6 +106,12 @@ export const ShiftsManagementPage: React.FC = () => {
       const exists = groups.some(g => g.shiftName === lg.shiftName && g.carId === lg.carId);
       if (!exists) groups.push(lg);
     }
+    // Sort by trailing number in shiftName (e.g., "מרחבים 211" → 211)
+    groups.sort((a, b) => {
+      const numA = parseInt(a.shiftName.match(/\d+$/)?.[0] ?? '0');
+      const numB = parseInt(b.shiftName.match(/\d+$/)?.[0] ?? '0');
+      return numA - numB;
+    });
     return groups;
   }, [shifts, localGroups]);
 
@@ -116,6 +128,40 @@ export const ShiftsManagementPage: React.FC = () => {
       toast.error(err instanceof Error ? err.message : 'שגיאה במחיקת השיבוץ');
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // ── Delete with SMS notification ──
+  const handleDeleteWithNotify = async () => {
+    if (!deleteTarget) return;
+    setDeletingWithNotify(true);
+    try {
+      try {
+        await shiftsService.sendShiftSms(deleteTarget.id, 3);
+      } catch {
+        // SMS failed — still proceed with delete
+      }
+      await shiftsService.deleteShift(deleteTarget.id);
+      toast.success('השיבוץ נמחק והמתנדב עודכן');
+      setDeleteTarget(null);
+      loadShifts();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'שגיאה במחיקת השיבוץ');
+    } finally {
+      setDeletingWithNotify(false);
+    }
+  };
+
+  // ── Send SMS ──
+  const handleSendSms = async (shift: ShiftWithVolunteerDto) => {
+    setSendingSmsId(shift.id);
+    try {
+      await shiftsService.sendShiftSms(shift.id);
+      toast.success('הודעת SMS נשלחה בהצלחה');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'שגיאה בשליחת SMS');
+    } finally {
+      setSendingSmsId(null);
     }
   };
 
@@ -199,7 +245,7 @@ export const ShiftsManagementPage: React.FC = () => {
     <div className="space-y-4 p-4" dir="rtl">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">ניהול שיבוצים</h1>
+        <h1 className="text-2xl font-bold">ניהול משמרות</h1>
         <div className="flex items-center gap-2">
           <Button onClick={() => setNewGroupOpen(true)} className="min-h-[44px]">
             <Plus className="h-4 w-4 ml-2" />
@@ -273,16 +319,20 @@ export const ShiftsManagementPage: React.FC = () => {
             )}
             {group.shifts.map((shift) => {
               const issue = getVolunteerIssue(shift);
+              const today = new Date(); today.setHours(0,0,0,0);
+              const shiftDateObj = new Date(shift.shiftDate); shiftDateObj.setHours(0,0,0,0);
+              const isPast = shiftDateObj < today;
+              const canSms = !!shift.volunteerPhone && shift.volunteerApproved;
               return (
                 <div
                   key={shift.id}
-                  className="flex items-center justify-between gap-2 rounded-md border p-3"
+                  className="rounded-md border p-3 space-y-2"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-2">
                     {issue ? (
                       <Popover>
                         <PopoverTrigger asChild>
-                          <button className="text-red-600 font-medium text-sm text-right cursor-pointer hover:underline truncate">
+                          <button className="text-red-600 font-medium text-sm text-right cursor-pointer hover:underline">
                             {shift.volunteerName}
                           </button>
                         </PopoverTrigger>
@@ -291,22 +341,46 @@ export const ShiftsManagementPage: React.FC = () => {
                         </PopoverContent>
                       </Popover>
                     ) : (
-                      <span className="text-sm font-medium truncate">{shift.volunteerName}</span>
+                      <span className="text-sm font-medium">{shift.volunteerName}</span>
                     )}
                     {shift.volunteerPhone && (
-                      <span className="text-sm text-muted-foreground whitespace-nowrap">
+                      <span className="text-sm text-muted-foreground">
                         {shift.volunteerPhone}
                       </span>
                     )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="min-h-[44px] min-w-[44px] text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0"
-                    onClick={() => setDeleteTarget(shift)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="min-h-[44px] min-w-[44px] text-blue-500 hover:text-blue-700 hover:bg-blue-50"
+                      disabled={!canSms || isPast || sendingSmsId === shift.id}
+                      onClick={() => setSmsConfirmTarget(shift)}
+                    >
+                      {sendingSmsId === shift.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <MessageSquare className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="min-h-[44px] min-w-[44px] text-green-500 hover:text-green-700 hover:bg-green-50"
+                      disabled={!shift.volunteerPhone}
+                      onClick={() => setCallConfirmTarget(shift)}
+                    >
+                      <Phone className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="min-h-[44px] min-w-[44px] text-red-500 hover:text-red-700 hover:bg-red-50"
+                      onClick={() => setDeleteTarget(shift)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               );
             })}
@@ -324,7 +398,7 @@ export const ShiftsManagementPage: React.FC = () => {
       ))}
 
       {/* Delete confirmation */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && !isDeleting && !deletingWithNotify && setDeleteTarget(null)}>
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle>מחיקת שיבוץ</AlertDialogTitle>
@@ -332,16 +406,75 @@ export const ShiftsManagementPage: React.FC = () => {
               האם למחוק את השיבוץ של {deleteTarget?.volunteerName}?
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-row-reverse gap-2">
+          <div className="flex flex-row flex-wrap gap-2 pt-2">
+            <AlertDialogCancel disabled={isDeleting || deletingWithNotify} className="mt-0">ביטול</AlertDialogCancel>
+            <Button
+              onClick={handleDeleteWithNotify}
+              disabled={
+                isDeleting || deletingWithNotify ||
+                !deleteTarget?.volunteerPhone || !deleteTarget?.volunteerApproved
+              }
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {deletingWithNotify ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
+              מחק ועדכן את המתנדב
+            </Button>
             <AlertDialogAction
               onClick={handleDelete}
-              disabled={isDeleting}
+              disabled={isDeleting || deletingWithNotify}
               className="bg-red-600 hover:bg-red-700"
             >
               {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'מחק'}
             </AlertDialogAction>
-            <AlertDialogCancel disabled={isDeleting}>ביטול</AlertDialogCancel>
-          </AlertDialogFooter>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* SMS confirmation */}
+      <AlertDialog open={!!smsConfirmTarget} onOpenChange={(open) => !open && setSmsConfirmTarget(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>שליחת SMS</AlertDialogTitle>
+            <AlertDialogDescription>
+              לשלוח הודעת SMS ל{smsConfirmTarget?.volunteerName}?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex flex-row gap-2 pt-2">
+            <AlertDialogCancel className="mt-0">ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (smsConfirmTarget) handleSendSms(smsConfirmTarget);
+                setSmsConfirmTarget(null);
+              }}
+            >
+              שלח
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Call confirmation */}
+      <AlertDialog open={!!callConfirmTarget} onOpenChange={(open) => !open && setCallConfirmTarget(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>התקשרות</AlertDialogTitle>
+            <AlertDialogDescription>
+              להתקשר ל{callConfirmTarget?.volunteerName} ({callConfirmTarget?.volunteerPhone})?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex flex-row gap-2 pt-2">
+            <AlertDialogCancel className="mt-0">ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (callConfirmTarget?.volunteerPhone) {
+                  window.location.href = `tel:${callConfirmTarget.volunteerPhone}`;
+                }
+                setCallConfirmTarget(null);
+              }}
+            >
+              התקשר
+            </AlertDialogAction>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
 
