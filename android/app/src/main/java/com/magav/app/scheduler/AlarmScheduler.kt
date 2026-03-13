@@ -17,14 +17,28 @@ class AlarmScheduler(private val context: Context) {
 
     suspend fun scheduleAllAlarms() {
         val database = MagavApplication.database
-        val configs = database.schedulerConfigDao().getEnabled()
+        val allConfigs = database.schedulerConfigDao().getAll()
 
-        android.util.Log.d("AlarmScheduler", "Scheduling alarms for ${configs.size} enabled configs")
+        android.util.Log.d("AlarmScheduler", "Scheduling alarms: ${allConfigs.size} total configs")
 
-        // Cancel all existing alarms first
-        cancelAllAlarms(configs.size * 7) // max possible alarms
+        // Cancel ALL alarms (enabled and disabled) using real request codes
+        for (config in allConfigs) {
+            val days = getDaysForGroup(config.dayGroup)
+            for (day in days) {
+                val requestCode = config.id * 10 + day.value
+                val intent = Intent(context, SmsAlarmReceiver::class.java)
+                val pendingIntent = PendingIntent.getBroadcast(
+                    context, requestCode, intent,
+                    PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+                )
+                pendingIntent?.let { alarmManager.cancel(it) }
+            }
+        }
 
-        for (config in configs) {
+        // Re-schedule only enabled configs
+        val enabledConfigs = allConfigs.filter { it.isEnabled == 1 }
+        android.util.Log.d("AlarmScheduler", "Re-scheduling ${enabledConfigs.size} enabled configs")
+        for (config in enabledConfigs) {
             val days = getDaysForGroup(config.dayGroup)
             for (day in days) {
                 scheduleAlarmForDay(config.id, config.time, day)
@@ -66,17 +80,6 @@ class AlarmScheduler(private val context: Context) {
         } else {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
             android.util.Log.d("AlarmScheduler", "Alarm set: configId=$configId day=$dayOfWeek at $target")
-        }
-    }
-
-    private fun cancelAllAlarms(maxAlarms: Int) {
-        for (requestCode in 0 until maxAlarms) {
-            val intent = Intent(context, SmsAlarmReceiver::class.java)
-            val pendingIntent = PendingIntent.getBroadcast(
-                context, requestCode, intent,
-                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
-            )
-            pendingIntent?.let { alarmManager.cancel(it) }
         }
     }
 

@@ -48,6 +48,10 @@ class SmsSchedulerWorker(
                     android.util.Log.e("SmsWorker", "Config $configId not found")
                     return Result.failure()
                 }
+                if (config.isEnabled != 1) {
+                    android.util.Log.d("SmsWorker", "Config $configId is disabled, skipping")
+                    return Result.success()
+                }
                 val targetDate = LocalDate.now(israelTz).plusDays(config.daysBeforeShift.toLong())
                 android.util.Log.d("SmsWorker", "Executing config ${config.id} (${config.reminderType}, daysBeforeShift=${config.daysBeforeShift}) for targetDate=$targetDate")
                 val summary = reminderService.execute(config, targetDate)
