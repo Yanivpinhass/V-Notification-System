@@ -80,7 +80,9 @@
       "Read(//c/MyData/Projects/Magav/V-Notification-System/web/client/$TEMP/**)",
       "Bash(npx eslint:*)",
       "Bash(npm run:*)",
-      "Bash(start \"\" \"c:\\\\tmp\\\\icon_preview.html\")"
+      "Bash(start \"\" \"c:\\\\tmp\\\\icon_preview.html\")",
+      "Bash(xargs grep:*)",
+      "Bash(cmd //c \"c:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\build-apk.bat\")"
     ]
   }
 }

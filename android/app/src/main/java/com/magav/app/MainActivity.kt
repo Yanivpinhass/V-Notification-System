@@ -68,6 +68,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupWebView() {
+        clearCacheOnVersionChange()
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -277,6 +278,21 @@ class MainActivity : AppCompatActivity() {
     private fun showWebView() {
         loadingSpinner.visibility = View.GONE
         webView.visibility = View.VISIBLE
+    }
+
+    private fun clearCacheOnVersionChange() {
+        val prefs = getSharedPreferences("webview_cache", MODE_PRIVATE)
+        val currentVersion = try {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(packageName, 0).versionCode.toLong()
+        } catch (_: Exception) {
+            0L
+        }
+        val lastVersion = prefs.getLong("last_version_code", 0L)
+        if (currentVersion != lastVersion) {
+            webView.clearCache(true)
+            prefs.edit().putLong("last_version_code", currentVersion).apply()
+        }
     }
 
     @Deprecated("Deprecated in Java")

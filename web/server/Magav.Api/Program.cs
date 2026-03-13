@@ -1186,6 +1186,7 @@ app.MapGet("/api/sms-log/summary", async (int? days, MagavDbManager db) =>
               LEFT JOIN SmsLog sl ON sl.ShiftId = s.Id
               WHERE s.ShiftDate >= @0
               GROUP BY s.ShiftDate, s.ShiftName
+              HAVING COUNT(sl.Id) > 0
               ORDER BY s.ShiftDate DESC, s.ShiftName", from);
 
         return Results.Ok(ApiResponse<object>.Ok(summary));

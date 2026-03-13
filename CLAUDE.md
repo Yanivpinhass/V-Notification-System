@@ -65,6 +65,8 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 
 The build script: (1) builds React in `web/client/`, (2) copies `dist/` to `android/app/src/main/assets/web/`, (3) runs `gradlew assembleDebug`.
 
+**IMPORTANT: Always bump `versionCode` (and optionally `versionName`) in `android/app/build.gradle.kts` before every APK build.** The Android WebView caches the PWA service worker; `MainActivity.clearCacheOnVersionChange()` detects the new version code and clears the cache so users get the updated frontend without needing to uninstall. Forgetting to bump = users stuck on old UI.
+
 There are no automated tests in this project.
 
 **Default dev credentials:** username `admin`, password `Admin123!` (.NET) or `12345` (Android seeded by DatabaseInitializer).

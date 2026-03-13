@@ -39,18 +39,6 @@ const isUserAdmin = (): boolean => {
   return false;
 };
 
-const formatDate = (dateString: string | null): string => {
-  if (!dateString) return '-';
-  const date = new Date(dateString);
-  return date.toLocaleDateString('he-IL', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
 export const MessageTemplatesPage: React.FC = () => {
   const [templates, setTemplates] = useState<MessageTemplateEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -184,7 +172,6 @@ export const MessageTemplatesPage: React.FC = () => {
               <TableHeader>
                 <TableRow className="bg-muted/60">
                   <TableHead className="text-center font-semibold text-foreground">שם</TableHead>
-                  <TableHead className="text-center font-semibold text-foreground">עודכן</TableHead>
                   {isAdmin && (
                     <TableHead className="text-center font-semibold text-foreground">פעולות</TableHead>
                   )}
@@ -194,7 +181,6 @@ export const MessageTemplatesPage: React.FC = () => {
                 {templates.map((template) => (
                   <TableRow key={template.id}>
                     <TableCell className="text-right font-medium whitespace-nowrap">{template.name}</TableCell>
-                    <TableCell className="text-center whitespace-nowrap">{formatDate(template.updatedAt)}</TableCell>
                     {isAdmin && (
                       <TableCell className="text-center">
                         <div className="flex justify-center gap-2">
