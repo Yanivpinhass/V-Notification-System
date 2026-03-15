@@ -108,16 +108,49 @@ class MagavApplication : Application() {
             .openHelperFactory(factory)
             .fallbackToDestructiveMigration()
             .build()
+
+        // Verify DB can be opened (handles restored backup encrypted with old key)
+        try {
+            database.openHelper.writableDatabase
+        } catch (e: Exception) {
+            android.util.Log.w("MagavApp", "Database wrong key or corrupted, recreating: ${e.message}")
+            try { database.close() } catch (_: Exception) {}
+            val dbFile = getDatabasePath("magav.db")
+            dbFile.delete()
+            java.io.File(dbFile.path + "-wal").delete()
+            java.io.File(dbFile.path + "-shm").delete()
+            java.io.File(dbFile.path + "-journal").delete()
+            database = Room.databaseBuilder(this, MagavDatabase::class.java, "magav.db")
+                .openHelperFactory(factory)
+                .fallbackToDestructiveMigration()
+                .build()
+        }
     }
 
     private fun getOrCreateDatabaseKey(): String {
-        val prefs = EncryptedSharedPreferences.create(
-            "magav_secure_prefs",
-            MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC),
-            this,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
+        val prefs = try {
+            EncryptedSharedPreferences.create(
+                "magav_secure_prefs",
+                MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC),
+                this,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e: Exception) {
+            // Corrupted EncryptedSharedPreferences (e.g. after uninstall/reinstall
+            // where Android Keystore retains old master key but prefs file is gone).
+            // Delete the corrupted prefs file and recreate.
+            android.util.Log.w("MagavApp", "EncryptedSharedPreferences corrupted, recreating: ${e.message}")
+            val prefsFile = java.io.File(applicationInfo.dataDir, "shared_prefs/magav_secure_prefs.xml")
+            prefsFile.delete()
+            EncryptedSharedPreferences.create(
+                "magav_secure_prefs",
+                MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC),
+                this,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        }
         val key = prefs.getString("db_encryption_key", null)
         if (key != null) return key
 

@@ -21,6 +21,8 @@ import kotlinx.coroutines.launch
 
 class MagavServerService : Service() {
     private var server: ApplicationEngine? = null
+    @Volatile
+    private var serverStarting = false
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -35,7 +37,7 @@ class MagavServerService : Service() {
 
         startForeground(1, notification)
 
-        if (server == null) {
+        if (server == null && !serverStarting) {
             // Check if database is available before attempting server start
             if (!MagavApplication.isDatabaseReady) {
                 android.util.Log.e("MagavServer", "Database not initialized, cannot start server")
@@ -43,6 +45,7 @@ class MagavServerService : Service() {
                 return START_STICKY
             }
 
+            serverStarting = true
             scope.launch {
                 try {
                     android.util.Log.i("MagavServer", "Starting server initialization...")
@@ -62,7 +65,8 @@ class MagavServerService : Service() {
                     server?.start(wait = true)
                 } catch (e: Exception) {
                     android.util.Log.e("MagavServer", "Server failed to start", e)
-                    server = null // Reset so server can be restarted on next onStartCommand
+                    server = null
+                    serverStarting = false // Reset so server can be restarted on next onStartCommand
                     updateNotification("שגיאה: השרת לא פעיל - יש להפעיל מחדש")
                 }
             }
