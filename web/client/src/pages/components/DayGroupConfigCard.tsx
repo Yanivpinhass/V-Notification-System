@@ -65,8 +65,8 @@ const ReminderSection: React.FC<{
         </div>
 
         {showDaysBefore && (
-          <div className="space-y-1 w-32">
-            <Label htmlFor={`days-${config.id}`} className="text-xs">ימים לפני משמרת</Label>
+          <div className="space-y-1 w-44">
+            <Label htmlFor={`days-${config.id}`} className="text-xs">תזכורת למשמרת שבעוד (ימים)</Label>
             <Select
               value={config.daysBeforeShift.toString()}
               disabled={isReadOnly}
