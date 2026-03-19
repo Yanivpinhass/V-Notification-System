@@ -43,7 +43,7 @@ class SmsSchedulerWorker(
         android.util.Log.d("SmsWorker", "configId=$configId")
 
         return try {
-            if (configId != -1) {
+            val summary = if (configId != -1) {
                 val config = database.schedulerConfigDao().getById(configId) ?: run {
                     android.util.Log.e("SmsWorker", "Config $configId not found")
                     return Result.failure()
@@ -53,13 +53,30 @@ class SmsSchedulerWorker(
                     return Result.success()
                 }
                 val targetDate = LocalDate.now(israelTz).plusDays(config.daysBeforeShift.toLong())
+                val targetDateStr = targetDate.toString()
+
+                // Prevent re-execution on retry (same check as checkAllConfigs)
+                if (database.schedulerRunLogDao().existsForConfigAndDate(
+                        config.id, targetDateStr, config.reminderType
+                    )
+                ) {
+                    android.util.Log.d("SmsWorker", "Config $configId already ran for $targetDateStr, skipping")
+                    return Result.success()
+                }
+
                 android.util.Log.d("SmsWorker", "Executing config ${config.id} (${config.reminderType}, daysBeforeShift=${config.daysBeforeShift}) for targetDate=$targetDate")
-                val summary = reminderService.execute(config, targetDate)
-                showSmsSummaryNotification(summary)
+                reminderService.execute(config, targetDate)
             } else {
-                val summary = checkAllConfigs(database, reminderService)
-                showSmsSummaryNotification(summary)
+                checkAllConfigs(database, reminderService)
             }
+
+            // Notification errors must not trigger Result.retry()
+            try {
+                showSmsSummaryNotification(summary)
+            } catch (e: Exception) {
+                android.util.Log.e("SmsWorker", "Failed to show notification", e)
+            }
+
             android.util.Log.d("SmsWorker", "doWork completed successfully")
             Result.success()
         } catch (e: Exception) {

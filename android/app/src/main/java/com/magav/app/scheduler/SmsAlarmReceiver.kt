@@ -4,8 +4,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.work.Data
+import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import java.time.LocalDate
+import java.time.ZoneId
 import com.magav.app.MagavApplication
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -24,7 +27,12 @@ class SmsAlarmReceiver : BroadcastReceiver() {
             .setInputData(workData)
             .build()
 
-        WorkManager.getInstance(context).enqueue(workRequest)
+        val today = LocalDate.now(ZoneId.of("Asia/Jerusalem"))
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "sms_config_${configId}_$today",
+            ExistingWorkPolicy.KEEP,
+            workRequest
+        )
 
         // Re-schedule alarm for next occurrence
         val pendingResult = goAsync()
