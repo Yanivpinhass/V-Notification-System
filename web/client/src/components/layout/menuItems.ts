@@ -1,4 +1,4 @@
-import { Users, Settings, Search, Calendar } from 'lucide-react';
+import { Users, Settings, Search, Calendar, Info } from 'lucide-react';
 import { MenuItem } from './types';
 
 export const mainMenuItems: MenuItem[] = [
@@ -51,6 +51,14 @@ export const mainMenuItems: MenuItem[] = [
     requiredRoles: ['Admin'],
     subItems: [
       { id: 'system-users', title: 'משתמשי מערכת', path: '/user-management/users' },
+    ]
+  },
+  {
+    id: 'about',
+    title: 'אודות',
+    icon: Info,
+    subItems: [
+      { id: 'about-version', title: 'גרסה', path: '/about/version' },
     ]
   }
 ];

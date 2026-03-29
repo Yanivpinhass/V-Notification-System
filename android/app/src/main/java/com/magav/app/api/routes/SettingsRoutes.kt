@@ -115,7 +115,9 @@ fun Route.settingsRoutes(database: MagavDatabase, context: Context) {
 
                 android.util.Log.d("SettingsRoutes", "Test SMS: phone=$phone")
 
-                val smsProvider = AndroidSmsProvider(context)
+                val subIdSetting = database.appSettingDao().getByKey("sms_sim_subscription_id")
+                val subscriptionId = subIdSetting?.value?.toIntOrNull() ?: -1
+                val smsProvider = AndroidSmsProvider(context, subscriptionId)
                 val result = smsProvider.sendSms(phone, request.message)
                 android.util.Log.d("SettingsRoutes", "Test SMS result: success=${result.success}, error=${result.error}")
 

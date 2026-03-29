@@ -160,7 +160,9 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                     template.content, shift.shiftName, shift.carId, volunteer.mappingName, shiftDate
                 )
 
-                val smsProvider = AndroidSmsProvider(context)
+                val subIdSetting = database.appSettingDao().getByKey("sms_sim_subscription_id")
+                val subscriptionId = subIdSetting?.value?.toIntOrNull() ?: -1
+                val smsProvider = AndroidSmsProvider(context, subscriptionId)
                 val result = smsProvider.sendSms(volunteer.mobilePhone, message)
 
                 val reminderType = when (templateId) { 1 -> "SameDay"; 2 -> "Advance"; else -> "Manual" }

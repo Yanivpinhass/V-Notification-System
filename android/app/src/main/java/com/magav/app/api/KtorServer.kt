@@ -73,7 +73,7 @@ fun createKtorServer(database: MagavDatabase, context: Context): ApplicationEngi
         }
 
         routing {
-            healthRoutes()
+            healthRoutes(context)
             authRoutes(database)
             userRoutes(database)
             volunteerRoutes(database)

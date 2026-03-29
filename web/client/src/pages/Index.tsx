@@ -14,6 +14,7 @@ import { SchedulerRunLogPage } from '@/pages/SchedulerRunLogPage';
 import { SmsSettingsPage } from '@/pages/SmsSettingsPage';
 import { ShiftsManagementPage } from '@/pages/ShiftsManagementPage';
 import { MessageTemplatesPage } from '@/pages/MessageTemplatesPage';
+import { AboutVersionPage } from '@/pages/AboutVersionPage';
 import { authService } from '@/services/authService';
 
 interface User {
@@ -80,6 +81,8 @@ const Index = () => {
         return <ShiftsManagementPage />;
       case 'message-templates':
         return <MessageTemplatesPage />;
+      case 'about-version':
+        return <AboutVersionPage />;
       default:
         return <PlaceholderPage />;
     }

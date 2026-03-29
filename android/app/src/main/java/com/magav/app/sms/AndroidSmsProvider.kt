@@ -16,7 +16,8 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.resume
 
 class AndroidSmsProvider(
-    private val context: Context
+    private val context: Context,
+    private val subscriptionId: Int = -1
 ) : SmsProvider {
 
     companion object {
@@ -37,14 +38,15 @@ class AndroidSmsProvider(
     private suspend fun sendSmsInternal(phoneNumber: String, message: String): SmsProvider.SmsResult {
         return suspendCancellableCoroutine { continuation ->
             try {
-                android.util.Log.d("AndroidSms", "Sending to $phoneNumber")
-                // Use the system default SmsManager — sends from whichever SIM
-                // the user has set as default for SMS in Android Settings.
-                val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    context.getSystemService(SmsManager::class.java)
-                } else {
-                    @Suppress("DEPRECATION")
-                    SmsManager.getDefault()
+                android.util.Log.d("AndroidSms", "Sending to $phoneNumber (subscriptionId=$subscriptionId)")
+                @Suppress("DEPRECATION")
+                val smsManager = when {
+                    subscriptionId != -1 ->
+                        SmsManager.getSmsManagerForSubscriptionId(subscriptionId)
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
+                        context.getSystemService(SmsManager::class.java)
+                    else ->
+                        SmsManager.getDefault()
                 }
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

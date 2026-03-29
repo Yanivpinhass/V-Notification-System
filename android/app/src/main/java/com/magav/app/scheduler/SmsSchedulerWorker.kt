@@ -4,9 +4,13 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.BitmapFactory
+import android.os.Build
+import android.telephony.TelephonyManager
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
+import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import com.magav.app.MainActivity
 import com.magav.app.MagavApplication
@@ -15,6 +19,7 @@ import com.magav.app.db.MagavDatabase
 import com.magav.app.service.SmsSummary
 import com.magav.app.service.SmsReminderService
 import com.magav.app.sms.AndroidSmsProvider
+import kotlinx.coroutines.delay
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.ZoneId
@@ -36,13 +41,16 @@ class SmsSchedulerWorker(
         }
         val database = MagavApplication.database
 
-        val smsProvider = AndroidSmsProvider(applicationContext)
+        val subIdSetting = database.appSettingDao().getByKey("sms_sim_subscription_id")
+        val subscriptionId = subIdSetting?.value?.toIntOrNull() ?: -1
+        val smsProvider = AndroidSmsProvider(applicationContext, subscriptionId)
         val reminderService = SmsReminderService(database, smsProvider)
 
         val configId = inputData.getInt("configId", -1)
-        android.util.Log.d("SmsWorker", "configId=$configId")
+        android.util.Log.d("SmsWorker", "configId=$configId, subscriptionId=$subscriptionId")
 
         return try {
+            waitForCallToEnd()
             val summary = if (configId != -1) {
                 val config = database.schedulerConfigDao().getById(configId) ?: run {
                     android.util.Log.e("SmsWorker", "Config $configId not found")
@@ -154,6 +162,43 @@ class SmsSchedulerWorker(
 
         val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(100, notification)
+    }
+
+    private suspend fun waitForCallToEnd() {
+        val tm = applicationContext.getSystemService(TelephonyManager::class.java)
+
+        @Suppress("DEPRECATION")
+        if (tm.callState == TelephonyManager.CALL_STATE_IDLE) return
+
+        android.util.Log.w("SmsWorker", "Call active, upgrading to foreground worker and waiting for call to end")
+
+        // Upgrade to foreground worker so Android won't kill us during the wait
+        val notification = NotificationCompat.Builder(applicationContext, "magav_server_channel")
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("מגב - ממתין לסיום שיחה")
+            .setContentText("הודעות SMS ישלחו לאחר סיום השיחה")
+            .setOngoing(true)
+            .build()
+
+        val foregroundInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ForegroundInfo(102, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            ForegroundInfo(102, notification)
+        }
+        setForeground(foregroundInfo)
+
+        // Poll every 60s, up to 20 minutes
+        for (attempt in 1..20) {
+            android.util.Log.w("SmsWorker", "Call active, waiting 60s (attempt $attempt/20)")
+            delay(60_000L)
+
+            @Suppress("DEPRECATION")
+            if (tm.callState == TelephonyManager.CALL_STATE_IDLE) {
+                android.util.Log.d("SmsWorker", "Call ended after $attempt min, proceeding with SMS")
+                return
+            }
+        }
+        android.util.Log.w("SmsWorker", "Call still active after 20 min, sending anyway")
     }
 
     private fun getDaysForGroup(dayGroup: String): List<DayOfWeek> = when (dayGroup) {
