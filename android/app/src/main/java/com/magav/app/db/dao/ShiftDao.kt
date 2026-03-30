@@ -12,11 +12,17 @@ interface ShiftDao {
     @Query("SELECT * FROM Shifts WHERE ShiftDate >= :from AND ShiftDate < :to")
     suspend fun getByDateRange(from: String, to: String): List<ShiftEntity>
 
+    @Query("SELECT DISTINCT ShiftDate FROM Shifts WHERE ShiftDate >= :from AND ShiftDate < :to")
+    suspend fun getDistinctDatesByRange(from: String, to: String): List<String>
+
     @Query("SELECT * FROM Shifts WHERE VolunteerId = :volunteerId")
     suspend fun getByVolunteerId(volunteerId: Int): List<ShiftEntity>
 
     @Query("DELETE FROM Shifts WHERE ShiftDate >= :from")
     suspend fun deleteByDateFrom(from: String)
+
+    @Query("DELETE FROM Shifts WHERE ShiftDate >= :from AND ShiftDate <= :to")
+    suspend fun deleteByDateRange(from: String, to: String)
 
     @Insert
     suspend fun insertAll(shifts: List<ShiftEntity>)

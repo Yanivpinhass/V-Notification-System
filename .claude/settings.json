@@ -125,7 +125,8 @@
       "Bash(grep -r date c:MyDataProjectsMagavV-Notification-Systemwebclientsrccomponentsui --include=*.tsx -l)",
       "Bash(grep -E \"\\\\.\\(cs\\)$\")",
       "Bash(cmd.exe /c \"gradlew.bat assembleDebug 2>&1\")",
-      "Bash(\"c:/MyData/Projects/Magav/V-Notification-System/android/gradlew.bat\" assembleDebug --project-dir \"c:/MyData/Projects/Magav/V-Notification-System/android\")"
+      "Bash(\"c:/MyData/Projects/Magav/V-Notification-System/android/gradlew.bat\" assembleDebug --project-dir \"c:/MyData/Projects/Magav/V-Notification-System/android\")",
+      "Bash(cmd //c \".\\\\build-apk.bat\")"
     ]
   },
   "effortLevel": "high"

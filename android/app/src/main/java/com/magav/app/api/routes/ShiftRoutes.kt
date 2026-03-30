@@ -79,6 +79,45 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                 call.respond(ApiResponse.ok(dtos))
             }
 
+            // GET /api/shifts/dates-with-shifts?from=YYYY-MM-DD&to=YYYY-MM-DD
+            get("/dates-with-shifts") {
+                call.requireRole("Admin", "SystemManager")
+
+                val fromStr = call.request.queryParameters["from"]
+                val toStr = call.request.queryParameters["to"]
+
+                if (fromStr.isNullOrBlank() || toStr.isNullOrBlank()) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ApiResponse.fail<Unit>("פרמטרי תאריך נדרשים")
+                    )
+                    return@get
+                }
+
+                val fromDate = try { LocalDate.parse(fromStr) } catch (_: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, ApiResponse.fail<Unit>("פורמט תאריך לא תקין"))
+                    return@get
+                }
+                val toDate = try { LocalDate.parse(toStr) } catch (_: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, ApiResponse.fail<Unit>("פורמט תאריך לא תקין"))
+                    return@get
+                }
+
+                val from = fromDate.atStartOfDay(ZoneOffset.UTC)
+                    .format(DateTimeFormatter.ISO_INSTANT)
+                val to = toDate.plusDays(1).atStartOfDay(ZoneOffset.UTC)
+                    .format(DateTimeFormatter.ISO_INSTANT)
+
+                val rawDates = database.shiftDao().getDistinctDatesByRange(from, to)
+
+                val israelTz = ZoneId.of("Asia/Jerusalem")
+                val dateStrings = rawDates.map { isoDate ->
+                    Instant.parse(isoDate).atZone(israelTz).toLocalDate().toString()
+                }.distinct()
+
+                call.respond(ApiResponse.ok(dateStrings))
+            }
+
             // DELETE /api/shifts/{id}
             delete("/{id}") {
                 call.requireRole("Admin", "SystemManager")

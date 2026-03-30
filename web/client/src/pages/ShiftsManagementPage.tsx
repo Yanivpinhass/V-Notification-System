@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -61,15 +61,23 @@ export const ShiftsManagementPage: React.FC = () => {
   const [editCarId, setEditCarId] = useState('');
   const [isEditing, setIsEditing] = useState(false);
 
+  // Calendar dot indicators
+  const [datesWithShifts, setDatesWithShifts] = useState<Set<string>>(new Set());
+  const [displayedMonth, setDisplayedMonth] = useState<Date>(new Date());
+
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
-  const isSelectedDatePast = React.useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  const todayDate = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  const isSelectedDatePast = useMemo(() => {
     const sel = new Date(selectedDate);
     sel.setHours(0, 0, 0, 0);
-    return sel < today;
-  }, [selectedDate]);
+    return sel < todayDate;
+  }, [selectedDate, todayDate]);
 
   const loadShifts = useCallback(async () => {
     setIsLoading(true);
@@ -89,6 +97,52 @@ export const ShiftsManagementPage: React.FC = () => {
   useEffect(() => {
     loadShifts();
   }, [loadShifts]);
+
+  const loadMonthIndicators = useCallback(async (month: Date) => {
+    try {
+      const year = month.getFullYear();
+      const monthIndex = month.getMonth();
+      const from = format(new Date(year, monthIndex, 1), 'yyyy-MM-dd');
+      const to = format(new Date(year, monthIndex + 1, 0), 'yyyy-MM-dd');
+      const dates = await shiftsService.getDatesWithShifts(from, to);
+      setDatesWithShifts(new Set(dates));
+    } catch {
+      // Non-critical — skip dots on error
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMonthIndicators(displayedMonth);
+  }, [displayedMonth, loadMonthIndicators]);
+
+  const refreshData = useCallback(() => {
+    loadShifts();
+    loadMonthIndicators(displayedMonth);
+  }, [loadShifts, loadMonthIndicators, displayedMonth]);
+
+  const { greenDates, redDates, grayDates } = useMemo(() => {
+    const green: Date[] = [];
+    const red: Date[] = [];
+    const gray: Date[] = [];
+    const year = displayedMonth.getFullYear();
+    const month = displayedMonth.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month, day);
+      date.setHours(0, 0, 0, 0);
+      const dateStr = format(date, 'yyyy-MM-dd');
+      const hasShifts = datesWithShifts.has(dateStr);
+
+      if (date < todayDate) {
+        if (hasShifts) gray.push(date);
+      } else {
+        if (hasShifts) green.push(date);
+        else red.push(date);
+      }
+    }
+    return { greenDates: green, redDates: red, grayDates: gray };
+  }, [displayedMonth, datesWithShifts, todayDate]);
 
   // Load volunteers once when add dialog opens
   const loadVolunteers = useCallback(async () => {
@@ -137,7 +191,7 @@ export const ShiftsManagementPage: React.FC = () => {
       await shiftsService.deleteShift(deleteTarget.id);
       toast.success('השיבוץ נמחק בהצלחה');
       setDeleteTarget(null);
-      loadShifts();
+      refreshData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'שגיאה במחיקת השיבוץ');
     } finally {
@@ -158,7 +212,7 @@ export const ShiftsManagementPage: React.FC = () => {
       await shiftsService.deleteShift(deleteTarget.id);
       toast.success('השיבוץ נמחק והמתנדב עודכן');
       setDeleteTarget(null);
-      loadShifts();
+      refreshData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'שגיאה במחיקת השיבוץ');
     } finally {
@@ -198,7 +252,7 @@ export const ShiftsManagementPage: React.FC = () => {
       });
       toast.success(`${vol.mappingName} שובץ בהצלחה`);
       setAddTarget(null);
-      loadShifts();
+      refreshData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'שגיאה בשיבוץ המתנדב');
     } finally {
@@ -236,7 +290,7 @@ export const ShiftsManagementPage: React.FC = () => {
       });
       toast.success('פרטי המשמרת עודכנו בהצלחה');
       setEditTarget(null);
-      loadShifts();
+      refreshData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'שגיאה בעדכון המשמרת');
     } finally {
@@ -300,14 +354,26 @@ export const ShiftsManagementPage: React.FC = () => {
                 locale={he}
                 mode="single"
                 selected={selectedDate}
+                month={displayedMonth}
+                onMonthChange={setDisplayedMonth}
                 onSelect={(date) => {
                   if (date) {
                     setSelectedDate(date);
                     setCalendarOpen(false);
                   }
                 }}
-                modifiers={{ past: { before: (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })() } }}
-                modifiersClassNames={{ past: 'opacity-50' }}
+                modifiers={{
+                  past: { before: todayDate },
+                  hasShifts: greenDates,
+                  noShifts: redDates,
+                  pastShifts: grayDates,
+                }}
+                modifiersClassNames={{
+                  past: 'opacity-50',
+                  hasShifts: 'calendar-dot-green',
+                  noShifts: 'calendar-dot-red',
+                  pastShifts: 'calendar-dot-gray',
+                }}
                 initialFocus
               />
             </PopoverContent>

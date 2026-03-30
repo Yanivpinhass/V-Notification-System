@@ -16,6 +16,12 @@ public class ShiftsRepository : Repository<Shift>
         return await Db.FetchAsync<Shift>(s => s.ShiftDate >= startOfDay && s.ShiftDate < endOfDay);
     }
 
+    public async Task<List<DateTime>> GetDatesWithShiftsAsync(DateTime from, DateTime to)
+    {
+        var shifts = await Db.FetchAsync<Shift>(s => s.ShiftDate >= from && s.ShiftDate < to);
+        return shifts.Select(s => s.ShiftDate.Date).Distinct().ToList();
+    }
+
     public async Task<List<Shift>> GetByVolunteerIdAsync(int volunteerId)
         => await Db.FetchAsync<Shift>(s => s.VolunteerId == volunteerId);
 

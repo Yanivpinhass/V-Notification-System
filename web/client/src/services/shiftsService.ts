@@ -50,6 +50,10 @@ class ShiftsService extends BaseApiClient {
     return this.post<void>(`/shifts/${shiftId}/send-sms`, { templateId: templateId ?? null });
   }
 
+  async getDatesWithShifts(from: string, to: string): Promise<string[]> {
+    return this.get<string[]>('/shifts/dates-with-shifts', { from, to });
+  }
+
   async updateShiftGroup(data: UpdateShiftGroupRequest): Promise<void> {
     return this.put<void, UpdateShiftGroupRequest>('/shifts/update-group', data);
   }

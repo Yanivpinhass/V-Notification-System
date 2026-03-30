@@ -468,6 +468,31 @@ app.MapGet("/api/shifts/by-date", async (string? date, MagavDbManager db) =>
     }
 }).RequireAuthorization("CanManageMessages");
 
+// GET /api/shifts/dates-with-shifts?from=YYYY-MM-DD&to=YYYY-MM-DD
+app.MapGet("/api/shifts/dates-with-shifts", async (string? from, string? to, MagavDbManager db) =>
+{
+    try
+    {
+        if (string.IsNullOrWhiteSpace(from) || string.IsNullOrWhiteSpace(to))
+            return Results.BadRequest(ApiResponse<object>.Fail("פרמטרי תאריך נדרשים"));
+
+        if (!DateTime.TryParse(from, out var parsedFrom) || !DateTime.TryParse(to, out var parsedTo))
+            return Results.BadRequest(ApiResponse<object>.Fail("פורמט תאריך לא תקין"));
+
+        var dates = await db.Shifts.GetDatesWithShiftsAsync(parsedFrom.Date, parsedTo.Date.AddDays(1));
+        var dateStrings = dates.Select(d => d.ToString("yyyy-MM-dd")).ToList();
+
+        return Results.Ok(ApiResponse<object>.Ok(dateStrings));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error fetching dates with shifts: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
 // DELETE /api/shifts/{id}
 app.MapDelete("/api/shifts/{id:int}", async (int id, MagavDbManager db) =>
 {

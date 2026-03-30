@@ -34,6 +34,12 @@ public class ShiftsImportService
         var today = DateTime.Today;
         var futureShifts = excelShifts.Where(s => s.Date >= today).ToList();
 
+        if (futureShifts.Count == 0)
+        {
+            result.ErrorMessages.Add("לא נמצאו משמרות עתידיות בקובץ");
+            return result;
+        }
+
         // 4. Load all volunteers and build lookup dictionary
         var allVolunteers = await db.Volunteers.GetAllAsync();
         var volunteerLookup = new Dictionary<string, Volunteer>(StringComparer.OrdinalIgnoreCase);
@@ -89,10 +95,12 @@ public class ShiftsImportService
             result.ErrorMessages.Add($"לא נמצא מתנדב: {name}");
         }
 
-        // 9. Delete future shifts and insert new ones
+        // 9. Delete shifts in the imported date range and insert new ones
         try
         {
-            await db.Db.DeleteManyAsync<Shift>(s => s.ShiftDate >= today);
+            var minDate = futureShifts.Min(s => s.Date);
+            var maxDate = futureShifts.Max(s => s.Date);
+            await db.Db.DeleteManyAsync<Shift>(s => s.ShiftDate >= minDate && s.ShiftDate <= maxDate);
             if (newShifts.Count > 0)
             {
                 await db.Db.BulkInsertAsync(newShifts);

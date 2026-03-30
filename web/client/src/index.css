@@ -349,4 +349,36 @@
     padding-top: env(safe-area-inset-top, 0px);
   }
 
+  /* Calendar shift indicator dots */
+  .calendar-dot-green,
+  .calendar-dot-red,
+  .calendar-dot-gray {
+    position: relative;
+  }
+
+  .calendar-dot-green::after,
+  .calendar-dot-red::after,
+  .calendar-dot-gray::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+  }
+
+  .calendar-dot-green::after {
+    background-color: hsl(var(--success));
+  }
+
+  .calendar-dot-red::after {
+    background-color: hsl(var(--destructive));
+  }
+
+  .calendar-dot-gray::after {
+    background-color: hsl(var(--muted-foreground));
+  }
+
 }

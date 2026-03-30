@@ -176,6 +176,8 @@ object ShiftScheduleParser {
                     }
                 }
 
+                if (volunteers.isEmpty()) continue
+
                 results.add(
                     ExcelShift(
                         date = date,

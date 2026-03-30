@@ -24,6 +24,14 @@ class ShiftsImportService(private val database: MagavDatabase) {
         val futureShifts = excelShifts.filter { !it.date.isBefore(today) }
         android.util.Log.d("ShiftsImport", "Future shifts (>= $today): ${futureShifts.size}")
 
+        if (futureShifts.isEmpty()) {
+            return ImportResultDto(
+                totalRows = 0, inserted = 0, updated = 0,
+                errors = 1,
+                errorMessages = listOf("לא נמצאו משמרות עתידיות בקובץ")
+            )
+        }
+
         val allVolunteers = database.volunteerDao().getAll()
         val volunteerMap = allVolunteers.associateBy { it.mappingName.lowercase() }
         android.util.Log.d("ShiftsImport", "Volunteers in DB: ${allVolunteers.size}")
@@ -65,9 +73,13 @@ class ShiftsImportService(private val database: MagavDatabase) {
             }
         }
 
-        val todayIso = today.atStartOfDay(ZoneOffset.UTC)
+        val minDate = futureShifts.minOf { it.date }
+        val maxDate = futureShifts.maxOf { it.date }
+        val minDateIso = minDate.atStartOfDay(ZoneOffset.UTC)
             .format(DateTimeFormatter.ISO_INSTANT)
-        database.shiftDao().deleteByDateFrom(todayIso)
+        val maxDateIso = maxDate.atStartOfDay(ZoneOffset.UTC)
+            .format(DateTimeFormatter.ISO_INSTANT)
+        database.shiftDao().deleteByDateRange(minDateIso, maxDateIso)
         database.shiftDao().insertAll(newShifts)
 
         val errorMessages = unmatchedNames.map { "לא נמצא מתנדב: $it" }
