@@ -63,6 +63,14 @@ export const ShiftsManagementPage: React.FC = () => {
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
+  const isSelectedDatePast = React.useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const sel = new Date(selectedDate);
+    sel.setHours(0, 0, 0, 0);
+    return sel < today;
+  }, [selectedDate]);
+
   const loadShifts = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -275,7 +283,7 @@ export const ShiftsManagementPage: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">ניהול משמרות</h1>
         <div className="flex items-center gap-2">
-          <Button onClick={() => setNewGroupOpen(true)} className="min-h-[44px]">
+          <Button onClick={() => setNewGroupOpen(true)} className="min-h-[44px]" disabled={isSelectedDatePast}>
             <Plus className="h-4 w-4 ml-2" />
             משמרת חדשה
           </Button>
@@ -298,12 +306,22 @@ export const ShiftsManagementPage: React.FC = () => {
                     setCalendarOpen(false);
                   }
                 }}
+                modifiers={{ past: { before: (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })() } }}
+                modifiersClassNames={{ past: 'opacity-50' }}
                 initialFocus
               />
             </PopoverContent>
           </Popover>
         </div>
       </div>
+
+      {/* Read-only banner for past dates */}
+      {isSelectedDatePast && !isLoading && (
+        <div className="flex items-center gap-2 rounded-md border border-muted bg-muted/50 px-4 py-2 text-sm text-muted-foreground">
+          <CalendarIcon className="h-4 w-4 shrink-0" />
+          <span>תאריך שעבר — צפייה בלבד</span>
+        </div>
+      )}
 
       {/* Loading */}
       {isLoading && (
@@ -339,7 +357,7 @@ export const ShiftsManagementPage: React.FC = () => {
                   / רכב {group.carId}
                 </span>
               )}
-              {!group.isLocal && (
+              {!group.isLocal && !isSelectedDatePast && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -361,9 +379,6 @@ export const ShiftsManagementPage: React.FC = () => {
             )}
             {group.shifts.map((shift) => {
               const issue = getVolunteerIssue(shift);
-              const today = new Date(); today.setHours(0,0,0,0);
-              const shiftDateObj = new Date(shift.shiftDate); shiftDateObj.setHours(0,0,0,0);
-              const isPast = shiftDateObj < today;
               const canSms = !!shift.volunteerPhone && shift.volunteerApproved;
               return (
                 <div
@@ -396,7 +411,7 @@ export const ShiftsManagementPage: React.FC = () => {
                       variant="ghost"
                       size="icon"
                       className="min-h-[44px] min-w-[44px] text-primary hover:text-primary hover:bg-primary/10"
-                      disabled={!canSms || isPast || sendingSmsId === shift.id}
+                      disabled={!canSms || isSelectedDatePast || sendingSmsId === shift.id}
                       onClick={() => setSmsConfirmTarget(shift)}
                     >
                       {sendingSmsId === shift.id ? (
@@ -418,6 +433,7 @@ export const ShiftsManagementPage: React.FC = () => {
                       variant="ghost"
                       size="icon"
                       className="min-h-[44px] min-w-[44px] text-destructive hover:text-destructive hover:bg-destructive/10"
+                      disabled={isSelectedDatePast}
                       onClick={() => setDeleteTarget(shift)}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -430,6 +446,7 @@ export const ShiftsManagementPage: React.FC = () => {
               variant="outline"
               size="sm"
               className="mt-2 min-h-[44px]"
+              disabled={isSelectedDatePast}
               onClick={() => openAddDialog(group.shiftName, group.carId)}
             >
               <Plus className="h-4 w-4 ml-1" />

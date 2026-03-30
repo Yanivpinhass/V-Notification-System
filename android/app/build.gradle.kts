@@ -13,8 +13,8 @@ android {
         applicationId = "com.magav.app"
         minSdk = 29
         targetSdk = 35
-        versionCode = 31
-        versionName = "1.1.27"
+        versionCode = 32
+        versionName = "1.1.28"
     }
 
     buildTypes {

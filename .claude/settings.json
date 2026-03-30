@@ -1,5 +1,4 @@
 {
-  "effortLevel": "high",
   "permissions": {
     "allow": [
       "Bash(find:*)",
@@ -113,7 +112,21 @@
       "Bash(ADB=\"C:/Users/yaniv/AppData/Local/Android/Sdk/platform-tools/adb.exe\" \"$ADB\" shell \"dumpsys activity services com.magav.app\")",
       "Bash(\"$ADB\" forward:*)",
       "Read(//C:/MyData/Projects/Magav/**)",
-      "Bash(build-apk.bat)"
+      "Bash(build-apk.bat)",
+      "Bash(grep -E \"\\(Endpoint|Handler|Endpoint\\\\.cs|\\\\.cs$\\)\")",
+      "Bash(cmd //c \"cd /d c:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System && call build-apk.bat\")",
+      "Bash(cmd.exe /c \"cd /d c:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System & build-apk.bat\")",
+      "Bash(cmd.exe /c \"cd /d C:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android && gradlew.bat assembleDebug 2>&1\")",
+      "Bash(cmd.exe /c \"call gradlew.bat assembleDebug\")",
+      "Bash(powershell.exe -Command \"Set-Location ''C:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android''; .\\\\gradlew.bat assembleDebug\")",
+      "Bash(grep -l \"about-version\\\\|אודות\" /c/MyData/Projects/Magav/V-Notification-System/android/app/src/main/assets/web/assets/*.js)",
+      "Bash(powershell.exe -Command \"Set-Location ''C:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android''; .\\\\gradlew.bat clean assembleDebug\")",
+      "Bash(grep -E \"\\\\.\\(ts|cs\\)$\")",
+      "Bash(grep -r date c:MyDataProjectsMagavV-Notification-Systemwebclientsrccomponentsui --include=*.tsx -l)",
+      "Bash(grep -E \"\\\\.\\(cs\\)$\")",
+      "Bash(cmd.exe /c \"gradlew.bat assembleDebug 2>&1\")",
+      "Bash(\"c:/MyData/Projects/Magav/V-Notification-System/android/gradlew.bat\" assembleDebug --project-dir \"c:/MyData/Projects/Magav/V-Notification-System/android\")"
     ]
-  }
+  },
+  "effortLevel": "high"
 }
