@@ -49,6 +49,7 @@ export const ShiftsManagementPage: React.FC = () => {
   const [volunteersLoaded, setVolunteersLoaded] = useState(false);
   const [volunteerSearch, setVolunteerSearch] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [addedVolunteerIds, setAddedVolunteerIds] = useState<Set<number>>(new Set());
 
   // New shift group dialog
   const [newGroupOpen, setNewGroupOpen] = useState(false);
@@ -245,7 +246,14 @@ export const ShiftsManagementPage: React.FC = () => {
   const openAddDialog = (shiftName: string, carId: string) => {
     setAddTarget({ shiftName, carId });
     setVolunteerSearch('');
+    setAddedVolunteerIds(new Set());
     loadVolunteers();
+  };
+
+  const closeAddDialog = () => {
+    setAddTarget(null);
+    setAddedVolunteerIds(new Set());
+    refreshData();
   };
 
   const handleAddVolunteer = async (vol: VolunteerDto) => {
@@ -259,8 +267,8 @@ export const ShiftsManagementPage: React.FC = () => {
         volunteerId: vol.id,
       });
       toast.success(`${vol.mappingName} שובץ בהצלחה`);
-      setAddTarget(null);
-      refreshData();
+      setAddedVolunteerIds(prev => new Set([...prev, vol.id]));
+      setVolunteerSearch('');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'שגיאה בשיבוץ המתנדב');
     } finally {
@@ -271,9 +279,11 @@ export const ShiftsManagementPage: React.FC = () => {
   // ── New shift group ──
   const handleCreateGroup = () => {
     if (!newShiftName.trim()) return;
+    const shiftName = newShiftName.trim();
+    const carId = newCarId.trim();
     const group: ShiftGroup = {
-      shiftName: newShiftName.trim(),
-      carId: newCarId.trim(),
+      shiftName,
+      carId,
       shifts: [],
       isLocal: true,
     };
@@ -282,6 +292,7 @@ export const ShiftsManagementPage: React.FC = () => {
     setNewShiftName('');
     setNewCarId('');
     toast.success('קבוצת משמרת חדשה נוספה');
+    openAddDialog(shiftName, carId);
   };
 
   // ── Edit shift group ──
@@ -331,13 +342,23 @@ export const ShiftsManagementPage: React.FC = () => {
   );
 
   // Assigned volunteer IDs for current group (to disable in picker)
+  const currentGroup = addTarget
+    ? groupedShifts.find(g => g.shiftName === addTarget.shiftName && g.carId === addTarget.carId)
+    : null;
+  const serverVolunteerIds = new Set(currentGroup?.shifts.map(s => s.volunteerId) ?? []);
   const assignedVolunteerIds = addTarget
-    ? new Set(
-        groupedShifts
-          .find(g => g.shiftName === addTarget.shiftName && g.carId === addTarget.carId)
-          ?.shifts.map(s => s.volunteerId) ?? []
-      )
+    ? new Set([...serverVolunteerIds, ...addedVolunteerIds])
     : new Set<number>();
+
+  // Names of volunteers already assigned to this group (server + locally added)
+  const assignedVolunteerNames: string[] = addTarget
+    ? [
+        ...(currentGroup?.shifts.map(s => s.volunteerName) ?? []),
+        ...volunteers
+          .filter(v => addedVolunteerIds.has(v.id) && !serverVolunteerIds.has(v.id))
+          .map(v => v.mappingName),
+      ]
+    : [];
 
   return (
     <div className="space-y-4 p-4" dir="rtl">
@@ -629,7 +650,7 @@ export const ShiftsManagementPage: React.FC = () => {
       </AlertDialog>
 
       {/* Add volunteer dialog */}
-      <Dialog open={!!addTarget} onOpenChange={(open) => !open && setAddTarget(null)}>
+      <Dialog open={!!addTarget} onOpenChange={(open) => !open && closeAddDialog()}>
         <DialogContent dir="rtl" className="max-w-md">
           <DialogHeader>
             <DialogTitle>
@@ -637,7 +658,19 @@ export const ShiftsManagementPage: React.FC = () => {
               {addTarget?.carId ? ` / רכב ${addTarget.carId}` : ''}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-4">
+            {assignedVolunteerNames.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {assignedVolunteerNames.map((name, i) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-xs font-medium"
+                  >
+                    {name}
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="relative">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -686,6 +719,11 @@ export const ShiftsManagementPage: React.FC = () => {
               })}
             </div>
           </div>
+          <DialogFooter className="mt-2">
+            <Button variant="outline" onClick={closeAddDialog} className="min-h-[44px] w-full">
+              סיום
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
