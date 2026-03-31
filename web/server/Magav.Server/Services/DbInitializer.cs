@@ -94,7 +94,8 @@ public class DbInitializer
                     ShiftDate TEXT NOT NULL,
                     ShiftName TEXT NOT NULL,
                     CarId TEXT NOT NULL DEFAULT '',
-                    VolunteerId INTEGER NOT NULL,
+                    VolunteerId INTEGER NULL,
+                    VolunteerName TEXT NULL,
                     SmsSentAt TEXT NULL,
                     CreatedAt TEXT NULL,
                     UpdatedAt TEXT NULL,
@@ -218,6 +219,7 @@ public class DbInitializer
         else
         {
             Console.WriteLine($"Database already exists at: {fullPath}");
+            await MigrateShiftsTableAsync(connection);
         }
 
     }
@@ -227,6 +229,60 @@ public class DbInitializer
         var fullPath = Path.GetFullPath(_dbPath);
         // Add busy timeout (30 seconds) to prevent "database is locked" errors
         return $"Data Source={fullPath};Password={_dbPassword};Default Timeout=30";
+    }
+
+    private static async Task MigrateShiftsTableAsync(SqliteConnection connection)
+    {
+        try
+        {
+            // Check if VolunteerName column already exists
+            var hasColumn = false;
+            await using (var checkCmd = new SqliteCommand("PRAGMA table_info(Shifts)", connection))
+            await using (var reader = await checkCmd.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    if (reader.GetString(1) == "VolunteerName")
+                    {
+                        hasColumn = true;
+                        break;
+                    }
+                }
+            }
+
+            if (hasColumn) return;
+
+            Console.WriteLine("Migrating Shifts table: adding VolunteerName, making VolunteerId nullable...");
+
+            var migrationSql = @"
+                CREATE TABLE Shifts_new (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ShiftDate TEXT NOT NULL,
+                    ShiftName TEXT NOT NULL,
+                    CarId TEXT NOT NULL DEFAULT '',
+                    VolunteerId INTEGER NULL,
+                    VolunteerName TEXT NULL,
+                    SmsSentAt TEXT NULL,
+                    CreatedAt TEXT NULL,
+                    UpdatedAt TEXT NULL,
+                    FOREIGN KEY (VolunteerId) REFERENCES Volunteers(Id)
+                );
+                INSERT INTO Shifts_new (Id, ShiftDate, ShiftName, CarId, VolunteerId, SmsSentAt, CreatedAt, UpdatedAt)
+                    SELECT Id, ShiftDate, ShiftName, CarId, VolunteerId, SmsSentAt, CreatedAt, UpdatedAt FROM Shifts;
+                DROP TABLE Shifts;
+                ALTER TABLE Shifts_new RENAME TO Shifts;
+                CREATE INDEX IX_Shifts_VolunteerId ON Shifts(VolunteerId);
+                CREATE INDEX IX_Shifts_ShiftDate ON Shifts(ShiftDate);
+            ";
+
+            await using var cmd = new SqliteCommand(migrationSql, connection);
+            await cmd.ExecuteNonQueryAsync();
+            Console.WriteLine("Shifts table migration completed successfully.");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Shifts table migration error: {ex}");
+        }
     }
 
     private static async Task SeedMessageTemplatesAsync(SqliteConnection connection)

@@ -40,7 +40,8 @@ class SmsReminderService(
         var smsFailed = 0
 
         for (shift in shifts) {
-            val volunteer = database.volunteerDao().getById(shift.volunteerId)
+            val volId = shift.volunteerId ?: continue
+            val volunteer = database.volunteerDao().getById(volId)
             if (volunteer == null) {
                 android.util.Log.w("SmsReminder", "Volunteer ${shift.volunteerId} not found for shift ${shift.id}")
                 continue

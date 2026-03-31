@@ -15,6 +15,9 @@ interface ShiftDao {
     @Query("SELECT DISTINCT ShiftDate FROM Shifts WHERE ShiftDate >= :from AND ShiftDate < :to")
     suspend fun getDistinctDatesByRange(from: String, to: String): List<String>
 
+    @Query("SELECT DISTINCT ShiftDate FROM Shifts WHERE VolunteerId IS NULL AND ShiftDate >= :from AND ShiftDate < :to")
+    suspend fun getDistinctDatesWithUnresolved(from: String, to: String): List<String>
+
     @Query("SELECT * FROM Shifts WHERE VolunteerId = :volunteerId")
     suspend fun getByVolunteerId(volunteerId: Int): List<ShiftEntity>
 

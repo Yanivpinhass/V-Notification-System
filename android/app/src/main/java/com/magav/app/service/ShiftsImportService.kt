@@ -36,7 +36,7 @@ class ShiftsImportService(private val database: MagavDatabase) {
         val volunteerMap = allVolunteers.associateBy { it.mappingName.lowercase() }
         android.util.Log.d("ShiftsImport", "Volunteers in DB: ${allVolunteers.size}")
 
-        val unmatchedNames = mutableSetOf<String>()
+        val unresolvedNames = mutableSetOf<String>()
         val newShifts = mutableListOf<ShiftEntity>()
         val dedupeKeys = mutableSetOf<String>()
         var totalAssignments = 0
@@ -51,25 +51,39 @@ class ShiftsImportService(private val database: MagavDatabase) {
                 totalAssignments++
                 val volunteer = volunteerMap[volunteerName.lowercase()]
 
-                if (volunteer == null) {
-                    unmatchedNames.add(volunteerName)
-                    continue
-                }
+                if (volunteer != null) {
+                    val dedupeKey = "$shiftDateIso|${shift.name}|${volunteer.id}"
+                    if (!dedupeKeys.add(dedupeKey)) continue
 
-                val dedupeKey = "$shiftDateIso|${shift.name}|${volunteer.id}"
-                if (!dedupeKeys.add(dedupeKey)) continue
-
-                newShifts.add(
-                    ShiftEntity(
-                        shiftDate = shiftDateIso,
-                        shiftName = shift.name,
-                        carId = shift.car,
-                        volunteerId = volunteer.id,
-                        smsSentAt = null,
-                        createdAt = now,
-                        updatedAt = now
+                    newShifts.add(
+                        ShiftEntity(
+                            shiftDate = shiftDateIso,
+                            shiftName = shift.name,
+                            carId = shift.car,
+                            volunteerId = volunteer.id,
+                            smsSentAt = null,
+                            createdAt = now,
+                            updatedAt = now
+                        )
                     )
-                )
+                } else {
+                    val dedupeKey = "$shiftDateIso|${shift.name}|name:$volunteerName"
+                    if (!dedupeKeys.add(dedupeKey)) continue
+
+                    newShifts.add(
+                        ShiftEntity(
+                            shiftDate = shiftDateIso,
+                            shiftName = shift.name,
+                            carId = shift.car,
+                            volunteerId = null,
+                            volunteerName = volunteerName,
+                            smsSentAt = null,
+                            createdAt = now,
+                            updatedAt = now
+                        )
+                    )
+                    unresolvedNames.add(volunteerName)
+                }
             }
         }
 
@@ -82,14 +96,14 @@ class ShiftsImportService(private val database: MagavDatabase) {
         database.shiftDao().deleteByDateRange(minDateIso, maxDateIso)
         database.shiftDao().insertAll(newShifts)
 
-        val errorMessages = unmatchedNames.map { "לא נמצא מתנדב: $it" }
-
         return ImportResultDto(
             totalRows = totalAssignments,
             inserted = newShifts.size,
             updated = 0,
-            errors = unmatchedNames.size,
-            errorMessages = errorMessages
+            errors = 0,
+            errorMessages = emptyList(),
+            unresolvedVolunteers = unresolvedNames.size,
+            unresolvedVolunteerNames = unresolvedNames.toList()
         )
     }
 }

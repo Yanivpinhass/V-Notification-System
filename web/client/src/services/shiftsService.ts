@@ -6,10 +6,16 @@ export interface ShiftWithVolunteerDto {
   shiftDate: string;
   shiftName: string;
   carId: string;
-  volunteerId: number;
+  volunteerId: number | null;
   volunteerName: string;
   volunteerPhone: string | null;
   volunteerApproved: boolean;
+  isUnresolved: boolean;
+}
+
+export interface DateShiftInfo {
+  date: string;
+  hasUnresolved: boolean;
 }
 
 export interface CreateShiftRequest {
@@ -50,8 +56,8 @@ class ShiftsService extends BaseApiClient {
     return this.post<void>(`/shifts/${shiftId}/send-sms`, { templateId: templateId ?? null });
   }
 
-  async getDatesWithShifts(from: string, to: string): Promise<string[]> {
-    return this.get<string[]>('/shifts/dates-with-shifts', { from, to });
+  async getDatesWithShifts(from: string, to: string): Promise<DateShiftInfo[]> {
+    return this.get<DateShiftInfo[]>('/shifts/dates-with-shifts', { from, to });
   }
 
   async updateShiftGroup(data: UpdateShiftGroupRequest): Promise<void> {

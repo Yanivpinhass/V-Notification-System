@@ -106,6 +106,7 @@ class MagavApplication : Application() {
 
         database = Room.databaseBuilder(this, MagavDatabase::class.java, "magav.db")
             .openHelperFactory(factory)
+            .addMigrations(MagavDatabase.MIGRATION_3_4)
             .fallbackToDestructiveMigration()
             .build()
 
@@ -122,6 +123,7 @@ class MagavApplication : Application() {
             java.io.File(dbFile.path + "-journal").delete()
             database = Room.databaseBuilder(this, MagavDatabase::class.java, "magav.db")
                 .openHelperFactory(factory)
+                .addMigrations(MagavDatabase.MIGRATION_3_4)
                 .fallbackToDestructiveMigration()
                 .build()
         }

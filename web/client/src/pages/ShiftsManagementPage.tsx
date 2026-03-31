@@ -61,8 +61,8 @@ export const ShiftsManagementPage: React.FC = () => {
   const [editCarId, setEditCarId] = useState('');
   const [isEditing, setIsEditing] = useState(false);
 
-  // Calendar dot indicators
-  const [datesWithShifts, setDatesWithShifts] = useState<Set<string>>(new Set());
+  // Calendar dot indicators: date → hasUnresolved
+  const [datesWithShifts, setDatesWithShifts] = useState<Map<string, boolean>>(new Map());
   const [displayedMonth, setDisplayedMonth] = useState<Date>(new Date());
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -104,8 +104,10 @@ export const ShiftsManagementPage: React.FC = () => {
       const monthIndex = month.getMonth();
       const from = format(new Date(year, monthIndex, 1), 'yyyy-MM-dd');
       const to = format(new Date(year, monthIndex + 1, 0), 'yyyy-MM-dd');
-      const dates = await shiftsService.getDatesWithShifts(from, to);
-      setDatesWithShifts(new Set(dates));
+      const dateInfos = await shiftsService.getDatesWithShifts(from, to);
+      const map = new Map<string, boolean>();
+      dateInfos.forEach(d => map.set(d.date, d.hasUnresolved));
+      setDatesWithShifts(map);
     } catch {
       // Non-critical — skip dots on error
     }
@@ -120,10 +122,11 @@ export const ShiftsManagementPage: React.FC = () => {
     loadMonthIndicators(displayedMonth);
   }, [loadShifts, loadMonthIndicators, displayedMonth]);
 
-  const { greenDates, redDates, grayDates } = useMemo(() => {
+  const { greenDates, redDates, grayDates, yellowDates } = useMemo(() => {
     const green: Date[] = [];
     const red: Date[] = [];
     const gray: Date[] = [];
+    const yellow: Date[] = [];
     const year = displayedMonth.getFullYear();
     const month = displayedMonth.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -137,11 +140,15 @@ export const ShiftsManagementPage: React.FC = () => {
       if (date < todayDate) {
         if (hasShifts) gray.push(date);
       } else {
-        if (hasShifts) green.push(date);
-        else red.push(date);
+        if (hasShifts) {
+          if (datesWithShifts.get(dateStr)) yellow.push(date);
+          else green.push(date);
+        } else {
+          red.push(date);
+        }
       }
     }
-    return { greenDates: green, redDates: red, grayDates: gray };
+    return { greenDates: green, redDates: red, grayDates: gray, yellowDates: yellow };
   }, [displayedMonth, datesWithShifts, todayDate]);
 
   // Load volunteers once when add dialog opens
@@ -367,12 +374,14 @@ export const ShiftsManagementPage: React.FC = () => {
                   hasShifts: greenDates,
                   noShifts: redDates,
                   pastShifts: grayDates,
+                  hasUnresolved: yellowDates,
                 }}
                 modifiersClassNames={{
                   past: 'opacity-50',
                   hasShifts: 'calendar-dot-green',
                   noShifts: 'calendar-dot-red',
                   pastShifts: 'calendar-dot-gray',
+                  hasUnresolved: 'calendar-dot-yellow',
                 }}
                 initialFocus
               />
@@ -444,7 +453,7 @@ export const ShiftsManagementPage: React.FC = () => {
               <p className="text-sm text-muted-foreground">אין מתנדבים</p>
             )}
             {group.shifts.map((shift) => {
-              const issue = getVolunteerIssue(shift);
+              const issue = shift.isUnresolved ? null : getVolunteerIssue(shift);
               const canSms = !!shift.volunteerPhone && shift.volunteerApproved;
               return (
                 <div
@@ -452,7 +461,18 @@ export const ShiftsManagementPage: React.FC = () => {
                   className="rounded-md border p-3 space-y-2"
                 >
                   <div className="flex items-center gap-2">
-                    {issue ? (
+                    {shift.isUnresolved ? (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button className="text-warning font-medium text-sm text-right cursor-pointer hover:underline">
+                            {shift.volunteerName}
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 text-sm" dir="rtl">
+                          מתנדב לא מזוהה - יש לעדכן פרטים
+                        </PopoverContent>
+                      </Popover>
+                    ) : issue ? (
                       <Popover>
                         <PopoverTrigger asChild>
                           <button className="text-destructive font-medium text-sm text-right cursor-pointer hover:underline">
@@ -466,35 +486,39 @@ export const ShiftsManagementPage: React.FC = () => {
                     ) : (
                       <span className="text-sm font-medium">{shift.volunteerName}</span>
                     )}
-                    {shift.volunteerPhone && (
+                    {!shift.isUnresolved && shift.volunteerPhone && (
                       <span className="text-sm text-muted-foreground">
                         {shift.volunteerPhone}
                       </span>
                     )}
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="min-h-[44px] min-w-[44px] text-primary hover:text-primary hover:bg-primary/10"
-                      disabled={!canSms || isSelectedDatePast || sendingSmsId === shift.id}
-                      onClick={() => setSmsConfirmTarget(shift)}
-                    >
-                      {sendingSmsId === shift.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <MessageSquare className="h-4 w-4" />
-                      )}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="min-h-[44px] min-w-[44px] text-success hover:text-success hover:bg-success/10"
-                      disabled={!shift.volunteerPhone}
-                      onClick={() => setCallConfirmTarget(shift)}
-                    >
-                      <Phone className="h-4 w-4" />
-                    </Button>
+                    {!shift.isUnresolved && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="min-h-[44px] min-w-[44px] text-primary hover:text-primary hover:bg-primary/10"
+                          disabled={!canSms || isSelectedDatePast || sendingSmsId === shift.id}
+                          onClick={() => setSmsConfirmTarget(shift)}
+                        >
+                          {sendingSmsId === shift.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <MessageSquare className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="min-h-[44px] min-w-[44px] text-success hover:text-success hover:bg-success/10"
+                          disabled={!shift.volunteerPhone}
+                          onClick={() => setCallConfirmTarget(shift)}
+                        >
+                          <Phone className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"

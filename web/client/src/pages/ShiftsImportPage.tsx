@@ -37,7 +37,8 @@ export const ShiftsImportPage: React.FC = () => {
     }
   };
 
-  const isSuccess = result && result.errors === 0;
+  const isSuccess = result && result.errors === 0 && (result.unresolvedVolunteers ?? 0) === 0;
+  const hasUnresolved = result && (result.unresolvedVolunteers ?? 0) > 0 && result.errors === 0;
   const hasWarnings = result && result.errors > 0 && result.inserted > 0;
 
   return (
@@ -92,6 +93,32 @@ export const ShiftsImportPage: React.FC = () => {
                   <p>סה"כ שיבוצים: {result.totalRows}</p>
                   <p>נשמרו: {result.inserted}</p>
                 </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Success with unresolved volunteers */}
+          {hasUnresolved && result && (
+            <Alert className="border-warning/50 bg-warning/10">
+              <AlertCircle className="h-4 w-4 text-warning" />
+              <AlertTitle className="text-warning">הטעינה הושלמה - יש מתנדבים לא מזוהים</AlertTitle>
+              <AlertDescription className="text-warning">
+                <div className="mt-2 space-y-1">
+                  <p>סה"כ שיבוצים: {result.totalRows}</p>
+                  <p>נשמרו: {result.inserted}</p>
+                  <p>מתנדבים לא מזוהים: {result.unresolvedVolunteers}</p>
+                </div>
+                {result.unresolvedVolunteerNames && result.unresolvedVolunteerNames.length > 0 && (
+                  <div className="mt-3 p-2 bg-white rounded border border-warning/30 max-h-40 overflow-y-auto">
+                    <p className="font-medium mb-1">מתנדבים שלא נמצאו:</p>
+                    <ul className="text-sm space-y-1 list-disc list-inside">
+                      {result.unresolvedVolunteerNames.map((name, idx) => (
+                        <li key={idx}>{name}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <p className="mt-2 text-sm">המתנדבים נוספו לשיבוצים אך ללא פרטי טלפון. יש לעדכן אותם בניהול המתנדבים.</p>
               </AlertDescription>
             </Alert>
           )}

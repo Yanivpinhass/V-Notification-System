@@ -109,4 +109,6 @@ public class ImportResult
     public int Updated { get; set; }
     public int Errors { get; set; }
     public List<string> ErrorMessages { get; set; } = new();
+    public int UnresolvedVolunteers { get; set; }
+    public List<string> UnresolvedVolunteerNames { get; set; } = new();
 }

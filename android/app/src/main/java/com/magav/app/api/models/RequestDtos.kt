@@ -108,7 +108,9 @@ data class ImportResultDto(
     val inserted: Int = 0,
     val updated: Int = 0,
     val errors: Int = 0,
-    val errorMessages: List<String> = emptyList()
+    val errorMessages: List<String> = emptyList(),
+    val unresolvedVolunteers: Int = 0,
+    val unresolvedVolunteerNames: List<String> = emptyList()
 )
 
 // ── Shifts ──────────────────────────────────────────────────────────────────
@@ -136,10 +138,17 @@ data class ShiftWithVolunteerDto(
     val shiftDate: String,
     val shiftName: String,
     val carId: String,
-    val volunteerId: Int,
+    val volunteerId: Int?,
     val volunteerName: String,
     val volunteerPhone: String?,
-    val volunteerApproved: Boolean
+    val volunteerApproved: Boolean,
+    val isUnresolved: Boolean = false
+)
+
+@Serializable
+data class DateShiftInfo(
+    val date: String,
+    val hasUnresolved: Boolean
 )
 
 @Serializable

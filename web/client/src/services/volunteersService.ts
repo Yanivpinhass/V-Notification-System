@@ -27,6 +27,8 @@ export interface ImportResult {
   updated: number;
   errors: number;
   errorMessages: string[];
+  unresolvedVolunteers: number;
+  unresolvedVolunteerNames: string[];
 }
 
 class VolunteersService extends BaseApiClient {

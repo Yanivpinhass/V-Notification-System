@@ -3,6 +3,7 @@ package com.magav.app.api.routes
 import android.content.Context
 import com.magav.app.api.models.ApiResponse
 import com.magav.app.api.models.CreateShiftRequest
+import com.magav.app.api.models.DateShiftInfo
 import com.magav.app.api.models.SendShiftSmsRequest
 import com.magav.app.api.models.ShiftWithVolunteerDto
 import com.magav.app.api.models.UpdateShiftGroupRequest
@@ -63,16 +64,17 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                 val volunteerMap = volunteers.associateBy { it.id }
 
                 val dtos = shifts.map { shift ->
-                    val vol = volunteerMap[shift.volunteerId]
+                    val vol = shift.volunteerId?.let { volunteerMap[it] }
                     ShiftWithVolunteerDto(
                         id = shift.id,
                         shiftDate = shift.shiftDate,
                         shiftName = shift.shiftName,
                         carId = shift.carId,
                         volunteerId = shift.volunteerId,
-                        volunteerName = vol?.mappingName ?: "מתנדב לא ידוע",
+                        volunteerName = if (shift.volunteerId != null) (vol?.mappingName ?: "מתנדב לא ידוע") else (shift.volunteerName ?: "?"),
                         volunteerPhone = vol?.mobilePhone,
-                        volunteerApproved = vol?.approveToReceiveSms == 1
+                        volunteerApproved = vol?.approveToReceiveSms == 1,
+                        isUnresolved = shift.volunteerId == null
                     )
                 }
 
@@ -109,13 +111,19 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                     .format(DateTimeFormatter.ISO_INSTANT)
 
                 val rawDates = database.shiftDao().getDistinctDatesByRange(from, to)
+                val rawUnresolved = database.shiftDao().getDistinctDatesWithUnresolved(from, to)
 
                 val israelTz = ZoneId.of("Asia/Jerusalem")
-                val dateStrings = rawDates.map { isoDate ->
+                val unresolvedSet = rawUnresolved.map { isoDate ->
                     Instant.parse(isoDate).atZone(israelTz).toLocalDate().toString()
-                }.distinct()
+                }.toSet()
 
-                call.respond(ApiResponse.ok(dateStrings))
+                val dateInfos = rawDates.map { isoDate ->
+                    val dateStr = Instant.parse(isoDate).atZone(israelTz).toLocalDate().toString()
+                    DateShiftInfo(date = dateStr, hasUnresolved = dateStr in unresolvedSet)
+                }.distinctBy { it.date }
+
+                call.respond(ApiResponse.ok(dateInfos))
             }
 
             // DELETE /api/shifts/{id}
@@ -159,7 +167,12 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                     return@post
                 }
 
-                val volunteer = database.volunteerDao().getById(shift.volunteerId) ?: run {
+                val volId = shift.volunteerId ?: run {
+                    call.respond(HttpStatusCode.BadRequest, ApiResponse.fail<Unit>("לא ניתן לשלוח SMS למתנדב לא מזוהה"))
+                    return@post
+                }
+
+                val volunteer = database.volunteerDao().getById(volId) ?: run {
                     call.respond(HttpStatusCode.NotFound, ApiResponse.fail<Unit>("מתנדב לא נמצא"))
                     return@post
                 }
@@ -302,7 +315,8 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                     volunteerId = request.volunteerId,
                     volunteerName = volunteer.mappingName,
                     volunteerPhone = volunteer.mobilePhone,
-                    volunteerApproved = volunteer.approveToReceiveSms == 1
+                    volunteerApproved = volunteer.approveToReceiveSms == 1,
+                    isUnresolved = false
                 )
 
                 call.respond(HttpStatusCode.Created, ApiResponse.ok(dto))

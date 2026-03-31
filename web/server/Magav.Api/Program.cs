@@ -444,16 +444,17 @@ app.MapGet("/api/shifts/by-date", async (string? date, MagavDbManager db) =>
 
         var dtos = shifts.Select(s =>
         {
-            volunteerMap.TryGetValue(s.VolunteerId, out var vol);
+            var vol = s.VolunteerId.HasValue ? volunteerMap.GetValueOrDefault(s.VolunteerId.Value) : null;
             return new ShiftWithVolunteerDto(
                 s.Id,
                 s.ShiftDate.ToString("yyyy-MM-dd"),
                 s.ShiftName,
                 s.CarId,
                 s.VolunteerId,
-                vol?.MappingName ?? "מתנדב לא ידוע",
+                s.VolunteerId.HasValue ? (vol?.MappingName ?? "מתנדב לא ידוע") : (s.VolunteerName ?? "?"),
                 vol?.MobilePhone,
-                vol?.ApproveToReceiveSms ?? false
+                vol?.ApproveToReceiveSms ?? false,
+                IsUnresolved: !s.VolunteerId.HasValue
             );
         }).ToList();
 
@@ -480,9 +481,15 @@ app.MapGet("/api/shifts/dates-with-shifts", async (string? from, string? to, Mag
             return Results.BadRequest(ApiResponse<object>.Fail("פורמט תאריך לא תקין"));
 
         var dates = await db.Shifts.GetDatesWithShiftsAsync(parsedFrom.Date, parsedTo.Date.AddDays(1));
-        var dateStrings = dates.Select(d => d.ToString("yyyy-MM-dd")).ToList();
+        var unresolvedDates = await db.Shifts.GetDatesWithUnresolvedAsync(parsedFrom.Date, parsedTo.Date.AddDays(1));
+        var unresolvedSet = new HashSet<DateTime>(unresolvedDates);
 
-        return Results.Ok(ApiResponse<object>.Ok(dateStrings));
+        var dateInfos = dates.Select(d => new DateShiftInfo(
+            d.ToString("yyyy-MM-dd"),
+            unresolvedSet.Contains(d)
+        )).ToList();
+
+        return Results.Ok(ApiResponse<object>.Ok(dateInfos));
     }
     catch (Exception ex)
     {
@@ -527,7 +534,10 @@ app.MapPost("/api/shifts/{id:int}/send-sms", async (int id, SendShiftSmsRequest 
         if (shift == null)
             return Results.NotFound(ApiResponse<object>.Fail("שיבוץ לא נמצא"));
 
-        var volunteer = await db.Volunteers.GetByIdAsync(shift.VolunteerId);
+        if (shift.VolunteerId == null)
+            return Results.BadRequest(ApiResponse<object>.Fail("לא ניתן לשלוח SMS למתנדב לא מזוהה"));
+
+        var volunteer = await db.Volunteers.GetByIdAsync(shift.VolunteerId.Value);
         if (volunteer == null)
             return Results.NotFound(ApiResponse<object>.Fail("מתנדב לא נמצא"));
 
@@ -648,7 +658,8 @@ app.MapPost("/api/shifts", async (CreateShiftRequest request, MagavDbManager db)
             shift.VolunteerId,
             volunteer.MappingName,
             volunteer.MobilePhone,
-            volunteer.ApproveToReceiveSms
+            volunteer.ApproveToReceiveSms,
+            IsUnresolved: false
         );
 
         return Results.Ok(ApiResponse<object>.Ok(dto));
@@ -1517,4 +1528,6 @@ public record SendShiftSmsRequest(int? TemplateId);
 public record CreateShiftRequest(string ShiftDate, string ShiftName, string CarId, int VolunteerId);
 public record UpdateShiftGroupRequest(string Date, string OldShiftName, string OldCarId, string NewShiftName, string NewCarId);
 public record ShiftWithVolunteerDto(int Id, string ShiftDate, string ShiftName, string CarId,
-    int VolunteerId, string VolunteerName, string? VolunteerPhone, bool VolunteerApproved);
+    int? VolunteerId, string VolunteerName, string? VolunteerPhone, bool VolunteerApproved,
+    bool IsUnresolved);
+public record DateShiftInfo(string Date, bool HasUnresolved);

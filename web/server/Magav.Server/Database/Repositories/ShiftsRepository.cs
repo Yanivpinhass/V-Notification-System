@@ -22,6 +22,14 @@ public class ShiftsRepository : Repository<Shift>
         return shifts.Select(s => s.ShiftDate.Date).Distinct().ToList();
     }
 
+    public async Task<List<DateTime>> GetDatesWithUnresolvedAsync(DateTime from, DateTime to)
+    {
+        var shifts = await Db.FetchAsync<Shift>(
+            "SELECT DISTINCT ShiftDate FROM Shifts WHERE VolunteerId IS NULL AND ShiftDate >= @0 AND ShiftDate < @1",
+            from, to);
+        return shifts.Select(s => s.ShiftDate.Date).Distinct().ToList();
+    }
+
     public async Task<List<Shift>> GetByVolunteerIdAsync(int volunteerId)
         => await Db.FetchAsync<Shift>(s => s.VolunteerId == volunteerId);
 

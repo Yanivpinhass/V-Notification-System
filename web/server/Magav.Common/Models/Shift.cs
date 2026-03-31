@@ -10,7 +10,8 @@ public class Shift
     public DateTime ShiftDate { get; set; }
     public string ShiftName { get; set; } = string.Empty;
     public string CarId { get; set; } = string.Empty;
-    public int VolunteerId { get; set; }
+    public int? VolunteerId { get; set; }
+    public string? VolunteerName { get; set; }
     public DateTime? SmsSentAt { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }

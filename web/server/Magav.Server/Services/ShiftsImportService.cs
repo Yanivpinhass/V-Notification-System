@@ -52,7 +52,7 @@ public class ShiftsImportService
 
         // 5-6. Match volunteers and build Shift records
         var newShifts = new List<Shift>();
-        var unmatchedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var unresolvedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         int totalAssignments = 0;
 
         foreach (var excelShift in futureShifts)
@@ -75,25 +75,31 @@ public class ShiftsImportService
                 }
                 else
                 {
-                    unmatchedNames.Add(trimmedName);
+                    newShifts.Add(new Shift
+                    {
+                        ShiftDate = excelShift.Date,
+                        ShiftName = excelShift.Name,
+                        CarId = excelShift.Car,
+                        VolunteerId = null,
+                        VolunteerName = trimmedName,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                    unresolvedNames.Add(trimmedName);
                 }
             }
         }
 
         result.TotalRows = totalAssignments;
 
-        // 7. Deduplicate by (ShiftDate, ShiftName, VolunteerId)
+        // 7. Deduplicate by (ShiftDate, ShiftName, VolunteerId, VolunteerName)
         newShifts = newShifts
-            .GroupBy(s => (s.ShiftDate, s.ShiftName, s.VolunteerId))
+            .GroupBy(s => (s.ShiftDate, s.ShiftName, s.VolunteerId, s.VolunteerName))
             .Select(g => g.First())
             .ToList();
 
-        // 8. Build error messages from unique unmatched names
-        foreach (var name in unmatchedNames)
-        {
-            result.Errors++;
-            result.ErrorMessages.Add($"לא נמצא מתנדב: {name}");
-        }
+        // 8. Build unresolved volunteer info
+        result.UnresolvedVolunteers = unresolvedNames.Count;
+        result.UnresolvedVolunteerNames = unresolvedNames.ToList();
 
         // 9. Delete shifts in the imported date range and insert new ones
         try

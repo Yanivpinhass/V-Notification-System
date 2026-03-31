@@ -352,13 +352,15 @@
   /* Calendar shift indicator dots */
   .calendar-dot-green,
   .calendar-dot-red,
-  .calendar-dot-gray {
+  .calendar-dot-gray,
+  .calendar-dot-yellow {
     position: relative;
   }
 
   .calendar-dot-green::after,
   .calendar-dot-red::after,
-  .calendar-dot-gray::after {
+  .calendar-dot-gray::after,
+  .calendar-dot-yellow::after {
     content: '';
     position: absolute;
     bottom: 2px;
@@ -379,6 +381,10 @@
 
   .calendar-dot-gray::after {
     background-color: hsl(var(--muted-foreground));
+  }
+
+  .calendar-dot-yellow::after {
+    background-color: hsl(50 100% 50%);
   }
 
 }
