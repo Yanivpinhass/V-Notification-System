@@ -133,7 +133,9 @@
       "Bash(grep -E \"\\\\.\\(cs|kt|ts\\)$\")",
       "Bash(grep -r \"s\\\\.VolunteerId\\\\|shift\\\\.VolunteerId\" /c/MyData/Projects/Magav/V-Notification-System --include=*.cs)",
       "Bash(grep -r \"SELECT.*VolunteerId\\\\|VolunteerId.*=\" /c/MyData/Projects/Magav/V-Notification-System --include=*.cs --include=*.kt)",
-      "Bash(find c:/MyData/Projects/Magav/V-Notification-System -type f \\\\\\(-name *.json -o -name *.config -o -name appsettings* \\\\\\))"
+      "Bash(find c:/MyData/Projects/Magav/V-Notification-System -type f \\\\\\(-name *.json -o -name *.config -o -name appsettings* \\\\\\))",
+      "Bash(grep -n \"סיום\\\\|Close\\\\|Done\" /c/MyData/Projects/Magav/V-Notification-System/web/client/src/pages/*.tsx)",
+      "Bash(\"c:/MyData/Projects/Magav/V-Notification-System/build-apk.bat\")"
     ]
   },
   "effortLevel": "high"

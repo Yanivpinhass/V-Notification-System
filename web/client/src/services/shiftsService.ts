@@ -63,6 +63,10 @@ class ShiftsService extends BaseApiClient {
   async updateShiftGroup(data: UpdateShiftGroupRequest): Promise<void> {
     return this.put<void, UpdateShiftGroupRequest>('/shifts/update-group', data);
   }
+
+  async deleteShiftGroup(data: { date: string; shiftName: string; carId: string; sendNotifications: boolean }): Promise<{ deletedCount: number; smsSentCount: number; smsFailedCount: number }> {
+    return this.post('/shifts/delete-group', data);
+  }
 }
 
 export const shiftsService = new ShiftsService();

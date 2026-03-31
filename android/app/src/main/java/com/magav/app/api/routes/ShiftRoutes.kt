@@ -4,6 +4,8 @@ import android.content.Context
 import com.magav.app.api.models.ApiResponse
 import com.magav.app.api.models.CreateShiftRequest
 import com.magav.app.api.models.DateShiftInfo
+import com.magav.app.api.models.DeleteGroupResult
+import com.magav.app.api.models.DeleteShiftGroupRequest
 import com.magav.app.api.models.SendShiftSmsRequest
 import com.magav.app.api.models.ShiftWithVolunteerDto
 import com.magav.app.api.models.UpdateShiftGroupRequest
@@ -153,6 +155,81 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                 database.shiftDao().deleteById(id)
 
                 call.respond(ApiResponse.ok("השיבוץ נמחק בהצלחה"))
+            }
+
+            // POST /api/shifts/delete-group - delete all shifts in a group, optionally notify volunteers
+            post("/delete-group") {
+                call.requireRole("Admin", "SystemManager")
+
+                val request = call.receive<DeleteShiftGroupRequest>()
+
+                if (request.shiftName.isBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, ApiResponse.fail<Unit>("שם משמרת נדרש"))
+                    return@post
+                }
+
+                val date = try {
+                    LocalDate.parse(request.date)
+                } catch (_: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, ApiResponse.fail<Unit>("פורמט תאריך לא תקין"))
+                    return@post
+                }
+
+                val from = date.atStartOfDay(ZoneOffset.UTC)
+                    .format(DateTimeFormatter.ISO_INSTANT)
+                val to = date.plusDays(1).atStartOfDay(ZoneOffset.UTC)
+                    .format(DateTimeFormatter.ISO_INSTANT)
+
+                val allShifts = database.shiftDao().getByDateRange(from, to)
+                val carId = request.carId.ifBlank { "" }
+                val matching = allShifts.filter { it.shiftName == request.shiftName && it.carId == carId }
+
+                if (matching.isEmpty()) {
+                    call.respond(HttpStatusCode.NotFound, ApiResponse.fail<Unit>("לא נמצאו שיבוצים למחיקה"))
+                    return@post
+                }
+
+                var smsSent = 0
+                var smsFailed = 0
+
+                if (request.sendNotifications) {
+                    val template = database.messageTemplateDao().getById(3)
+                    if (template != null) {
+                        val subIdSetting = database.appSettingDao().getByKey("sms_sim_subscription_id")
+                        val subscriptionId = subIdSetting?.value?.toIntOrNull() ?: -1
+                        val smsProvider = AndroidSmsProvider(context, subscriptionId)
+                        val israelTz = ZoneId.of("Asia/Jerusalem")
+                        val volunteers = database.volunteerDao().getAll()
+                        val volunteerMap = volunteers.associateBy { it.id }
+
+                        for (shift in matching) {
+                            if (shift.volunteerId == null) continue
+
+                            try {
+                                val volunteer = volunteerMap[shift.volunteerId] ?: continue
+                                if (volunteer.mobilePhone.isNullOrBlank() || volunteer.approveToReceiveSms != 1) continue
+
+                                val shiftDate = Instant.parse(shift.shiftDate).atZone(israelTz).toLocalDate()
+                                val message = SmsReminderService.buildMessage(
+                                    template.content, shift.shiftName, shift.carId,
+                                    volunteer.mappingName, shiftDate
+                                )
+                                val result = smsProvider.sendSms(volunteer.mobilePhone, message)
+
+                                if (result.success) smsSent++ else smsFailed++
+                            } catch (_: Exception) {
+                                smsFailed++
+                            }
+                        }
+                    }
+                }
+
+                for (shift in matching) {
+                    database.smsLogDao().deleteByShiftId(shift.id)
+                    database.shiftDao().deleteById(shift.id)
+                }
+
+                call.respond(ApiResponse.ok(DeleteGroupResult(matching.size, smsSent, smsFailed)))
             }
 
             // POST /api/shifts/{id}/send-sms - send SMS to a shift volunteer

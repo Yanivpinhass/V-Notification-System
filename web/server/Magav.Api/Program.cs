@@ -524,6 +524,92 @@ app.MapDelete("/api/shifts/{id:int}", async (int id, MagavDbManager db) =>
     }
 }).RequireAuthorization("CanManageMessages");
 
+// POST /api/shifts/delete-group - delete all shifts in a group, optionally notify volunteers
+app.MapPost("/api/shifts/delete-group", async (DeleteShiftGroupRequest request,
+    MagavDbManager db, ISmsProvider smsProvider) =>
+{
+    try
+    {
+        if (string.IsNullOrWhiteSpace(request.ShiftName))
+            return Results.BadRequest(ApiResponse<object>.Fail("שם משמרת נדרש"));
+
+        if (!DateTime.TryParse(request.Date, out var parsedDate))
+            return Results.BadRequest(ApiResponse<object>.Fail("פורמט תאריך לא תקין"));
+
+        var allShifts = await db.Shifts.GetByDateAsync(parsedDate);
+        var matching = allShifts
+            .Where(s => s.ShiftName == request.ShiftName && s.CarId == (request.CarId ?? ""))
+            .ToList();
+
+        if (matching.Count == 0)
+            return Results.NotFound(ApiResponse<object>.Fail("לא נמצאו שיבוצים למחיקה"));
+
+        var smsSent = 0;
+        var smsFailed = 0;
+
+        if (request.SendNotifications)
+        {
+            var template = await db.MessageTemplates.GetByIdAsync(3);
+            if (template != null)
+            {
+                var allVolunteers = await db.Volunteers.GetAllAsync();
+                var volunteerMap = allVolunteers.ToDictionary(v => v.Id);
+
+                foreach (var shift in matching)
+                {
+                    if (shift.VolunteerId == null) continue;
+
+                    try
+                    {
+                        if (!volunteerMap.TryGetValue(shift.VolunteerId.Value, out var volunteer)) continue;
+                        if (string.IsNullOrEmpty(volunteer.MobilePhone) || !volunteer.ApproveToReceiveSms)
+                            continue;
+
+                        var shiftDto = new ShiftVolunteerDto
+                        {
+                            ShiftId = shift.Id,
+                            ShiftDate = shift.ShiftDate,
+                            ShiftName = shift.ShiftName,
+                            CarId = shift.CarId,
+                            VolunteerId = volunteer.Id,
+                            FirstName = volunteer.FirstName,
+                            LastName = volunteer.LastName,
+                            MappingName = volunteer.MappingName,
+                            MobilePhone = volunteer.MobilePhone
+                        };
+                        var message = SmsReminderService.BuildMessage(template.Content, shiftDto, shift.ShiftDate);
+                        var result = await smsProvider.SendSmsAsync(volunteer.MobilePhone, message);
+
+                        if (result.Success) smsSent++;
+                        else smsFailed++;
+                    }
+                    catch
+                    {
+                        smsFailed++;
+                    }
+                }
+            }
+        }
+
+        foreach (var shift in matching)
+        {
+            await db.Db.ExecuteQueryAsync("DELETE FROM SmsLog WHERE ShiftId = @0", shift.Id);
+            await db.Shifts.DeleteAsync(shift);
+        }
+
+        return Results.Ok(ApiResponse<DeleteGroupResult>.Ok(
+            new DeleteGroupResult(matching.Count, smsSent, smsFailed),
+            "הצוות נמחק בהצלחה"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error deleting shift group: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה במחיקת הצוות"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
 // POST /api/shifts/{id}/send-sms - send SMS to a shift volunteer
 app.MapPost("/api/shifts/{id:int}/send-sms", async (int id, SendShiftSmsRequest request,
     MagavDbManager db, ISmsProvider smsProvider) =>
@@ -1531,3 +1617,5 @@ public record ShiftWithVolunteerDto(int Id, string ShiftDate, string ShiftName, 
     int? VolunteerId, string VolunteerName, string? VolunteerPhone, bool VolunteerApproved,
     bool IsUnresolved);
 public record DateShiftInfo(string Date, bool HasUnresolved);
+public record DeleteShiftGroupRequest(string Date, string ShiftName, string CarId, bool SendNotifications);
+public record DeleteGroupResult(int DeletedCount, int SmsSentCount, int SmsFailedCount);

@@ -156,6 +156,21 @@ data class SendShiftSmsRequest(
     val templateId: Int? = null
 )
 
+@Serializable
+data class DeleteShiftGroupRequest(
+    val date: String,
+    val shiftName: String,
+    val carId: String,
+    val sendNotifications: Boolean
+)
+
+@Serializable
+data class DeleteGroupResult(
+    val deletedCount: Int,
+    val smsSentCount: Int,
+    val smsFailedCount: Int
+)
+
 // ── Scheduler ────────────────────────────────────────────────────────────────
 
 @Serializable

@@ -38,6 +38,11 @@ export const ShiftsManagementPage: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingWithNotify, setDeletingWithNotify] = useState(false);
 
+  // Delete group dialog
+  const [deleteGroupTarget, setDeleteGroupTarget] = useState<ShiftGroup | null>(null);
+  const [isDeletingGroup, setIsDeletingGroup] = useState(false);
+  const [deletingGroupWithNotify, setDeletingGroupWithNotify] = useState(false);
+
   // SMS sending
   const [sendingSmsId, setSendingSmsId] = useState<number | null>(null);
   const [smsConfirmTarget, setSmsConfirmTarget] = useState<ShiftWithVolunteerDto | null>(null);
@@ -226,6 +231,31 @@ export const ShiftsManagementPage: React.FC = () => {
       toast.error(err instanceof Error ? err.message : 'שגיאה במחיקת השיבוץ');
     } finally {
       setDeletingWithNotify(false);
+    }
+  };
+
+  const handleDeleteGroup = async (sendNotifications: boolean) => {
+    if (!deleteGroupTarget) return;
+    const setLoading = sendNotifications ? setDeletingGroupWithNotify : setIsDeletingGroup;
+    setLoading(true);
+    try {
+      const result = await shiftsService.deleteShiftGroup({
+        date: dateStr,
+        shiftName: deleteGroupTarget.shiftName,
+        carId: deleteGroupTarget.carId,
+        sendNotifications,
+      });
+      toast.success(
+        sendNotifications
+          ? `הצוות נמחק, ${result.smsSentCount} הודעות נשלחו`
+          : `הצוות נמחק בהצלחה (${result.deletedCount} שיבוצים)`
+      );
+      setDeleteGroupTarget(null);
+      refreshData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'שגיאה במחיקת הצוות');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -455,18 +485,28 @@ export const ShiftsManagementPage: React.FC = () => {
                 </span>
               )}
               {!group.isLocal && !isSelectedDatePast && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                  onClick={() => {
-                    setEditTarget(group);
-                    setEditShiftName(group.shiftName);
-                    setEditCarId(group.carId);
-                  }}
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      setEditTarget(group);
+                      setEditShiftName(group.shiftName);
+                      setEditCarId(group.carId);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    onClick={() => setDeleteGroupTarget(group)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
               )}
             </CardTitle>
           </CardHeader>
@@ -596,6 +636,41 @@ export const ShiftsManagementPage: React.FC = () => {
               className="bg-destructive hover:bg-destructive/90"
             >
               {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'מחק'}
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete group confirmation */}
+      <AlertDialog open={!!deleteGroupTarget} onOpenChange={(open) => !open && !isDeletingGroup && !deletingGroupWithNotify && setDeleteGroupTarget(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>מחיקת צוות</AlertDialogTitle>
+            <AlertDialogDescription>
+              האם למחוק את כל הצוות {deleteGroupTarget?.shiftName}
+              {deleteGroupTarget?.carId ? ` / רכב ${deleteGroupTarget.carId}` : ''}
+              {' '}({deleteGroupTarget?.shifts.length} מתנדבים)?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex flex-row flex-wrap gap-2 pt-2">
+            <AlertDialogCancel disabled={isDeletingGroup || deletingGroupWithNotify} className="mt-0">ביטול</AlertDialogCancel>
+            <Button
+              onClick={() => handleDeleteGroup(true)}
+              disabled={
+                isDeletingGroup || deletingGroupWithNotify ||
+                !deleteGroupTarget?.shifts.some(s => !s.isUnresolved && s.volunteerPhone && s.volunteerApproved)
+              }
+              className="bg-warning hover:bg-warning/90 text-white"
+            >
+              {deletingGroupWithNotify ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
+              מחק ועדכן את המתנדבים
+            </Button>
+            <AlertDialogAction
+              onClick={() => handleDeleteGroup(false)}
+              disabled={isDeletingGroup || deletingGroupWithNotify}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {isDeletingGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : 'מחק'}
             </AlertDialogAction>
           </div>
         </AlertDialogContent>
