@@ -67,17 +67,18 @@ export const ShiftsManagementPage: React.FC = () => {
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
 
-  const todayDate = useMemo(() => {
+  const cutoffDate = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - 1);
     return d;
   }, []);
 
   const isSelectedDatePast = useMemo(() => {
     const sel = new Date(selectedDate);
     sel.setHours(0, 0, 0, 0);
-    return sel < todayDate;
-  }, [selectedDate, todayDate]);
+    return sel < cutoffDate;
+  }, [selectedDate, cutoffDate]);
 
   const loadShifts = useCallback(async () => {
     setIsLoading(true);
@@ -137,7 +138,7 @@ export const ShiftsManagementPage: React.FC = () => {
       const dateStr = format(date, 'yyyy-MM-dd');
       const hasShifts = datesWithShifts.has(dateStr);
 
-      if (date < todayDate) {
+      if (date < cutoffDate) {
         if (hasShifts) gray.push(date);
       } else {
         if (hasShifts) {
@@ -149,7 +150,7 @@ export const ShiftsManagementPage: React.FC = () => {
       }
     }
     return { greenDates: green, redDates: red, grayDates: gray, yellowDates: yellow };
-  }, [displayedMonth, datesWithShifts, todayDate]);
+  }, [displayedMonth, datesWithShifts, cutoffDate]);
 
   // Load volunteers once when add dialog opens
   const loadVolunteers = useCallback(async () => {
@@ -370,7 +371,7 @@ export const ShiftsManagementPage: React.FC = () => {
                   }
                 }}
                 modifiers={{
-                  past: { before: todayDate },
+                  past: { before: cutoffDate },
                   hasShifts: greenDates,
                   noShifts: redDates,
                   pastShifts: grayDates,

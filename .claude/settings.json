@@ -126,7 +126,14 @@
       "Bash(grep -E \"\\\\.\\(cs\\)$\")",
       "Bash(cmd.exe /c \"gradlew.bat assembleDebug 2>&1\")",
       "Bash(\"c:/MyData/Projects/Magav/V-Notification-System/android/gradlew.bat\" assembleDebug --project-dir \"c:/MyData/Projects/Magav/V-Notification-System/android\")",
-      "Bash(cmd //c \".\\\\build-apk.bat\")"
+      "Bash(cmd //c \".\\\\build-apk.bat\")",
+      "Bash(grep -E \"\\\\.\\(cs|java|ts\\)$\")",
+      "Bash(grep -E \"\\\\.java$\")",
+      "Bash(grep -E \"\\\\.\\(cs|kt\\)$\")",
+      "Bash(grep -E \"\\\\.\\(cs|kt|ts\\)$\")",
+      "Bash(grep -r \"s\\\\.VolunteerId\\\\|shift\\\\.VolunteerId\" /c/MyData/Projects/Magav/V-Notification-System --include=*.cs)",
+      "Bash(grep -r \"SELECT.*VolunteerId\\\\|VolunteerId.*=\" /c/MyData/Projects/Magav/V-Notification-System --include=*.cs --include=*.kt)",
+      "Bash(find c:/MyData/Projects/Magav/V-Notification-System -type f \\\\\\(-name *.json -o -name *.config -o -name appsettings* \\\\\\))"
     ]
   },
   "effortLevel": "high"
