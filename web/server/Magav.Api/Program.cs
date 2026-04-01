@@ -95,6 +95,7 @@ builder.Services.AddHttpClient<ISmsProvider, InforUMobileSmsProvider>(client =>
 // SMS Scheduler services
 builder.Services.AddScoped<SmsReminderService>();
 builder.Services.AddHostedService<SmsSchedulerService>();
+builder.Services.AddHostedService<ShiftCleanupService>();
 
 // Add Rate Limiting for public SMS approval endpoints
 builder.Services.AddRateLimiter(options =>

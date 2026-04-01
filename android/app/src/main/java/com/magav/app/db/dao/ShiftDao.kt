@@ -50,4 +50,7 @@ interface ShiftDao {
 
     @Query("SELECT COUNT(*) FROM Shifts WHERE ShiftName = :shiftName AND CarId = :carId AND ShiftDate >= :from AND ShiftDate < :to")
     suspend fun countShiftGroup(shiftName: String, carId: String, from: String, to: String): Int
+
+    @Query("DELETE FROM Shifts WHERE ShiftDate < :cutoff")
+    suspend fun deleteOlderThan(cutoff: String): Int
 }

@@ -12,6 +12,7 @@ import com.magav.app.db.DatabaseInitializer
 import com.magav.app.api.auth.JwtConfig
 import com.magav.app.api.createKtorServer
 import com.magav.app.scheduler.AlarmScheduler
+import com.magav.app.scheduler.ShiftCleanupWorker
 import io.ktor.server.engine.ApplicationEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +62,9 @@ class MagavServerService : Service() {
                     AlarmScheduler(applicationContext).scheduleAllAlarms()
                     android.util.Log.i("MagavServer", "SMS alarms scheduled")
 
+                    // Schedule monthly shift cleanup
+                    scheduleMonthlyCleanup()
+
                     server = createKtorServer(database, applicationContext)
                     server?.start(wait = true)
                 } catch (e: Exception) {
@@ -107,6 +111,19 @@ class MagavServerService : Service() {
         }
         prefs.edit().putString("jwt_secret_key", newKey).apply()
         return newKey
+    }
+
+    private fun scheduleMonthlyCleanup() {
+        val cleanupRequest = androidx.work.PeriodicWorkRequestBuilder<ShiftCleanupWorker>(
+            1, java.util.concurrent.TimeUnit.DAYS
+        ).build()
+
+        androidx.work.WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
+            "shift_monthly_cleanup",
+            androidx.work.ExistingPeriodicWorkPolicy.KEEP,
+            cleanupRequest
+        )
+        android.util.Log.i("MagavServer", "Monthly shift cleanup worker scheduled")
     }
 
     override fun onDestroy() {
