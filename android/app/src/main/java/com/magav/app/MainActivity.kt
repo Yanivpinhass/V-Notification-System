@@ -20,6 +20,7 @@ import androidx.lifecycle.lifecycleScope
 import com.magav.app.auth.BiometricAuthHelper
 import com.magav.app.auth.NativeAuthBridge
 import com.magav.app.auth.SessionManager
+import com.magav.app.license.LicenseValidator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -126,6 +127,11 @@ class MainActivity : AppCompatActivity() {
         if (checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
             needed.add(android.Manifest.permission.READ_PHONE_STATE)
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (checkSelfPermission(android.Manifest.permission.READ_PHONE_NUMBERS) != PackageManager.PERMISSION_GRANTED) {
+                needed.add(android.Manifest.permission.READ_PHONE_NUMBERS)
+            }
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 needed.add(android.Manifest.permission.POST_NOTIFICATIONS)
@@ -165,14 +171,20 @@ class MainActivity : AppCompatActivity() {
                 }
                 if (!ready) delay(500)
             }
-            if (ready) {
-                handleSessionAwareStartup()
-            } else {
+            if (!ready) {
                 showWebView()
                 webView.loadDataWithBaseURL(null,
                     "<html dir='rtl'><body style='text-align:center;padding:40px;font-family:sans-serif'>" +
                     "<h2>שגיאה בהפעלת השרת</h2><p>יש לסגור ולהפעיל מחדש את האפליקציה</p></body></html>",
                     "text/html", "UTF-8", null)
+            } else if (!LicenseValidator.isValid(this@MainActivity)) {
+                showWebView()
+                webView.loadDataWithBaseURL(null,
+                    "<html dir='rtl'><body style='text-align:center;padding:40px;font-family:sans-serif'>" +
+                    "<h2>שגיאה בהפעלת המערכת</h2><p>יש לסגור ולהפעיל מחדש את האפליקציה</p></body></html>",
+                    "text/html", "UTF-8", null)
+            } else {
+                handleSessionAwareStartup()
             }
         }
     }

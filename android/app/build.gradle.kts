@@ -13,8 +13,13 @@ android {
         applicationId = "com.magav.app"
         minSdk = 29
         targetSdk = 35
-        versionCode = 49
-        versionName = "1.4.0"
+        versionCode = 50
+        versionName = "1.4.1"
+
+        buildConfigField("String", "LICENSE_PHONES",
+            "\"${project.findProperty("LICENSE_PHONES") ?: "0547504775,0506271989"}\"")
+        buildConfigField("String", "LICENSE_EXPIRY_DATE",
+            "\"${project.findProperty("LICENSE_EXPIRY_DATE") ?: "2026-10-06"}\"")
     }
 
     buildTypes {
@@ -35,6 +40,10 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     packaging {

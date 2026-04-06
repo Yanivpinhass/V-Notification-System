@@ -36,3 +36,6 @@
 -keepclassmembers class com.magav.app.auth.NativeAuthBridge {
     @android.webkit.JavascriptInterface *;
 }
+
+# Keep license validation
+-keep class com.magav.app.license.** { *; }
