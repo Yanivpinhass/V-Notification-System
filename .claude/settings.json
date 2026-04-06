@@ -141,7 +141,16 @@
       "Bash(npx shadcn@latest add select --yes)",
       "Bash(kill %1)",
       "Bash(grep -n \"database.locationDao\\(\\)\" /c/MyData/Projects/Magav/V-Notification-System/android/app/src/main/java/com/magav/app/api/routes/*.kt)",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "Bash(xargs wc:*)",
+      "Read(//tmp/**)",
+      "Read(//c/tmp/**)",
+      "Bash(grep -l \"jewish-holidays\\\\|jewishHolidays\\\\|חגים יהודיים\" /c/MyData/Projects/Magav/V-Notification-System/android/app/src/main/assets/web/assets/*.js)",
+      "Bash(cmd.exe //c \"build-apk.bat\")",
+      "Bash(cmd.exe /c \"c:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\build-apk.bat\")",
+      "Bash(cmd.exe //c \".\\\\\\\\build-apk.bat\")",
+      "Bash(cmd /c \"build-apk.bat\")",
+      "Bash(gh pr:*)"
     ]
   },
   "effortLevel": "high"

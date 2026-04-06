@@ -471,19 +471,9 @@ export const ShiftsManagementPage: React.FC = () => {
     }
   };
 
-  // Get volunteer status explanation
-  const getVolunteerIssue = (s: ShiftWithVolunteerDto): string | null => {
-    const noPhone = !s.volunteerPhone;
-    const notApproved = !s.volunteerApproved;
-    if (noPhone && notApproved) return 'למתנדב זה לא הוגדר מספר טלפון ולא אישר קבלת הודעות SMS';
-    if (noPhone) return 'למתנדב זה לא הוגדר מספר טלפון';
-    if (notApproved) return 'המתנדב לא אישר קבלת הודעות SMS';
-    return null;
-  };
-
-  const getVolunteerDtoIssue = (v: VolunteerDto): string | null => {
-    const noPhone = !v.mobilePhone;
-    const notApproved = !v.approveToReceiveSms;
+  const getStatusIssue = (phone: string | null, approved: boolean): string | null => {
+    const noPhone = !phone;
+    const notApproved = !approved;
     if (noPhone && notApproved) return 'למתנדב זה לא הוגדר מספר טלפון ולא אישר קבלת הודעות SMS';
     if (noPhone) return 'למתנדב זה לא הוגדר מספר טלפון';
     if (notApproved) return 'המתנדב לא אישר קבלת הודעות SMS';
@@ -670,7 +660,7 @@ export const ShiftsManagementPage: React.FC = () => {
               <p className="text-sm text-muted-foreground">אין מתנדבים</p>
             )}
             {group.shifts.map((shift) => {
-              const issue = shift.isUnresolved ? null : getVolunteerIssue(shift);
+              const issue = shift.isUnresolved ? null : getStatusIssue(shift.volunteerPhone, shift.volunteerApproved);
               const canSms = !!shift.volunteerPhone && shift.volunteerApproved;
               const dotColor = shift.isUnresolved ? 'bg-warning' : issue ? 'bg-destructive' : 'bg-success';
               const statusMessage = shift.isUnresolved ? 'מתנדב לא מזוהה - יש לעדכן פרטים' : issue;
@@ -904,15 +894,15 @@ export const ShiftsManagementPage: React.FC = () => {
           </DialogHeader>
           <div className="space-y-4">
             {assignedVolunteerNames.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {assignedVolunteerNames.map((name, i) => (
-                  <span
-                    key={i}
-                    className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-xs font-medium"
-                  >
-                    {name}
-                  </span>
-                ))}
+              <div className="space-y-1.5 mt-1">
+                <span className="text-xs text-muted-foreground">משובצים</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {assignedVolunteerNames.map((name, i) => (
+                    <Badge key={i} variant="secondary" className="text-xs">
+                      {name}
+                    </Badge>
+                  ))}
+                </div>
               </div>
             )}
             <div className="relative">
@@ -924,7 +914,7 @@ export const ShiftsManagementPage: React.FC = () => {
                 className="pr-10"
               />
             </div>
-            <div className="max-h-[50vh] overflow-y-auto space-y-1 border rounded-md p-2">
+            <div className="max-h-[50vh] overflow-y-auto space-y-2 rounded-lg border bg-muted/30 p-2">
               {!volunteersLoaded && (
                 <div className="flex justify-center py-4">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -935,28 +925,34 @@ export const ShiftsManagementPage: React.FC = () => {
               )}
               {filteredVolunteers.map((vol) => {
                 const isAssigned = assignedVolunteerIds.has(vol.id);
-                const issue = getVolunteerDtoIssue(vol);
+                const volIssue = getStatusIssue(vol.mobilePhone, vol.approveToReceiveSms);
+                const volDotColor = volIssue ? 'bg-destructive' : 'bg-success';
                 return (
                   <button
                     key={vol.id}
                     disabled={isAssigned || isAdding}
                     onClick={() => handleAddVolunteer(vol)}
-                    className={`w-full text-right rounded-md px-3 py-3 text-sm transition-colors min-h-[44px] ${
+                    className={`w-full text-right rounded-md border px-3 py-3 text-sm transition-colors min-h-[44px] ${
                       isAssigned
-                        ? 'opacity-40 cursor-not-allowed bg-muted'
-                        : 'hover:bg-accent cursor-pointer'
+                        ? 'opacity-40 cursor-not-allowed bg-muted border-transparent'
+                        : 'bg-card hover:bg-accent/50 active:bg-primary/10 cursor-pointer'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className={issue ? 'text-destructive' : ''}>
-                        {vol.mappingName}
+                    <span className="flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        {!isAssigned && (
+                          <span className={`h-3 w-3 rounded-full shrink-0 ${volDotColor}`} />
+                        )}
+                        <span className="font-medium">{vol.mappingName}</span>
                       </span>
                       <span className="text-xs text-muted-foreground mr-2">
-                        {isAssigned ? 'כבר משובץ' : vol.mobilePhone || ''}
+                        {isAssigned ? (
+                          <span className="inline-flex items-center rounded-full border px-2.5 text-xs font-semibold">כבר משובץ</span>
+                        ) : vol.mobilePhone || ''}
                       </span>
-                    </div>
-                    {issue && (
-                      <p className="text-xs text-destructive mt-0.5">{issue}</p>
+                    </span>
+                    {volIssue && !isAssigned && (
+                      <span className="block text-xs text-destructive mt-1 mr-5">{volIssue}</span>
                     )}
                   </button>
                 );
@@ -964,7 +960,7 @@ export const ShiftsManagementPage: React.FC = () => {
             </div>
           </div>
           <DialogFooter className="mt-2">
-            <Button variant="outline" onClick={closeAddDialog} className="min-h-[44px] w-full">
+            <Button variant="default" onClick={closeAddDialog} className="min-h-[44px] w-full">
               סיום
             </Button>
           </DialogFooter>
