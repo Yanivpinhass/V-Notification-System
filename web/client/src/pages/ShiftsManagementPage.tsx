@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Calendar } from '@/components/ui/calendar';
@@ -16,7 +18,7 @@ import { locationsService, LocationDto } from '@/services/locationsService';
 import { jewishHolidaysService, JewishHolidayDto } from '@/services/jewishHolidaysService';
 import { Loader2, Trash2, Plus, Search, Calendar as CalendarIcon, MessageSquare, Phone, Pencil, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { he } from 'date-fns/locale';
 
 interface ShiftGroup {
@@ -99,6 +101,9 @@ export const ShiftsManagementPage: React.FC = () => {
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
   const holidayName = holidays.find(h => h.date === dateStr)?.name;
+  const tomorrowStr = format(addDays(selectedDate, 1), 'yyyy-MM-dd');
+  const tomorrowHolidayName = holidays.find(h => h.date === tomorrowStr)?.name;
+  const holidayLabel = holidayName || (tomorrowHolidayName ? `ערב ${tomorrowHolidayName}` : undefined);
 
   const cutoffDate = useMemo(() => {
     const d = new Date();
@@ -519,11 +524,6 @@ export const ShiftsManagementPage: React.FC = () => {
             <Plus className="h-4 w-4 ml-2" />
             משמרת חדשה
           </Button>
-          {holidayName && (
-            <span className="text-sm font-medium text-primary bg-primary/10 px-2 py-1 rounded">
-              {holidayName}
-            </span>
-          )}
           <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" className="min-h-[44px] min-w-[140px]">
@@ -566,6 +566,14 @@ export const ShiftsManagementPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Holiday / erev holiday banner */}
+      {holidayLabel && (
+        <div className="flex items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-4 py-2 text-sm font-medium text-primary">
+          <CalendarIcon className="h-4 w-4 shrink-0" />
+          <span>{holidayLabel}</span>
+        </div>
+      )}
+
       {/* Read-only banner for past dates */}
       {isSelectedDatePast && !isLoading && (
         <div className="flex items-center gap-2 rounded-md border border-muted bg-muted/50 px-4 py-2 text-sm text-muted-foreground">
@@ -599,22 +607,26 @@ export const ShiftsManagementPage: React.FC = () => {
 
       {/* Shift groups */}
       {!isLoading && !error && groupedShifts.map((group, idx) => (
-        <Card key={`${group.shiftName}-${group.carId}-${idx}`} className="max-w-full">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <span>{group.shiftName}</span>
-              {group.carId && (
-                <span className="text-sm font-normal text-muted-foreground">
-                  / רכב {group.carId}
-                </span>
-              )}
-              {group.shifts[0]?.locationName && (
-                <span className="text-sm font-normal text-muted-foreground flex items-center gap-1">
-                  | <MapPin className="h-3 w-3" /> {group.shifts[0].locationName}
-                </span>
-              )}
+        <Card key={`${group.shiftName}-${group.carId}-${idx}`} className="max-w-full overflow-hidden transition-shadow hover:shadow-md">
+          <CardHeader className="pb-3 bg-primary/5 border-b border-primary/10">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge variant="default" className="text-sm px-3 py-1">
+                  {group.shiftName}
+                </Badge>
+                {group.carId && (
+                  <Badge variant="outline" className="text-sm px-3 py-1 font-normal">
+                    רכב {group.carId}
+                  </Badge>
+                )}
+                {group.shifts[0]?.locationName && (
+                  <span className="text-sm text-muted-foreground flex items-center gap-1">
+                    <MapPin className="h-3 w-3" /> {group.shifts[0].locationName}
+                  </span>
+                )}
+              </div>
               {!group.isLocal && !isSelectedDatePast && (
-                <>
+                <div className="flex items-center gap-1 shrink-0">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -649,9 +661,9 @@ export const ShiftsManagementPage: React.FC = () => {
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
-                </>
+                </div>
               )}
-            </CardTitle>
+            </div>
           </CardHeader>
           <CardContent className="space-y-2">
             {group.shifts.length === 0 && (
@@ -660,79 +672,88 @@ export const ShiftsManagementPage: React.FC = () => {
             {group.shifts.map((shift) => {
               const issue = shift.isUnresolved ? null : getVolunteerIssue(shift);
               const canSms = !!shift.volunteerPhone && shift.volunteerApproved;
+              const dotColor = shift.isUnresolved ? 'bg-warning' : issue ? 'bg-destructive' : 'bg-success';
+              const statusMessage = shift.isUnresolved ? 'מתנדב לא מזוהה - יש לעדכן פרטים' : issue;
               return (
                 <div
                   key={shift.id}
-                  className="rounded-md border p-3 space-y-2"
+                  className="rounded-md border p-3 bg-card hover:bg-accent/50 transition-colors"
                 >
-                  <div className="flex items-center gap-2">
-                    {shift.isUnresolved ? (
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button className="text-warning font-medium text-sm text-right cursor-pointer hover:underline">
-                            {shift.volunteerName}
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-64 text-sm" dir="rtl">
-                          מתנדב לא מזוהה - יש לעדכן פרטים
-                        </PopoverContent>
-                      </Popover>
-                    ) : issue ? (
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button className="text-destructive font-medium text-sm text-right cursor-pointer hover:underline">
-                            {shift.volunteerName}
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-64 text-sm" dir="rtl">
-                          {issue}
-                        </PopoverContent>
-                      </Popover>
-                    ) : (
-                      <span className="text-sm font-medium">{shift.volunteerName}</span>
-                    )}
-                    {!shift.isUnresolved && shift.volunteerPhone && (
-                      <span className="text-sm text-muted-foreground">
-                        {shift.volunteerPhone}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {!shift.isUnresolved && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="min-h-[44px] min-w-[44px] text-primary hover:text-primary hover:bg-primary/10"
-                          disabled={!canSms || isSelectedDatePast || sendingSmsId === shift.id}
-                          onClick={() => setSmsConfirmTarget(shift)}
-                        >
-                          {sendingSmsId === shift.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <MessageSquare className="h-4 w-4" />
-                          )}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="min-h-[44px] min-w-[44px] text-success hover:text-success hover:bg-success/10"
-                          disabled={!shift.volunteerPhone}
-                          onClick={() => setCallConfirmTarget(shift)}
-                        >
-                          <Phone className="h-4 w-4" />
-                        </Button>
-                      </>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="min-h-[44px] min-w-[44px] text-destructive hover:text-destructive hover:bg-destructive/10"
-                      disabled={isSelectedDatePast}
-                      onClick={() => setDeleteTarget(shift)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`h-3 w-3 rounded-full shrink-0 ${dotColor}`} />
+                      {statusMessage ? (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button className="font-medium text-sm text-right cursor-pointer hover:underline">
+                              {shift.volunteerName}
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64 text-sm" dir="rtl">
+                            {statusMessage}
+                          </PopoverContent>
+                        </Popover>
+                      ) : (
+                        <span className="text-sm font-medium">{shift.volunteerName}</span>
+                      )}
+                      {!shift.isUnresolved && shift.volunteerPhone && (
+                        <span className="text-sm text-muted-foreground">
+                          {shift.volunteerPhone}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {!shift.isUnresolved && (
+                        <>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-11 w-11 md:h-8 md:w-8 text-primary hover:text-primary hover:bg-primary/10"
+                                disabled={!canSms || isSelectedDatePast || sendingSmsId === shift.id}
+                                onClick={() => setSmsConfirmTarget(shift)}
+                              >
+                                {sendingSmsId === shift.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <MessageSquare className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom"><p>שליחת SMS</p></TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-11 w-11 md:h-8 md:w-8 text-success hover:text-success hover:bg-success/10"
+                                disabled={!shift.volunteerPhone}
+                                onClick={() => setCallConfirmTarget(shift)}
+                              >
+                                <Phone className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom"><p>התקשר</p></TooltipContent>
+                          </Tooltip>
+                        </>
+                      )}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-11 w-11 md:h-8 md:w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            disabled={isSelectedDatePast}
+                            onClick={() => setDeleteTarget(shift)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom"><p>מחיקת שיבוץ</p></TooltipContent>
+                      </Tooltip>
+                    </div>
                   </div>
                 </div>
               );
