@@ -227,7 +227,7 @@ export const ShiftsManagementPage: React.FC = () => {
       <div>
         <label className="text-sm font-medium mb-1 block">מיקום ניידת</label>
         <Select value={selection} onValueChange={setSelection}>
-          <SelectTrigger><SelectValue placeholder="לא נבחר" /></SelectTrigger>
+          <SelectTrigger className="min-h-[44px]"><SelectValue placeholder="לא נבחר" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="none">לא נבחר</SelectItem>
             {sortedLocations.map(l => (
@@ -241,7 +241,7 @@ export const ShiftsManagementPage: React.FC = () => {
         <>
           <div>
             <label className="text-sm font-medium mb-1 block">שם מיקום</label>
-            <Input value={customName} onChange={(e) => setCustomName(e.target.value)}
+            <Input className="min-h-[44px]" value={customName} onChange={(e) => setCustomName(e.target.value)}
               placeholder="שם בעל הבית / מיקום" list={datalistId} />
             <datalist id={datalistId}>
               {volunteers.map(v => <option key={v.id} value={v.mappingName} />)}
@@ -250,10 +250,51 @@ export const ShiftsManagementPage: React.FC = () => {
           <div>
             <label className="text-sm font-medium mb-1 block">ניווט</label>
             <Input value={customNav} onChange={(e) => setCustomNav(e.target.value)}
-              placeholder="קישור Waze" dir="ltr" className="text-left" />
+              placeholder="קישור Waze" dir="ltr" className="text-left min-h-[44px]" />
           </div>
         </>
       )}
+    </>
+  );
+
+  const renderShiftGroupForm = (config: {
+    title: string;
+    shiftName: string; setShiftName: (v: string) => void;
+    carId: string; setCarId: (v: string) => void;
+    locationSelection: string; setLocationSelection: (v: string) => void;
+    customLocationName: string; setCustomLocationName: (v: string) => void;
+    customLocationNavigation: string; setCustomLocationNavigation: (v: string) => void;
+    datalistId: string;
+    submitLabel: string; onSubmit: () => void; submitDisabled: boolean;
+    isSubmitting?: boolean;
+    onCancel: () => void; cancelDisabled?: boolean;
+  }) => (
+    <>
+      <DialogHeader><DialogTitle>{config.title}</DialogTitle></DialogHeader>
+      <div className="space-y-4 rounded-lg border bg-card p-4">
+        <div>
+          <label className="text-sm font-medium mb-1 block">שם משמרת *</label>
+          <Input className="min-h-[44px]" value={config.shiftName}
+            onChange={(e) => config.setShiftName(e.target.value)} placeholder="לדוגמה: צוות א" />
+        </div>
+        <div>
+          <label className="text-sm font-medium mb-1 block">מספר רכב</label>
+          <Input className="min-h-[44px]" value={config.carId}
+            onChange={(e) => config.setCarId(e.target.value)} placeholder="לדוגמה: 101" />
+        </div>
+        {renderLocationPicker(config.locationSelection, config.setLocationSelection,
+          config.customLocationName, config.setCustomLocationName,
+          config.customLocationNavigation, config.setCustomLocationNavigation, config.datalistId)}
+      </div>
+      <DialogFooter className="flex flex-col gap-2 mt-4 sm:flex-col">
+        <Button onClick={config.onSubmit} disabled={config.submitDisabled} className="w-full min-h-[44px]">
+          {config.isSubmitting ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
+          {config.submitLabel}
+        </Button>
+        <Button variant="ghost" onClick={config.onCancel} disabled={config.cancelDisabled} className="w-full min-h-[44px]">
+          ביטול
+        </Button>
+      </DialogFooter>
     </>
   );
 
@@ -990,89 +1031,37 @@ export const ShiftsManagementPage: React.FC = () => {
       {/* New shift group dialog */}
       <Dialog open={newGroupOpen} onOpenChange={setNewGroupOpen}>
         <DialogContent dir="rtl" className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>משמרת חדשה</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <label className="text-sm font-medium mb-1 block">שם משמרת *</label>
-              <Input
-                value={newShiftName}
-                onChange={(e) => setNewShiftName(e.target.value)}
-                placeholder="לדוגמה: צוות א"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">מספר רכב</label>
-              <Input
-                value={newCarId}
-                onChange={(e) => setNewCarId(e.target.value)}
-                placeholder="לדוגמה: 101"
-              />
-            </div>
-            {renderLocationPicker(
-              newLocationSelection, setNewLocationSelection,
-              newCustomLocationName, setNewCustomLocationName,
-              newCustomLocationNavigation, setNewCustomLocationNavigation,
-              'volunteer-names-create'
-            )}
-          </div>
-          <DialogFooter className="flex-row-reverse gap-2 mt-4">
-            <Button
-              onClick={handleCreateGroup}
-              disabled={!newShiftName.trim()}
-            >
-              צור משמרת
-            </Button>
-            <Button variant="outline" onClick={() => setNewGroupOpen(false)}>
-              ביטול
-            </Button>
-          </DialogFooter>
+          {renderShiftGroupForm({
+            title: 'משמרת חדשה',
+            shiftName: newShiftName, setShiftName: setNewShiftName,
+            carId: newCarId, setCarId: setNewCarId,
+            locationSelection: newLocationSelection, setLocationSelection: setNewLocationSelection,
+            customLocationName: newCustomLocationName, setCustomLocationName: setNewCustomLocationName,
+            customLocationNavigation: newCustomLocationNavigation, setCustomLocationNavigation: setNewCustomLocationNavigation,
+            datalistId: 'volunteer-names-create',
+            submitLabel: 'צור משמרת', onSubmit: handleCreateGroup,
+            submitDisabled: !newShiftName.trim(),
+            onCancel: () => setNewGroupOpen(false),
+          })}
         </DialogContent>
       </Dialog>
 
       {/* Edit shift group dialog */}
       <Dialog open={!!editTarget} onOpenChange={(open) => !open && !isEditing && setEditTarget(null)}>
         <DialogContent dir="rtl" className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>עריכת משמרת</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <label className="text-sm font-medium mb-1 block">שם משמרת *</label>
-              <Input
-                value={editShiftName}
-                onChange={(e) => setEditShiftName(e.target.value)}
-                placeholder="לדוגמה: צוות א"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">מספר רכב</label>
-              <Input
-                value={editCarId}
-                onChange={(e) => setEditCarId(e.target.value)}
-                placeholder="לדוגמה: 101"
-              />
-            </div>
-            {renderLocationPicker(
-              editLocationSelection, setEditLocationSelection,
-              editCustomLocationName, setEditCustomLocationName,
-              editCustomLocationNavigation, setEditCustomLocationNavigation,
-              'volunteer-names-edit'
-            )}
-          </div>
-          <DialogFooter className="flex-row-reverse gap-2 mt-4">
-            <Button
-              onClick={handleEditGroup}
-              disabled={!editShiftName.trim() || isEditing}
-            >
-              {isEditing ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
-              שמור
-            </Button>
-            <Button variant="outline" onClick={() => setEditTarget(null)} disabled={isEditing}>
-              ביטול
-            </Button>
-          </DialogFooter>
+          {renderShiftGroupForm({
+            title: 'עריכת משמרת',
+            shiftName: editShiftName, setShiftName: setEditShiftName,
+            carId: editCarId, setCarId: setEditCarId,
+            locationSelection: editLocationSelection, setLocationSelection: setEditLocationSelection,
+            customLocationName: editCustomLocationName, setCustomLocationName: setEditCustomLocationName,
+            customLocationNavigation: editCustomLocationNavigation, setCustomLocationNavigation: setEditCustomLocationNavigation,
+            datalistId: 'volunteer-names-edit',
+            submitLabel: 'שמור', onSubmit: handleEditGroup,
+            submitDisabled: !editShiftName.trim() || isEditing,
+            isSubmitting: isEditing,
+            onCancel: () => setEditTarget(null), cancelDisabled: isEditing,
+          })}
         </DialogContent>
       </Dialog>
 

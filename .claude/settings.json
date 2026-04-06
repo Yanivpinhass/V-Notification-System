@@ -150,7 +150,10 @@
       "Bash(cmd.exe /c \"c:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\build-apk.bat\")",
       "Bash(cmd.exe //c \".\\\\\\\\build-apk.bat\")",
       "Bash(cmd /c \"build-apk.bat\")",
-      "Bash(gh pr:*)"
+      "Bash(gh pr:*)",
+      "Bash(node -e \"const {twMerge} = require\\('./web/client/node_modules/tailwind-merge'\\); console.log\\(twMerge\\('flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2', 'flex flex-col gap-2 mt-4'\\)\\)\")",
+      "Bash(node -e \"const {twMerge} = require\\('./web/client/node_modules/tailwind-merge'\\); console.log\\('WITH sm:flex-col:', twMerge\\('flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2', 'flex flex-col gap-2 mt-4 sm:flex-col'\\)\\)\")",
+      "Bash(wc -l *.tsx)"
     ]
   },
   "effortLevel": "high"
