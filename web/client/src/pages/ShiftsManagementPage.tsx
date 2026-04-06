@@ -914,7 +914,7 @@ export const ShiftsManagementPage: React.FC = () => {
                 className="pr-10"
               />
             </div>
-            <div className="max-h-[50vh] overflow-y-auto space-y-2 rounded-lg border bg-muted/30 p-2">
+            <div className="space-y-2 rounded-lg border bg-muted/30 p-2">
               {!volunteersLoaded && (
                 <div className="flex justify-center py-4">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
