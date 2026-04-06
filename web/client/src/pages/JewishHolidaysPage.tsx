@@ -91,7 +91,7 @@ export const JewishHolidaysPage: React.FC = () => {
       <Card className="overflow-hidden">
         <CardHeader className="pb-4 space-y-3">
           <div className="flex items-center justify-between">
-            <CardTitle>חגים יהודיים</CardTitle>
+            <CardTitle>חגים</CardTitle>
             {isAdmin && (
               <div className="flex items-center gap-2">
                 <Button size="sm" onClick={handleCreate}>

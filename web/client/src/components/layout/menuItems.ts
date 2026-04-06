@@ -51,7 +51,7 @@ export const mainMenuItems: MenuItem[] = [
       { id: 'scheduler-settings', title: 'הגדרות תזמון', path: '/settings/scheduler' },
       { id: 'message-templates', title: 'הגדרות הודעות', path: '/settings/message-templates' },
       { id: 'sms-settings', title: 'הגדרות SMS', path: '/settings/sms' },
-      { id: 'jewish-holidays', title: 'חגים יהודיים', path: '/settings/jewish-holidays' },
+      { id: 'jewish-holidays', title: 'חגים', path: '/settings/jewish-holidays' },
     ]
   },
   {
