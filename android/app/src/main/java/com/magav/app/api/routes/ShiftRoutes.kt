@@ -28,8 +28,10 @@ import io.ktor.server.routing.*
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
+import com.magav.app.util.ReminderTypes
+import com.magav.app.util.SmsStatuses
+import com.magav.app.util.toIsoInstant
+import com.magav.app.util.toIsoRange
 
 fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
     authenticate("auth-bearer") {
@@ -58,10 +60,7 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                     return@get
                 }
 
-                val from = date.atStartOfDay(ZoneOffset.UTC)
-                    .format(DateTimeFormatter.ISO_INSTANT)
-                val to = date.plusDays(1).atStartOfDay(ZoneOffset.UTC)
-                    .format(DateTimeFormatter.ISO_INSTANT)
+                val (from, to) = date.toIsoRange()
 
                 val shifts = database.shiftDao().getByDateRange(from, to)
                 val volunteers = database.volunteerDao().getAll()
@@ -115,10 +114,8 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                     return@get
                 }
 
-                val from = fromDate.atStartOfDay(ZoneOffset.UTC)
-                    .format(DateTimeFormatter.ISO_INSTANT)
-                val to = toDate.plusDays(1).atStartOfDay(ZoneOffset.UTC)
-                    .format(DateTimeFormatter.ISO_INSTANT)
+                val from = fromDate.toIsoInstant()
+                val to = toDate.plusDays(1).toIsoInstant()
 
                 val rawDates = database.shiftDao().getDistinctDatesByRange(from, to)
                 val rawUnresolved = database.shiftDao().getDistinctDatesWithUnresolved(from, to)
@@ -183,10 +180,7 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                     return@post
                 }
 
-                val from = date.atStartOfDay(ZoneOffset.UTC)
-                    .format(DateTimeFormatter.ISO_INSTANT)
-                val to = date.plusDays(1).atStartOfDay(ZoneOffset.UTC)
-                    .format(DateTimeFormatter.ISO_INSTANT)
+                val (from, to) = date.toIsoRange()
 
                 val allShifts = database.shiftDao().getByDateRange(from, to)
                 val carId = request.carId.ifBlank { "" }
@@ -310,12 +304,12 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                 val smsProvider = AndroidSmsProvider(context, subscriptionId)
                 val result = smsProvider.sendSms(volunteer.mobilePhone, message)
 
-                val reminderType = when (templateId) { 1 -> "SameDay"; 2 -> "Advance"; else -> "Manual" }
+                val reminderType = when (templateId) { 1 -> ReminderTypes.SAME_DAY; 2 -> ReminderTypes.ADVANCE; else -> ReminderTypes.MANUAL }
                 database.smsLogDao().insert(
                     SmsLogEntity(
                         shiftId = shift.id,
                         sentAt = Instant.now().toString(),
-                        status = if (result.success) "Success" else "Fail",
+                        status = if (result.success) SmsStatuses.SUCCESS else SmsStatuses.FAIL,
                         error = result.error,
                         reminderType = reminderType
                     )
@@ -358,9 +352,7 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
 
                 // Convert date to ISO_INSTANT format (matching import format)
                 val shiftDateIso = try {
-                    LocalDate.parse(request.shiftDate)
-                        .atStartOfDay(ZoneOffset.UTC)
-                        .format(DateTimeFormatter.ISO_INSTANT)
+                    LocalDate.parse(request.shiftDate).toIsoInstant()
                 } catch (_: Exception) {
                     call.respond(
                         HttpStatusCode.BadRequest,
@@ -371,9 +363,7 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
 
                 // Check for duplicates
                 val from = shiftDateIso
-                val to = LocalDate.parse(request.shiftDate)
-                    .plusDays(1).atStartOfDay(ZoneOffset.UTC)
-                    .format(DateTimeFormatter.ISO_INSTANT)
+                val to = LocalDate.parse(request.shiftDate).plusDays(1).toIsoInstant()
                 val existingShifts = database.shiftDao().getByDateRange(from, to)
                 val isDuplicate = existingShifts.any {
                     it.shiftName == request.shiftName &&
@@ -450,10 +440,7 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                 val newShiftName = request.newShiftName.trim()
                 val newCarId = request.newCarId.trim()
 
-                val from = date.atStartOfDay(ZoneOffset.UTC)
-                    .format(DateTimeFormatter.ISO_INSTANT)
-                val to = date.plusDays(1).atStartOfDay(ZoneOffset.UTC)
-                    .format(DateTimeFormatter.ISO_INSTANT)
+                val (from, to) = date.toIsoRange()
 
                 val nameCarChanged = request.oldShiftName != newShiftName || request.oldCarId != newCarId
 
@@ -504,7 +491,7 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                 val today = LocalDate.now(israelTz)
                 if (locationChanged && date == today) {
                     for (shift in groupShifts) {
-                        val existingLog = database.smsLogDao().getByShiftIdAndReminderType(shift.id, "SameDay")
+                        val existingLog = database.smsLogDao().getByShiftIdAndReminderType(shift.id, ReminderTypes.SAME_DAY)
                         if (existingLog != null) {
                             alreadySentSms = true
                             break
@@ -616,10 +603,7 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                     return@put
                 }
 
-                val from = date.atStartOfDay(ZoneOffset.UTC)
-                    .format(DateTimeFormatter.ISO_INSTANT)
-                val to = date.plusDays(1).atStartOfDay(ZoneOffset.UTC)
-                    .format(DateTimeFormatter.ISO_INSTANT)
+                val (from, to) = date.toIsoRange()
 
                 database.shiftDao().updateShiftGroupLocation(
                     request.locationId, request.customLocationName?.trim(), request.customLocationNavigation?.trim(),
@@ -634,7 +618,7 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                     val allShifts = database.shiftDao().getByDateRange(from, to)
                     val groupShifts = allShifts.filter { it.shiftName == request.shiftName && it.carId == request.carId }
                     for (shift in groupShifts) {
-                        val existingLog = database.smsLogDao().getByShiftIdAndReminderType(shift.id, "SameDay")
+                        val existingLog = database.smsLogDao().getByShiftIdAndReminderType(shift.id, ReminderTypes.SAME_DAY)
                         if (existingLog != null) {
                             alreadySentSms = true
                             break
@@ -671,10 +655,7 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                     return@post
                 }
 
-                val from = date.atStartOfDay(ZoneOffset.UTC)
-                    .format(DateTimeFormatter.ISO_INSTANT)
-                val to = date.plusDays(1).atStartOfDay(ZoneOffset.UTC)
-                    .format(DateTimeFormatter.ISO_INSTANT)
+                val (from, to) = date.toIsoRange()
 
                 val allShifts = database.shiftDao().getByDateRange(from, to)
                 val groupShifts = allShifts.filter { it.shiftName == request.shiftName && it.carId == request.carId }
@@ -723,9 +704,9 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                             SmsLogEntity(
                                 shiftId = shift.id,
                                 sentAt = now,
-                                status = if (result.success) "Success" else "Fail",
+                                status = if (result.success) SmsStatuses.SUCCESS else SmsStatuses.FAIL,
                                 error = result.error,
-                                reminderType = "LocationUpdate"
+                                reminderType = ReminderTypes.LOCATION_UPDATE
                             )
                         )
                         if (result.success) smsSent++ else smsFailed++

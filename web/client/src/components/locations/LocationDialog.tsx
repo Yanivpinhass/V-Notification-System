@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { locationsService, LocationDto, CreateLocationRequest, UpdateLocationRequest } from '@/services/locationsService';
+import { locationsService, LocationDto, LocationRequest } from '@/services/locationsService';
 import { Loader2 } from 'lucide-react';
 
 const locationSchema = z.object({
@@ -80,7 +80,7 @@ export const LocationDialog: React.FC<LocationDialogProps> = ({
 
     try {
       if (isEditing && location) {
-        const request: UpdateLocationRequest = {
+        const request: LocationRequest = {
           name: data.name,
           address: data.address || null,
           city: data.city || null,
@@ -88,7 +88,7 @@ export const LocationDialog: React.FC<LocationDialogProps> = ({
         };
         await locationsService.update(location.id, request);
       } else {
-        const request: CreateLocationRequest = {
+        const request: LocationRequest = {
           name: data.name,
           address: data.address || null,
           city: data.city || null,

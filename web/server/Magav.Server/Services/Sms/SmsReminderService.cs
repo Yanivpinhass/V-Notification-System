@@ -1,3 +1,4 @@
+using Magav.Common;
 using Magav.Common.Models;
 using Magav.Server.Database;
 using Microsoft.Extensions.Logging;
@@ -51,9 +52,9 @@ public class SmsReminderService
                     SELECT 1 FROM SmsLog sl
                     WHERE sl.ShiftId = s.Id
                       AND sl.ReminderType = @2
-                      AND sl.Status = 'Success'
+                      AND sl.Status = @3
                 )",
-            targetDateStart, targetDateEnd, reminderType);
+            targetDateStart, targetDateEnd, reminderType, MagavConstants.SmsStatuses.Success);
 
         var totalEligible = eligibleShifts.Count;
         var smsSent = 0;
@@ -91,7 +92,7 @@ public class SmsReminderService
             try
             {
                 var message = BuildMessage(template.Content, shift, targetDate);
-                if (reminderType == "SameDay")
+                if (reminderType == MagavConstants.ReminderTypes.SameDay)
                     message += BuildLocationText(shift);
                 var result = await _smsProvider.SendSmsAsync(shift.MobilePhone!, message);
 
@@ -100,7 +101,7 @@ public class SmsReminderService
                 {
                     ShiftId = shift.ShiftId,
                     SentAt = DateTime.UtcNow,
-                    Status = result.Success ? "Success" : "Fail",
+                    Status = result.Success ? MagavConstants.SmsStatuses.Success : MagavConstants.SmsStatuses.Fail,
                     Error = result.Error,
                     ReminderType = reminderType
                 };
@@ -133,7 +134,7 @@ public class SmsReminderService
                     {
                         ShiftId = shift.ShiftId,
                         SentAt = DateTime.UtcNow,
-                        Status = "Fail",
+                        Status = MagavConstants.SmsStatuses.Fail,
                         Error = "שגיאה פנימית",
                         ReminderType = reminderType
                     };
@@ -254,9 +255,9 @@ public class SmsReminderService
                 {
                     ShiftId = shift.ShiftId,
                     SentAt = DateTime.UtcNow,
-                    Status = result.Success ? "Success" : "Fail",
+                    Status = result.Success ? MagavConstants.SmsStatuses.Success : MagavConstants.SmsStatuses.Fail,
                     Error = result.Error,
-                    ReminderType = "LocationUpdate"
+                    ReminderType = MagavConstants.ReminderTypes.LocationUpdate
                 });
 
                 if (result.Success) smsSent++;

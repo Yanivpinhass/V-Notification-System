@@ -7,8 +7,7 @@ import java.io.InputStream
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
+import com.magav.app.util.toIsoInstant
 
 class ShiftsImportService(private val database: MagavDatabase) {
 
@@ -44,8 +43,7 @@ class ShiftsImportService(private val database: MagavDatabase) {
         val now = Instant.now().toString()
 
         for (shift in futureShifts) {
-            val shiftDateIso = shift.date.atStartOfDay(ZoneOffset.UTC)
-                .format(DateTimeFormatter.ISO_INSTANT)
+            val shiftDateIso = shift.date.toIsoInstant()
 
             for (volunteerName in shift.volunteers) {
                 totalAssignments++
@@ -89,10 +87,8 @@ class ShiftsImportService(private val database: MagavDatabase) {
 
         val minDate = futureShifts.minOf { it.date }
         val maxDate = futureShifts.maxOf { it.date }
-        val minDateIso = minDate.atStartOfDay(ZoneOffset.UTC)
-            .format(DateTimeFormatter.ISO_INSTANT)
-        val maxDateIso = maxDate.atStartOfDay(ZoneOffset.UTC)
-            .format(DateTimeFormatter.ISO_INSTANT)
+        val minDateIso = minDate.toIsoInstant()
+        val maxDateIso = maxDate.toIsoInstant()
         database.shiftDao().deleteByDateRange(minDateIso, maxDateIso)
         database.shiftDao().insertAll(newShifts)
 

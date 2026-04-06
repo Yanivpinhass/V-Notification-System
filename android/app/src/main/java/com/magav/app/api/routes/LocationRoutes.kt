@@ -1,8 +1,7 @@
 package com.magav.app.api.routes
 
 import com.magav.app.api.models.ApiResponse
-import com.magav.app.api.models.CreateLocationRequest
-import com.magav.app.api.models.UpdateLocationRequest
+import com.magav.app.api.models.LocationRequest
 import com.magav.app.api.requireRole
 import com.magav.app.db.MagavDatabase
 import com.magav.app.db.entity.LocationEntity
@@ -16,8 +15,7 @@ import kotlinx.serialization.Serializable
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
+import com.magav.app.util.toIsoInstant
 
 @Serializable
 data class LocationDto(
@@ -78,7 +76,7 @@ fun Route.locationRoutes(database: MagavDatabase) {
             // POST /api/locations - create location
             post {
                 call.requireRole("Admin", "SystemManager")
-                val request = call.receive<CreateLocationRequest>()
+                val request = call.receive<LocationRequest>()
 
                 if (request.name.isBlank()) {
                     throw IllegalArgumentException("שם מיקום נדרש")
@@ -126,7 +124,7 @@ fun Route.locationRoutes(database: MagavDatabase) {
                     return@put
                 }
 
-                val request = call.receive<UpdateLocationRequest>()
+                val request = call.receive<LocationRequest>()
 
                 if (request.name.isBlank()) {
                     throw IllegalArgumentException("שם מיקום נדרש")
@@ -176,9 +174,7 @@ fun Route.locationRoutes(database: MagavDatabase) {
 
                 // Check if location is used in future shifts
                 val israelTz = ZoneId.of("Asia/Jerusalem")
-                val today = LocalDate.now(israelTz)
-                    .atStartOfDay(ZoneOffset.UTC)
-                    .format(DateTimeFormatter.ISO_INSTANT)
+                val today = LocalDate.now(israelTz).toIsoInstant()
 
                 val futureCount = database.locationDao().countFutureShiftsByLocationId(id, today)
                 if (futureCount > 0) {

@@ -3,13 +3,17 @@ package com.magav.app.service
 import com.magav.app.db.MagavDatabase
 import com.magav.app.db.entity.SchedulerConfigEntity
 import com.magav.app.db.entity.SchedulerRunLogEntity
+import com.magav.app.db.entity.LocationEntity
 import com.magav.app.db.entity.SmsLogEntity
+import com.magav.app.db.entity.VolunteerEntity
 import com.magav.app.sms.SmsProvider
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import com.magav.app.util.ReminderTypes
+import com.magav.app.util.SmsStatuses
+import com.magav.app.util.toIsoRange
 
 data class SmsSummary(val totalEligible: Int, val smsSent: Int, val smsFailed: Int)
 
@@ -18,8 +22,7 @@ class SmsReminderService(
     private val smsProvider: SmsProvider
 ) {
     suspend fun execute(config: SchedulerConfigEntity, targetDate: LocalDate): SmsSummary {
-        val targetDateStart = targetDate.atStartOfDay(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT)
-        val targetDateEnd = targetDate.plusDays(1).atStartOfDay(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT)
+        val (targetDateStart, targetDateEnd) = targetDate.toIsoRange()
         val targetDateStr = targetDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
         val reminderType = config.reminderType
 
@@ -35,13 +38,31 @@ class SmsReminderService(
         val shifts = database.shiftDao().getByDateRange(targetDateStart, targetDateEnd)
         android.util.Log.d("SmsReminder", "Found ${shifts.size} shifts for $targetDateStr")
 
+        // Bulk loads (replaces N+1 per-shift queries)
+        val volunteerMap: Map<Int, VolunteerEntity>
+        val sentShiftIds: Set<Int>
+        val locationMap: Map<Int, LocationEntity>
+        if (shifts.isNotEmpty()) {
+            volunteerMap = database.volunteerDao().getAll().associateBy { it.id }
+            val shiftIds = shifts.map { it.id }
+            sentShiftIds = database.smsLogDao().getSuccessfulByShiftIdsAndReminderType(shiftIds, reminderType)
+                .map { it.shiftId }.toSet()
+            locationMap = if (reminderType == ReminderTypes.SAME_DAY) {
+                database.locationDao().getAll().associateBy { it.id }
+            } else emptyMap()
+        } else {
+            volunteerMap = emptyMap()
+            sentShiftIds = emptySet()
+            locationMap = emptyMap()
+        }
+
         var totalEligible = 0
         var smsSent = 0
         var smsFailed = 0
 
         for (shift in shifts) {
             val volId = shift.volunteerId ?: continue
-            val volunteer = database.volunteerDao().getById(volId)
+            val volunteer = volunteerMap[volId]
             if (volunteer == null) {
                 android.util.Log.w("SmsReminder", "Volunteer ${shift.volunteerId} not found for shift ${shift.id}")
                 continue
@@ -56,8 +77,7 @@ class SmsReminderService(
                 continue
             }
 
-            val existingLog = database.smsLogDao().getByShiftIdAndReminderType(shift.id, reminderType)
-            if (existingLog != null && existingLog.status == "Success") {
+            if (shift.id in sentShiftIds) {
                 android.util.Log.d("SmsReminder", "Skip ${volunteer.mappingName}: already sent")
                 continue
             }
@@ -69,8 +89,8 @@ class SmsReminderService(
                     messageTemplate.content, shift.shiftName, shift.carId,
                     volunteer.mappingName, targetDate
                 )
-                if (config.reminderType == "SameDay") {
-                    val location = shift.locationId?.let { database.locationDao().getById(it) }
+                if (reminderType == ReminderTypes.SAME_DAY) {
+                    val location = shift.locationId?.let { locationMap[it] }
                     val locName = location?.name ?: shift.customLocationName
                     val locNav = location?.navigation ?: shift.customLocationNavigation
                     val locCity = location?.city
@@ -84,7 +104,7 @@ class SmsReminderService(
                 val smsLog = SmsLogEntity(
                     shiftId = shift.id,
                     sentAt = now,
-                    status = if (result.success) "Success" else "Fail",
+                    status = if (result.success) SmsStatuses.SUCCESS else SmsStatuses.FAIL,
                     error = result.error,
                     reminderType = reminderType
                 )
@@ -109,7 +129,7 @@ class SmsReminderService(
                         SmsLogEntity(
                             shiftId = shift.id,
                             sentAt = Instant.now().toString(),
-                            status = "Fail",
+                            status = SmsStatuses.FAIL,
                             error = "שגיאה פנימית",
                             reminderType = reminderType
                         )

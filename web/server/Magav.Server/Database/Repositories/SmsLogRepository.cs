@@ -1,3 +1,4 @@
+using Magav.Common;
 using Magav.Common.Database;
 using Magav.Common.Models;
 
@@ -19,7 +20,7 @@ public class SmsLogRepository : Repository<SmsLog>
 
     public async Task<List<SmsLog>> GetFailedByDateRangeAsync(DateTime from, DateTime to)
     {
-        return await Db.FetchAsync<SmsLog>(s => s.SentAt >= from && s.SentAt < to && s.Status == "Fail");
+        return await Db.FetchAsync<SmsLog>(s => s.SentAt >= from && s.SentAt < to && s.Status == MagavConstants.SmsStatuses.Fail);
     }
 
     public async Task<List<SmsLog>> GetFailedByDateAsync(DateTime date)

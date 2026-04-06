@@ -6,6 +6,7 @@ import com.magav.app.api.models.SchedulerConfigUpdateDto
 import com.magav.app.api.requireRole
 import com.magav.app.db.MagavDatabase
 import com.magav.app.scheduler.AlarmScheduler
+import com.magav.app.util.ReminderTypes
 import android.content.Context
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -118,12 +119,12 @@ fun Route.schedulerRoutes(database: MagavDatabase, context: Context) {
                     }
 
                     // SameDay must have DaysBeforeShift=0
-                    if (existingConfig.reminderType == "SameDay" && update.daysBeforeShift != 0) {
+                    if (existingConfig.reminderType == ReminderTypes.SAME_DAY && update.daysBeforeShift != 0) {
                         throw IllegalArgumentException("תזכורת ביום המשמרת חייבת להיות עם 0 ימים לפני")
                     }
 
                     // Advance must have DaysBeforeShift>=1
-                    if (existingConfig.reminderType == "Advance" && update.daysBeforeShift < 1) {
+                    if (existingConfig.reminderType == ReminderTypes.ADVANCE && update.daysBeforeShift < 1) {
                         throw IllegalArgumentException("תזכורת מקדימה חייבת להיות עם לפחות יום אחד לפני")
                     }
                 }

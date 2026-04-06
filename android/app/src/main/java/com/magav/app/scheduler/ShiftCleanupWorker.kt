@@ -6,8 +6,7 @@ import androidx.work.WorkerParameters
 import com.magav.app.MagavApplication
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
+import com.magav.app.util.toIsoInstant
 
 class ShiftCleanupWorker(
     appContext: Context,
@@ -31,8 +30,7 @@ class ShiftCleanupWorker(
         val database = MagavApplication.database
         val cutoffDate = today.minusMonths(1)
 
-        val shiftCutoff = cutoffDate.atStartOfDay(ZoneOffset.UTC)
-            .format(DateTimeFormatter.ISO_INSTANT)
+        val shiftCutoff = cutoffDate.toIsoInstant()
         val runLogCutoff = cutoffDate.toString()
 
         return try {

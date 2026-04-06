@@ -209,15 +209,7 @@ data class UpdateMessageTemplateRequest(
 // ── Locations ──────────────────────────────────────────────────────────────
 
 @Serializable
-data class CreateLocationRequest(
-    val name: String,
-    val address: String? = null,
-    val city: String? = null,
-    val navigation: String? = null
-)
-
-@Serializable
-data class UpdateLocationRequest(
+data class LocationRequest(
     val name: String,
     val address: String? = null,
     val city: String? = null,

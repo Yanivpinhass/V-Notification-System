@@ -10,14 +10,7 @@ export interface LocationDto {
   updatedAt: string | null;
 }
 
-export interface CreateLocationRequest {
-  name: string;
-  address: string | null;
-  city: string | null;
-  navigation: string | null;
-}
-
-export interface UpdateLocationRequest {
+export interface LocationRequest {
   name: string;
   address: string | null;
   city: string | null;
@@ -33,12 +26,12 @@ class LocationsService extends BaseApiClient {
     return this.get<LocationDto>(`/locations/${id}`);
   }
 
-  async create(data: CreateLocationRequest): Promise<LocationDto> {
-    return this.post<LocationDto, CreateLocationRequest>('/locations', data);
+  async create(data: LocationRequest): Promise<LocationDto> {
+    return this.post<LocationDto, LocationRequest>('/locations', data);
   }
 
-  async update(id: number, data: UpdateLocationRequest): Promise<LocationDto> {
-    return this.put<LocationDto, UpdateLocationRequest>(`/locations/${id}`, data);
+  async update(id: number, data: LocationRequest): Promise<LocationDto> {
+    return this.put<LocationDto, LocationRequest>(`/locations/${id}`, data);
   }
 
   async deleteLocation(id: number): Promise<void> {

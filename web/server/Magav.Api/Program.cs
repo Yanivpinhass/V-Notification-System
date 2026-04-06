@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.Text.RegularExpressions;
+using Magav.Common;
 using Magav.Common.Database;
 using Magav.Common.Models;
 using Magav.Common.Models.Auth;
@@ -402,7 +403,7 @@ app.MapGet("/api/locations/{id:int}", async (int id, MagavDbManager db) =>
 }).RequireAuthorization("CanManageMessages");
 
 // POST /api/locations
-app.MapPost("/api/locations", async (CreateLocationRequest request, MagavDbManager db) =>
+app.MapPost("/api/locations", async (LocationRequest request, MagavDbManager db) =>
 {
     try
     {
@@ -437,7 +438,7 @@ app.MapPost("/api/locations", async (CreateLocationRequest request, MagavDbManag
 }).RequireAuthorization("CanManageMessages");
 
 // PUT /api/locations/{id}
-app.MapPut("/api/locations/{id:int}", async (int id, UpdateLocationRequest request, MagavDbManager db) =>
+app.MapPut("/api/locations/{id:int}", async (int id, LocationRequest request, MagavDbManager db) =>
 {
     try
     {
@@ -815,12 +816,12 @@ app.MapPost("/api/shifts/{id:int}/send-sms", async (int id, SendShiftSmsRequest 
 
         var result = await smsProvider.SendSmsAsync(volunteer.MobilePhone, message);
 
-        var reminderType = templateId.Value switch { 1 => "SameDay", 2 => "Advance", _ => "Manual" };
+        var reminderType = templateId.Value switch { 1 => MagavConstants.ReminderTypes.SameDay, 2 => MagavConstants.ReminderTypes.Advance, _ => MagavConstants.ReminderTypes.Manual };
         await db.SmsLog.InsertAsync(new SmsLog
         {
             ShiftId = shift.Id,
             SentAt = DateTime.UtcNow,
-            Status = result.Success ? "Success" : "Fail",
+            Status = result.Success ? MagavConstants.SmsStatuses.Success : MagavConstants.SmsStatuses.Fail,
             Error = result.Error,
             ReminderType = reminderType
         });
@@ -954,11 +955,11 @@ app.MapPut("/api/shifts/update-group", async (UpdateShiftGroupRequest request, M
         // Conflict check only if name/car changed
         if (nameCarChanged)
         {
-            if (await db.Shifts.HasShiftGroupAsync(parsedDate, newShiftName, newCarId))
+            if (db.Shifts.HasShiftGroup(existingShifts, newShiftName, newCarId))
                 return Results.BadRequest(ApiResponse<object>.Fail("קבוצת משמרת עם שם ורכב זהים כבר קיימת לתאריך זה"));
 
             var updated = await db.Shifts.UpdateShiftGroupAsync(
-                parsedDate, request.OldShiftName, request.OldCarId ?? "", newShiftName, newCarId);
+                existingShifts, request.OldShiftName, request.OldCarId ?? "", newShiftName, newCarId);
 
             if (updated == 0)
                 return Results.NotFound(ApiResponse<object>.Fail("לא נמצאו שיבוצים לעדכון"));
@@ -966,7 +967,7 @@ app.MapPut("/api/shifts/update-group", async (UpdateShiftGroupRequest request, M
 
         // Always update location (uses NEW name/car as key since they may have changed)
         await db.Shifts.UpdateShiftGroupLocationAsync(
-            parsedDate, newShiftName, newCarId,
+            existingShifts, newShiftName, newCarId,
             request.LocationId, request.CustomLocationName?.Trim(), request.CustomLocationNavigation?.Trim());
 
         // Check if same-day SMS was already sent for this group today
@@ -1543,15 +1544,15 @@ app.MapGet("/api/sms-log/summary", async (int? days, MagavDbManager db) =>
         var summary = await db.Db.FetchAsync<SmsLogSummaryDto>(
             @"SELECT s.ShiftDate, s.ShiftName,
                      COUNT(*) as TotalVolunteers,
-                     COUNT(CASE WHEN sl.Status = 'Success' THEN 1 END) as SentSuccess,
-                     COUNT(CASE WHEN sl.Status = 'Fail' THEN 1 END) as SentFail,
+                     COUNT(CASE WHEN sl.Status = @1 THEN 1 END) as SentSuccess,
+                     COUNT(CASE WHEN sl.Status = @2 THEN 1 END) as SentFail,
                      COUNT(CASE WHEN sl.Id IS NULL THEN 1 END) as NotSent
               FROM Shifts s
               LEFT JOIN SmsLog sl ON sl.ShiftId = s.Id
               WHERE s.ShiftDate >= @0
               GROUP BY s.ShiftDate, s.ShiftName
               HAVING COUNT(sl.Id) > 0
-              ORDER BY s.ShiftDate DESC, s.ShiftName", from);
+              ORDER BY s.ShiftDate DESC, s.ShiftName", from, MagavConstants.SmsStatuses.Success, MagavConstants.SmsStatuses.Fail);
 
         return Results.Ok(ApiResponse<object>.Ok(summary));
     }
@@ -1618,9 +1619,9 @@ app.MapPut("/api/scheduler/config", async (
                 return Results.BadRequest(ApiResponse<object>.Fail("ימים לפני משמרת חייב להיות בין 0 ל-7"));
 
             // Cross-validate DaysBeforeShift against ReminderType
-            if (existing.ReminderType == "SameDay" && config.DaysBeforeShift != 0)
+            if (existing.ReminderType == MagavConstants.ReminderTypes.SameDay && config.DaysBeforeShift != 0)
                 return Results.BadRequest(ApiResponse<object>.Fail("תזכורת ליום המשמרת חייבת להיות 0 ימים לפני"));
-            if (existing.ReminderType == "Advance" && config.DaysBeforeShift < 1)
+            if (existing.ReminderType == MagavConstants.ReminderTypes.Advance && config.DaysBeforeShift < 1)
                 return Results.BadRequest(ApiResponse<object>.Fail("תזכורת מוקדמת חייבת להיות לפחות יום אחד לפני"));
 
             // Validate MessageTemplateId references an existing template
@@ -1865,8 +1866,7 @@ public record DeleteShiftGroupRequest(string Date, string ShiftName, string CarI
 public record DeleteGroupResult(int DeletedCount, int SmsSentCount, int SmsFailedCount);
 
 // Location Management DTOs
-public record CreateLocationRequest(string Name, string? Address, string? City, string? Navigation);
-public record UpdateLocationRequest(string Name, string? Address, string? City, string? Navigation);
+public record LocationRequest(string Name, string? Address, string? City, string? Navigation);
 public record UpdateGroupLocationRequest(string Date, string ShiftName, string CarId,
     int? LocationId, string? CustomLocationName, string? CustomLocationNavigation);
 public record SendLocationUpdateRequest(string Date, string ShiftName, string CarId);

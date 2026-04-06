@@ -1,3 +1,4 @@
+using Magav.Common;
 using Magav.Common.Database;
 using Magav.Common.Models;
 using Magav.Server.Database;
@@ -47,15 +48,26 @@ public class ShiftsRepository : Repository<Shift>
     }
 
     public async Task<bool> HasShiftGroupAsync(DateTime date, string shiftName, string carId)
-    {
-        var shifts = await GetByDateAsync(date);
-        return shifts.Any(s => s.ShiftName == shiftName && s.CarId == carId);
-    }
+        => HasShiftGroup(await GetByDateAsync(date), shiftName, carId);
 
     public async Task<int> UpdateShiftGroupAsync(DateTime date, string oldShiftName, string oldCarId, string newShiftName, string newCarId)
+        => await UpdateShiftGroupAsync(await GetByDateAsync(date), oldShiftName, oldCarId, newShiftName, newCarId);
+
+    public async Task<int> UpdateShiftGroupLocationAsync(
+        DateTime date, string shiftName, string carId,
+        int? locationId, string? customLocationName, string? customLocationNavigation)
+        => await UpdateShiftGroupLocationAsync(await GetByDateAsync(date), shiftName, carId, locationId, customLocationName, customLocationNavigation);
+
+    // Overloads accepting pre-loaded shifts (avoid redundant GetByDateAsync calls)
+
+    public bool HasShiftGroup(IEnumerable<Shift> shifts, string shiftName, string carId)
+        => shifts.Any(s => s.ShiftName == shiftName && s.CarId == carId);
+
+    public async Task<int> UpdateShiftGroupAsync(
+        IEnumerable<Shift> allShifts, string oldShiftName, string oldCarId,
+        string newShiftName, string newCarId)
     {
-        var shifts = await GetByDateAsync(date);
-        var matching = shifts.Where(s => s.ShiftName == oldShiftName && s.CarId == oldCarId).ToList();
+        var matching = allShifts.Where(s => s.ShiftName == oldShiftName && s.CarId == oldCarId).ToList();
 
         foreach (var shift in matching)
         {
@@ -69,11 +81,10 @@ public class ShiftsRepository : Repository<Shift>
     }
 
     public async Task<int> UpdateShiftGroupLocationAsync(
-        DateTime date, string shiftName, string carId,
+        IEnumerable<Shift> allShifts, string shiftName, string carId,
         int? locationId, string? customLocationName, string? customLocationNavigation)
     {
-        var shifts = await GetByDateAsync(date);
-        var matching = shifts.Where(s => s.ShiftName == shiftName && s.CarId == carId).ToList();
+        var matching = allShifts.Where(s => s.ShiftName == shiftName && s.CarId == carId).ToList();
 
         foreach (var shift in matching)
         {
@@ -96,8 +107,8 @@ public class ShiftsRepository : Repository<Shift>
               JOIN Shifts s ON sl.ShiftId = s.Id
               WHERE s.ShiftDate >= @0 AND s.ShiftDate < @1
                 AND s.ShiftName = @2 AND s.CarId = @3
-                AND sl.ReminderType = 'SameDay' AND sl.Status = 'Success'",
-            dateStart, dateEnd, shiftName, carId);
+                AND sl.ReminderType = @4 AND sl.Status = @5",
+            dateStart, dateEnd, shiftName, carId, MagavConstants.ReminderTypes.SameDay, MagavConstants.SmsStatuses.Success);
         return count > 0;
     }
 }

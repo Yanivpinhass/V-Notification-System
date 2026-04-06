@@ -1,3 +1,4 @@
+using Magav.Common;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 
@@ -401,12 +402,12 @@ public class DbInitializer
         // MessageTemplateId 1 = "תזכורת ליום המשמרת" (SameDay), 2 = "תזכורת מוקדמת" (Advance)
         var configs = new[]
         {
-            ("SunThu", "SameDay", "13:00", 0, 1),
-            ("SunThu", "Advance", "18:30", 2, 2),
-            ("Fri",    "SameDay", "10:00", 0, 1),
-            ("Fri",    "Advance", "12:00", 2, 2),
-            ("Sat",    "SameDay", "10:00", 0, 1),
-            ("Sat",    "Advance", "12:00", 2, 2),
+            ("SunThu", MagavConstants.ReminderTypes.SameDay, "13:00", 0, 1),
+            ("SunThu", MagavConstants.ReminderTypes.Advance, "18:30", 2, 2),
+            ("Fri",    MagavConstants.ReminderTypes.SameDay, "10:00", 0, 1),
+            ("Fri",    MagavConstants.ReminderTypes.Advance, "12:00", 2, 2),
+            ("Sat",    MagavConstants.ReminderTypes.SameDay, "10:00", 0, 1),
+            ("Sat",    MagavConstants.ReminderTypes.Advance, "12:00", 2, 2),
         };
 
         var sql = @"INSERT INTO SchedulerConfig (DayGroup, ReminderType, Time, DaysBeforeShift, IsEnabled, MessageTemplateId)
@@ -507,8 +508,8 @@ public class DbInitializer
             var sentAt = DateTime.UtcNow.Date.AddDays(-(dayGroup + 1)).AddHours(8).ToString("o");
 
             // Every 6th shift fails
-            var status = id % 6 == 0 ? "Fail" : "Success";
-            var error = status == "Fail" ? "מספר טלפון לא תקין" : (string?)null;
+            var status = id % 6 == 0 ? MagavConstants.SmsStatuses.Fail : MagavConstants.SmsStatuses.Success;
+            var error = status == MagavConstants.SmsStatuses.Fail ? "מספר טלפון לא תקין" : (string?)null;
 
             var sql = @"INSERT INTO SmsLog (ShiftId, SentAt, Status, Error)
                         VALUES (@ShiftId, @SentAt, @Status, @Error)";
