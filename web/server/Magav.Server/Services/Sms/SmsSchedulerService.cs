@@ -1,3 +1,4 @@
+using Magav.Common;
 using Magav.Server.Database;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -65,17 +66,33 @@ public class SmsSchedulerService : BackgroundService
 
         var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, IsraelTz);
         var currentTime = now.ToString("HH:mm");
-        var currentDayOfWeek = now.DayOfWeek;
 
         var configs = await db.SchedulerConfig.GetEnabledAsync();
+
+        // Determine effective day group (holiday-aware, with graceful fallback)
+        string effectiveDayGroup;
+        try
+        {
+            effectiveDayGroup = await GetEffectiveDayGroupAsync(now, db);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to check Jewish holidays, falling back to normal day-of-week");
+            effectiveDayGroup = GetNormalDayGroup(now.DayOfWeek);
+        }
+
+        // Log holiday override (only when different from normal)
+        var normalGroup = GetNormalDayGroup(now.DayOfWeek);
+        if (effectiveDayGroup != normalGroup)
+            _logger.LogInformation("Holiday override: {DayOfWeek} -> effective group '{Group}'",
+                now.DayOfWeek, effectiveDayGroup);
 
         foreach (var config in configs)
         {
             if (stoppingToken.IsCancellationRequested) break;
 
-            // Check if current day-of-week is in the config's DayGroup
-            var days = GetDaysForGroup(config.DayGroup);
-            if (!days.Contains(currentDayOfWeek))
+            // Check if config's DayGroup matches the effective day group
+            if (config.DayGroup != effectiveDayGroup)
                 continue;
 
             // Check if current time matches (exact HH:mm match)
@@ -104,14 +121,36 @@ public class SmsSchedulerService : BackgroundService
         }
     }
 
-    private static DayOfWeek[] GetDaysForGroup(string dayGroup) => dayGroup switch
+    /// <summary>
+    /// Normal day-of-week mapping (used as fallback if holiday check fails).
+    /// </summary>
+    private static string GetNormalDayGroup(DayOfWeek day) => day switch
     {
-        "SunThu" => new[] {
-            DayOfWeek.Sunday, DayOfWeek.Monday, DayOfWeek.Tuesday,
-            DayOfWeek.Wednesday, DayOfWeek.Thursday
-        },
-        "Fri" => new[] { DayOfWeek.Friday },
-        "Sat" => new[] { DayOfWeek.Saturday },
-        _ => Array.Empty<DayOfWeek>()
+        DayOfWeek.Saturday => MagavConstants.DayGroups.Sat,
+        DayOfWeek.Friday => MagavConstants.DayGroups.Fri,
+        _ => MagavConstants.DayGroups.SunThu
     };
+
+    /// <summary>
+    /// Holiday-aware day group resolution.
+    /// Priority: Saturday > today is holiday > Friday > tomorrow is holiday > default.
+    /// </summary>
+    private static async Task<string> GetEffectiveDayGroupAsync(DateTime now, MagavDbManager db)
+    {
+        if (now.DayOfWeek == DayOfWeek.Saturday)
+            return MagavConstants.DayGroups.Sat;
+
+        var todayStr = now.Date.ToString("yyyy-MM-dd");
+        if (await db.JewishHolidays.IsHolidayAsync(todayStr))
+            return MagavConstants.DayGroups.Sat;
+
+        if (now.DayOfWeek == DayOfWeek.Friday)
+            return MagavConstants.DayGroups.Fri;
+
+        var tomorrowStr = now.Date.AddDays(1).ToString("yyyy-MM-dd");
+        if (await db.JewishHolidays.IsHolidayAsync(tomorrowStr))
+            return MagavConstants.DayGroups.Fri;
+
+        return MagavConstants.DayGroups.SunThu;
+    }
 }

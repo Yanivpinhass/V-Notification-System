@@ -496,6 +496,121 @@ app.MapDelete("/api/locations/{id:int}", async (int id, MagavDbManager db) =>
 }).RequireAuthorization("CanManageMessages");
 
 // ============================================
+// JEWISH HOLIDAYS ENDPOINTS
+// ============================================
+
+static bool IsValidDateString(string? date) =>
+    !string.IsNullOrWhiteSpace(date) &&
+    Regex.IsMatch(date, @"^\d{4}-\d{2}-\d{2}$") &&
+    DateTime.TryParseExact(date, "yyyy-MM-dd", null,
+        System.Globalization.DateTimeStyles.None, out _);
+
+// GET /api/jewish-holidays
+app.MapGet("/api/jewish-holidays", async (MagavDbManager db) =>
+{
+    try
+    {
+        var holidays = await db.JewishHolidays.GetAllSortedAsync();
+        return Results.Ok(ApiResponse<object>.Ok(holidays));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error fetching Jewish holidays: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בטעינת החגים"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// POST /api/jewish-holidays
+app.MapPost("/api/jewish-holidays", async (JewishHolidayRequest request, MagavDbManager db) =>
+{
+    try
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+            return Results.BadRequest(ApiResponse<object>.Fail("שם חג נדרש"));
+
+        if (!IsValidDateString(request.Date))
+            return Results.BadRequest(ApiResponse<object>.Fail("תאריך לא תקין (yyyy-MM-dd)"));
+
+        var existing = await db.JewishHolidays.GetByDateAsync(request.Date);
+        if (existing != null)
+            return Results.BadRequest(ApiResponse<object>.Fail("תאריך זה כבר קיים"));
+
+        var holiday = new Magav.Common.Models.JewishHoliday
+        {
+            Date = request.Date,
+            Name = request.Name.Trim()
+        };
+
+        await db.JewishHolidays.InsertAsync(holiday);
+        return Results.Ok(ApiResponse<object>.Ok(holiday));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error creating Jewish holiday: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה ביצירת החג"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// PUT /api/jewish-holidays/{id}
+app.MapPut("/api/jewish-holidays/{id:int}", async (int id, JewishHolidayRequest request, MagavDbManager db) =>
+{
+    try
+    {
+        var holiday = await db.JewishHolidays.GetByIdAsync(id);
+        if (holiday == null)
+            return Results.NotFound(ApiResponse<object>.Fail("חג לא נמצא"));
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+            return Results.BadRequest(ApiResponse<object>.Fail("שם חג נדרש"));
+
+        if (!IsValidDateString(request.Date))
+            return Results.BadRequest(ApiResponse<object>.Fail("תאריך לא תקין (yyyy-MM-dd)"));
+
+        var duplicate = await db.JewishHolidays.GetByDateAsync(request.Date);
+        if (duplicate != null && duplicate.Id != id)
+            return Results.BadRequest(ApiResponse<object>.Fail("תאריך זה כבר קיים"));
+
+        holiday.Date = request.Date;
+        holiday.Name = request.Name.Trim();
+
+        await db.JewishHolidays.UpdateAsync(holiday);
+        return Results.Ok(ApiResponse<object>.Ok(holiday));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error updating Jewish holiday: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בעדכון החג"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// DELETE /api/jewish-holidays/{id}
+app.MapDelete("/api/jewish-holidays/{id:int}", async (int id, MagavDbManager db) =>
+{
+    try
+    {
+        var holiday = await db.JewishHolidays.GetByIdAsync(id);
+        if (holiday == null)
+            return Results.NotFound(ApiResponse<object>.Fail("חג לא נמצא"));
+
+        await db.JewishHolidays.DeleteAsync(holiday);
+        return Results.Ok(ApiResponse<object>.Ok(null!, "החג נמחק בהצלחה"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error deleting Jewish holiday: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה במחיקת החג"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// ============================================
 // SHIFTS ENDPOINTS
 // ============================================
 
@@ -1870,3 +1985,6 @@ public record LocationRequest(string Name, string? Address, string? City, string
 public record UpdateGroupLocationRequest(string Date, string ShiftName, string CarId,
     int? LocationId, string? CustomLocationName, string? CustomLocationNavigation);
 public record SendLocationUpdateRequest(string Date, string ShiftName, string CarId);
+
+// Jewish Holidays
+public record JewishHolidayRequest(string Date, string Name);

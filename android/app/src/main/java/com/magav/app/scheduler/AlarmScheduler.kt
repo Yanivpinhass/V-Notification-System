@@ -18,13 +18,13 @@ class AlarmScheduler(private val context: Context) {
     suspend fun scheduleAllAlarms() {
         val database = MagavApplication.database
         val allConfigs = database.schedulerConfigDao().getAll()
+        val allDays = DayOfWeek.values().toList()
 
         android.util.Log.d("AlarmScheduler", "Scheduling alarms: ${allConfigs.size} total configs")
 
-        // Cancel ALL alarms (enabled and disabled) using real request codes
+        // Cancel ALL alarms (enabled and disabled) for all 7 days
         for (config in allConfigs) {
-            val days = getDaysForGroup(config.dayGroup)
-            for (day in days) {
+            for (day in allDays) {
                 val requestCode = config.id * 10 + day.value
                 val intent = Intent(context, SmsAlarmReceiver::class.java)
                 val pendingIntent = PendingIntent.getBroadcast(
@@ -35,12 +35,12 @@ class AlarmScheduler(private val context: Context) {
             }
         }
 
-        // Re-schedule only enabled configs
+        // Re-schedule only enabled configs for ALL 7 days
+        // (worker decides at runtime which config to execute based on effective day group)
         val enabledConfigs = allConfigs.filter { it.isEnabled == 1 }
-        android.util.Log.d("AlarmScheduler", "Re-scheduling ${enabledConfigs.size} enabled configs")
+        android.util.Log.d("AlarmScheduler", "Re-scheduling ${enabledConfigs.size} enabled configs for all 7 days")
         for (config in enabledConfigs) {
-            val days = getDaysForGroup(config.dayGroup)
-            for (day in days) {
+            for (day in allDays) {
                 scheduleAlarmForDay(config.id, config.time, day)
             }
         }
@@ -81,15 +81,5 @@ class AlarmScheduler(private val context: Context) {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
             android.util.Log.d("AlarmScheduler", "Alarm set: configId=$configId day=$dayOfWeek at $target")
         }
-    }
-
-    private fun getDaysForGroup(dayGroup: String): List<DayOfWeek> = when (dayGroup) {
-        "SunThu" -> listOf(
-            DayOfWeek.SUNDAY, DayOfWeek.MONDAY, DayOfWeek.TUESDAY,
-            DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY
-        )
-        "Fri" -> listOf(DayOfWeek.FRIDAY)
-        "Sat" -> listOf(DayOfWeek.SATURDAY)
-        else -> emptyList()
     }
 }

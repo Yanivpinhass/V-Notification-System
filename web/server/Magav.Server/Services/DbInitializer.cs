@@ -209,6 +209,23 @@ public class DbInitializer
             // Seed default SchedulerConfig rows
             await SeedSchedulerConfigAsync(connection);
 
+            // Create JewishHolidays table
+            var createJewishHolidaysSql = @"
+                CREATE TABLE JewishHolidays (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Date TEXT NOT NULL,
+                    Name TEXT NOT NULL,
+                    UNIQUE(Date)
+                );
+                CREATE INDEX IX_JewishHolidays_Date ON JewishHolidays(Date);
+            ";
+
+            await using var jewishHolidaysCmd = new SqliteCommand(createJewishHolidaysSql, connection);
+            await jewishHolidaysCmd.ExecuteNonQueryAsync();
+
+            // Seed default Jewish holidays
+            await SeedJewishHolidaysAsync(connection);
+
             // Create default admin user with BCrypt hashed password
             var adminPasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin123!", 12);
             var now = DateTime.UtcNow.ToString("o");
@@ -242,6 +259,7 @@ public class DbInitializer
             Console.WriteLine($"Database already exists at: {fullPath}");
             await MigrateShiftsTableAsync(connection);
             await MigrateLocationsAsync(connection);
+            await MigrateJewishHolidaysAsync(connection);
         }
 
     }
@@ -371,6 +389,121 @@ public class DbInitializer
         }
     }
 
+    private static async Task MigrateJewishHolidaysAsync(SqliteConnection connection)
+    {
+        try
+        {
+            // Check if JewishHolidays table exists
+            await using (var checkCmd = new SqliteCommand(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='JewishHolidays'", connection))
+            {
+                var exists = Convert.ToInt32(await checkCmd.ExecuteScalarAsync()) > 0;
+                if (!exists)
+                {
+                    Console.WriteLine("Creating JewishHolidays table...");
+                    var createSql = @"
+                        CREATE TABLE JewishHolidays (
+                            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            Date TEXT NOT NULL,
+                            Name TEXT NOT NULL,
+                            UNIQUE(Date)
+                        );
+                        CREATE INDEX IX_JewishHolidays_Date ON JewishHolidays(Date);
+                    ";
+                    await using var createCmd = new SqliteCommand(createSql, connection);
+                    await createCmd.ExecuteNonQueryAsync();
+                    Console.WriteLine("JewishHolidays table created.");
+
+                    // Seed holidays for existing databases
+                    await SeedJewishHolidaysAsync(connection);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"JewishHolidays migration error: {ex}");
+        }
+    }
+
+    // IMPORTANT: Keep holiday dates in sync with android/app/src/main/java/com/magav/app/db/DatabaseInitializer.kt seedJewishHolidays()
+    private static async Task SeedJewishHolidaysAsync(SqliteConnection connection)
+    {
+        // Check if already seeded
+        await using (var countCmd = new SqliteCommand("SELECT COUNT(*) FROM JewishHolidays", connection))
+        {
+            var count = Convert.ToInt32(await countCmd.ExecuteScalarAsync());
+            if (count > 0) return;
+        }
+
+        // Israeli Yom Tov dates (Shabbat-like work restrictions) for 2026-2030
+        var holidays = new[]
+        {
+            // 5786 (2025-2026)
+            ("2025-09-23", "ראש השנה א׳"),
+            ("2025-09-24", "ראש השנה ב׳"),
+            ("2025-10-02", "יום כיפור"),
+            ("2025-10-07", "סוכות"),
+            ("2025-10-14", "שמיני עצרת / שמחת תורה"),
+            ("2026-04-02", "פסח יום א׳"),
+            ("2026-04-08", "פסח יום ז׳"),
+            ("2026-05-22", "שבועות"),
+            // 5787 (2026-2027)
+            ("2026-09-12", "ראש השנה א׳"),
+            ("2026-09-13", "ראש השנה ב׳"),
+            ("2026-09-21", "יום כיפור"),
+            ("2026-09-26", "סוכות"),
+            ("2026-10-03", "שמיני עצרת / שמחת תורה"),
+            ("2027-04-22", "פסח יום א׳"),
+            ("2027-04-28", "פסח יום ז׳"),
+            ("2027-06-11", "שבועות"),
+            // 5788 (2027-2028)
+            ("2027-10-02", "ראש השנה א׳"),
+            ("2027-10-03", "ראש השנה ב׳"),
+            ("2027-10-11", "יום כיפור"),
+            ("2027-10-16", "סוכות"),
+            ("2027-10-23", "שמיני עצרת / שמחת תורה"),
+            ("2028-04-11", "פסח יום א׳"),
+            ("2028-04-17", "פסח יום ז׳"),
+            ("2028-05-31", "שבועות"),
+            // 5789 (2028-2029)
+            ("2028-09-21", "ראש השנה א׳"),
+            ("2028-09-22", "ראש השנה ב׳"),
+            ("2028-09-30", "יום כיפור"),
+            ("2028-10-05", "סוכות"),
+            ("2028-10-12", "שמיני עצרת / שמחת תורה"),
+            ("2029-03-31", "פסח יום א׳"),
+            ("2029-04-06", "פסח יום ז׳"),
+            ("2029-05-20", "שבועות"),
+            // 5790 (2029-2030)
+            ("2029-09-10", "ראש השנה א׳"),
+            ("2029-09-11", "ראש השנה ב׳"),
+            ("2029-09-19", "יום כיפור"),
+            ("2029-09-24", "סוכות"),
+            ("2029-10-01", "שמיני עצרת / שמחת תורה"),
+            ("2030-04-18", "פסח יום א׳"),
+            ("2030-04-24", "פסח יום ז׳"),
+            ("2030-06-07", "שבועות"),
+            // 5791 (2030-2031) — Tishrei only
+            ("2030-09-28", "ראש השנה א׳"),
+            ("2030-09-29", "ראש השנה ב׳"),
+            ("2030-10-07", "יום כיפור"),
+            ("2030-10-12", "סוכות"),
+            ("2030-10-19", "שמיני עצרת / שמחת תורה"),
+        };
+
+        var sql = @"INSERT INTO JewishHolidays (Date, Name) VALUES (@Date, @Name)";
+
+        foreach (var (date, name) in holidays)
+        {
+            await using var cmd = new SqliteCommand(sql, connection);
+            cmd.Parameters.AddWithValue("@Date", date);
+            cmd.Parameters.AddWithValue("@Name", name);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        Console.WriteLine($"Jewish holidays seeded with {holidays.Length} entries.");
+    }
+
     private static async Task SeedMessageTemplatesAsync(SqliteConnection connection)
     {
         var templates = new[]
@@ -402,12 +535,12 @@ public class DbInitializer
         // MessageTemplateId 1 = "תזכורת ליום המשמרת" (SameDay), 2 = "תזכורת מוקדמת" (Advance)
         var configs = new[]
         {
-            ("SunThu", MagavConstants.ReminderTypes.SameDay, "13:00", 0, 1),
-            ("SunThu", MagavConstants.ReminderTypes.Advance, "18:30", 2, 2),
-            ("Fri",    MagavConstants.ReminderTypes.SameDay, "10:00", 0, 1),
-            ("Fri",    MagavConstants.ReminderTypes.Advance, "12:00", 2, 2),
-            ("Sat",    MagavConstants.ReminderTypes.SameDay, "10:00", 0, 1),
-            ("Sat",    MagavConstants.ReminderTypes.Advance, "12:00", 2, 2),
+            (MagavConstants.DayGroups.SunThu, MagavConstants.ReminderTypes.SameDay, "13:00", 0, 1),
+            (MagavConstants.DayGroups.SunThu, MagavConstants.ReminderTypes.Advance, "18:30", 2, 2),
+            (MagavConstants.DayGroups.Fri,    MagavConstants.ReminderTypes.SameDay, "10:00", 0, 1),
+            (MagavConstants.DayGroups.Fri,    MagavConstants.ReminderTypes.Advance, "12:00", 2, 2),
+            (MagavConstants.DayGroups.Sat,    MagavConstants.ReminderTypes.SameDay, "10:00", 0, 1),
+            (MagavConstants.DayGroups.Sat,    MagavConstants.ReminderTypes.Advance, "12:00", 2, 2),
         };
 
         var sql = @"INSERT INTO SchedulerConfig (DayGroup, ReminderType, Time, DaysBeforeShift, IsEnabled, MessageTemplateId)

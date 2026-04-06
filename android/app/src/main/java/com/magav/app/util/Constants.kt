@@ -11,3 +11,9 @@ object SmsStatuses {
     const val SUCCESS = "Success"
     const val FAIL = "Fail"
 }
+
+object DayGroups {
+    const val SUN_THU = "SunThu"
+    const val FRI = "Fri"
+    const val SAT = "Sat"
+}

@@ -23,6 +23,7 @@ public class MagavDbManager
     private SchedulerRunLogRepository? _schedulerRunLog;
     private MessageTemplateRepository? _messageTemplates;
     private LocationsRepository? _locations;
+    private JewishHolidaysRepository? _jewishHolidays;
 
     public MagavDbManager(DbHelper db)
     {
@@ -56,6 +57,8 @@ public class MagavDbManager
     public MessageTemplateRepository MessageTemplates => _messageTemplates ??= new MessageTemplateRepository(_db);
 
     public LocationsRepository Locations => _locations ??= new LocationsRepository(_db);
+
+    public JewishHolidaysRepository JewishHolidays => _jewishHolidays ??= new JewishHolidaysRepository(_db);
 
     /// <summary>
     /// Direct DbHelper access for complex operations or raw queries.

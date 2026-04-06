@@ -22,22 +22,9 @@ import {
 import { messageTemplateService, MessageTemplateEntry } from '@/services/messageTemplateService';
 import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { isUserAdmin } from '@/lib/auth';
 
 const CONTENT_MAX_LENGTH = 500;
-
-const isUserAdmin = (): boolean => {
-  try {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      const user = JSON.parse(userStr);
-      const roles: string[] = user.roles || [];
-      return roles.includes('Admin');
-    }
-  } catch {
-    // ignore
-  }
-  return false;
-};
 
 export const MessageTemplatesPage: React.FC = () => {
   const [templates, setTemplates] = useState<MessageTemplateEntry[]>([]);

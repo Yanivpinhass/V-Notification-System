@@ -5,6 +5,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.magav.app.db.dao.AppSettingDao
+import com.magav.app.db.dao.JewishHolidayDao
 import com.magav.app.db.dao.LocationDao
 import com.magav.app.db.dao.MessageTemplateDao
 import com.magav.app.db.dao.SchedulerConfigDao
@@ -14,6 +15,7 @@ import com.magav.app.db.dao.SmsLogDao
 import com.magav.app.db.dao.UserDao
 import com.magav.app.db.dao.VolunteerDao
 import com.magav.app.db.entity.AppSettingEntity
+import com.magav.app.db.entity.JewishHolidayEntity
 import com.magav.app.db.entity.LocationEntity
 import com.magav.app.db.entity.MessageTemplateEntity
 import com.magav.app.db.entity.SchedulerConfigEntity
@@ -33,9 +35,10 @@ import com.magav.app.db.entity.VolunteerEntity
         SchedulerRunLogEntity::class,
         AppSettingEntity::class,
         MessageTemplateEntity::class,
-        LocationEntity::class
+        LocationEntity::class,
+        JewishHolidayEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class MagavDatabase : RoomDatabase() {
@@ -48,6 +51,7 @@ abstract class MagavDatabase : RoomDatabase() {
     abstract fun appSettingDao(): AppSettingDao
     abstract fun messageTemplateDao(): MessageTemplateDao
     abstract fun locationDao(): LocationDao
+    abstract fun jewishHolidayDao(): JewishHolidayDao
 
     companion object {
         val MIGRATION_3_4 = object : Migration(3, 4) {
@@ -94,6 +98,19 @@ abstract class MagavDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE Shifts ADD COLUMN LocationId INTEGER")
                 db.execSQL("ALTER TABLE Shifts ADD COLUMN CustomLocationName TEXT")
                 db.execSQL("ALTER TABLE Shifts ADD COLUMN CustomLocationNavigation TEXT")
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS JewishHolidays (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        Date TEXT NOT NULL,
+                        Name TEXT NOT NULL
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_JewishHolidays_Date ON JewishHolidays(Date)")
             }
         }
     }

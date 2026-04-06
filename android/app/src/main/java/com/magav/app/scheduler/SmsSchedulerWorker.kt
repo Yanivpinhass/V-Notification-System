@@ -19,6 +19,7 @@ import com.magav.app.db.MagavDatabase
 import com.magav.app.service.SmsSummary
 import com.magav.app.service.SmsReminderService
 import com.magav.app.sms.AndroidSmsProvider
+import com.magav.app.util.DayGroups
 import kotlinx.coroutines.delay
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -60,6 +61,15 @@ class SmsSchedulerWorker(
                     android.util.Log.d("SmsWorker", "Config $configId is disabled, skipping")
                     return Result.success()
                 }
+
+                // Check if config's day group matches the effective day group (holiday-aware)
+                val now = ZonedDateTime.now(israelTz)
+                val effectiveGroup = getEffectiveDayGroupSafe(now, database)
+                if (config.dayGroup != effectiveGroup) {
+                    android.util.Log.d("SmsWorker", "Config ${config.id} dayGroup=${config.dayGroup} != effective=$effectiveGroup, skipping")
+                    return Result.success()
+                }
+
                 val targetDate = LocalDate.now(israelTz).plusDays(config.daysBeforeShift.toLong())
                 val targetDateStr = targetDate.toString()
 
@@ -99,7 +109,8 @@ class SmsSchedulerWorker(
     ): SmsSummary {
         val now = ZonedDateTime.now(israelTz)
         val currentTime = String.format("%02d:%02d", now.hour, now.minute)
-        val currentDayOfWeek = now.dayOfWeek
+
+        val effectiveGroup = getEffectiveDayGroupSafe(now, database)
 
         val configs = database.schedulerConfigDao().getEnabled()
 
@@ -109,8 +120,7 @@ class SmsSchedulerWorker(
 
         for (config in configs) {
             try {
-                val days = getDaysForGroup(config.dayGroup)
-                if (currentDayOfWeek !in days) continue
+                if (config.dayGroup != effectiveGroup) continue
                 if (config.time != currentTime) continue
 
                 val targetDate = now.toLocalDate().plusDays(config.daysBeforeShift.toLong())
@@ -201,13 +211,33 @@ class SmsSchedulerWorker(
         android.util.Log.w("SmsWorker", "Call still active after 20 min, sending anyway")
     }
 
-    private fun getDaysForGroup(dayGroup: String): List<DayOfWeek> = when (dayGroup) {
-        "SunThu" -> listOf(
-            DayOfWeek.SUNDAY, DayOfWeek.MONDAY, DayOfWeek.TUESDAY,
-            DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY
-        )
-        "Fri" -> listOf(DayOfWeek.FRIDAY)
-        "Sat" -> listOf(DayOfWeek.SATURDAY)
-        else -> emptyList()
+    private suspend fun getEffectiveDayGroupSafe(now: ZonedDateTime, database: MagavDatabase): String {
+        val effective = try {
+            getEffectiveDayGroup(now, database)
+        } catch (e: Exception) {
+            android.util.Log.w("SmsWorker", "Holiday check failed, falling back to normal", e)
+            getNormalDayGroup(now.dayOfWeek)
+        }
+        val normal = getNormalDayGroup(now.dayOfWeek)
+        if (effective != normal) {
+            android.util.Log.i("SmsWorker", "Holiday override: ${now.dayOfWeek} -> effective group '$effective'")
+        }
+        return effective
+    }
+
+    private fun getNormalDayGroup(day: DayOfWeek): String = when (day) {
+        DayOfWeek.SATURDAY -> DayGroups.SAT
+        DayOfWeek.FRIDAY -> DayGroups.FRI
+        else -> DayGroups.SUN_THU
+    }
+
+    private suspend fun getEffectiveDayGroup(now: ZonedDateTime, database: MagavDatabase): String {
+        if (now.dayOfWeek == DayOfWeek.SATURDAY) return DayGroups.SAT
+        val todayStr = now.toLocalDate().toString()
+        if (database.jewishHolidayDao().isHoliday(todayStr) > 0) return DayGroups.SAT
+        if (now.dayOfWeek == DayOfWeek.FRIDAY) return DayGroups.FRI
+        val tomorrowStr = now.toLocalDate().plusDays(1).toString()
+        if (database.jewishHolidayDao().isHoliday(tomorrowStr) > 0) return DayGroups.FRI
+        return DayGroups.SUN_THU
     }
 }

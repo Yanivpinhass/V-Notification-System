@@ -19,5 +19,12 @@
             public const string Success = "Success";
             public const string Fail = "Fail";
         }
+
+        public static class DayGroups
+        {
+            public const string SunThu = "SunThu";
+            public const string Fri = "Fri";
+            public const string Sat = "Sat";
+        }
     }
 }

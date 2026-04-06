@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { shiftsService, ShiftWithVolunteerDto, UpdateShiftGroupRequest } from '@/services/shiftsService';
 import { volunteersService, VolunteerDto } from '@/services/volunteersService';
 import { locationsService, LocationDto } from '@/services/locationsService';
+import { jewishHolidaysService, JewishHolidayDto } from '@/services/jewishHolidaysService';
 import { Loader2, Trash2, Plus, Search, Calendar as CalendarIcon, MessageSquare, Phone, Pencil, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -69,6 +70,9 @@ export const ShiftsManagementPage: React.FC = () => {
   // Locations for dropdown
   const [locations, setLocations] = useState<LocationDto[]>([]);
 
+  // Jewish holidays for date indicator
+  const [holidays, setHolidays] = useState<JewishHolidayDto[]>([]);
+
   // New shift group dialog
   const [newGroupOpen, setNewGroupOpen] = useState(false);
   const [newShiftName, setNewShiftName] = useState('');
@@ -94,6 +98,7 @@ export const ShiftsManagementPage: React.FC = () => {
   const [displayedMonth, setDisplayedMonth] = useState<Date>(new Date());
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
+  const holidayName = holidays.find(h => h.date === dateStr)?.name;
 
   const cutoffDate = useMemo(() => {
     const d = new Date();
@@ -195,6 +200,11 @@ export const ShiftsManagementPage: React.FC = () => {
   // Load locations for dropdown
   useEffect(() => {
     locationsService.getAll().then(setLocations).catch(() => {});
+  }, []);
+
+  // Load Jewish holidays for date indicator
+  useEffect(() => {
+    jewishHolidaysService.getAll().then(setHolidays).catch(() => {});
   }, []);
 
   const sortedLocations = useMemo(() =>
@@ -509,6 +519,11 @@ export const ShiftsManagementPage: React.FC = () => {
             <Plus className="h-4 w-4 ml-2" />
             משמרת חדשה
           </Button>
+          {holidayName && (
+            <span className="text-sm font-medium text-primary bg-primary/10 px-2 py-1 rounded">
+              {holidayName}
+            </span>
+          )}
           <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" className="min-h-[44px] min-w-[140px]">

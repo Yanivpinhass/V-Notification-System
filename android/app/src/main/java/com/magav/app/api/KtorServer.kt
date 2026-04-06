@@ -79,6 +79,7 @@ fun createKtorServer(database: MagavDatabase, context: Context): ApplicationEngi
             volunteerRoutes(database)
             shiftRoutes(database, context)
             locationRoutes(database)
+            jewishHolidayRoutes(database)
             smsLogRoutes(database)
             schedulerRoutes(database, context)
             messageTemplateRoutes(database)

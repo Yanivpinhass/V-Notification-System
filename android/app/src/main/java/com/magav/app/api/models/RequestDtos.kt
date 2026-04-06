@@ -232,3 +232,11 @@ data class SendLocationUpdateRequest(
     val shiftName: String,
     val carId: String
 )
+
+// ── Jewish Holidays ───────────────────────────────────────────────────────
+
+@Serializable
+data class JewishHolidayRequest(
+    val date: String,
+    val name: String
+)

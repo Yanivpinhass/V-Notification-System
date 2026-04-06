@@ -9,6 +9,7 @@ import {
   SchedulerConfigUpdate,
 } from '@/services/schedulerService';
 import { messageTemplateService, MessageTemplateEntry } from '@/services/messageTemplateService';
+import { isUserAdmin } from '@/lib/auth';
 
 const DAY_GROUP_TITLES: Record<string, string> = {
   SunThu: "ימים א׳–ה׳ (ראשון עד חמישי)",
@@ -17,20 +18,6 @@ const DAY_GROUP_TITLES: Record<string, string> = {
 };
 
 const DAY_GROUP_ORDER = ['SunThu', 'Fri', 'Sat'];
-
-const isUserAdmin = (): boolean => {
-  try {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      const user = JSON.parse(userStr);
-      const roles: string[] = user.roles || [];
-      return roles.includes('Admin');
-    }
-  } catch {
-    // ignore
-  }
-  return false;
-};
 
 export const SchedulerSettingsPage: React.FC = () => {
   const [configs, setConfigs] = useState<SchedulerConfigEntry[]>([]);

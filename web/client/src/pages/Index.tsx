@@ -16,6 +16,7 @@ import { ShiftsManagementPage } from '@/pages/ShiftsManagementPage';
 import { MessageTemplatesPage } from '@/pages/MessageTemplatesPage';
 import { AboutVersionPage } from '@/pages/AboutVersionPage';
 import { LocationsManagementPage } from '@/pages/LocationsManagementPage';
+import { JewishHolidaysPage } from '@/pages/JewishHolidaysPage';
 import { authService } from '@/services/authService';
 
 interface User {
@@ -84,6 +85,8 @@ const Index = () => {
         return <ShiftsManagementPage />;
       case 'message-templates':
         return <MessageTemplatesPage />;
+      case 'jewish-holidays':
+        return <JewishHolidaysPage />;
       case 'about-version':
         return <AboutVersionPage />;
       default:
