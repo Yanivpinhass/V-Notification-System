@@ -6,8 +6,10 @@ import com.magav.app.api.models.CreateShiftRequest
 import com.magav.app.api.models.DateShiftInfo
 import com.magav.app.api.models.DeleteGroupResult
 import com.magav.app.api.models.DeleteShiftGroupRequest
+import com.magav.app.api.models.SendLocationUpdateRequest
 import com.magav.app.api.models.SendShiftSmsRequest
 import com.magav.app.api.models.ShiftWithVolunteerDto
+import com.magav.app.api.models.UpdateGroupLocationRequest
 import com.magav.app.api.models.UpdateShiftGroupRequest
 import com.magav.app.api.requireRole
 import com.magav.app.db.MagavDatabase
@@ -64,9 +66,11 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                 val shifts = database.shiftDao().getByDateRange(from, to)
                 val volunteers = database.volunteerDao().getAll()
                 val volunteerMap = volunteers.associateBy { it.id }
+                val locations = database.locationDao().getAll().associateBy { it.id }
 
                 val dtos = shifts.map { shift ->
                     val vol = shift.volunteerId?.let { volunteerMap[it] }
+                    val loc = shift.locationId?.let { locations[it] }
                     ShiftWithVolunteerDto(
                         id = shift.id,
                         shiftDate = shift.shiftDate,
@@ -76,7 +80,11 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                         volunteerName = if (shift.volunteerId != null) (vol?.mappingName ?: "מתנדב לא ידוע") else (shift.volunteerName ?: "?"),
                         volunteerPhone = vol?.mobilePhone,
                         volunteerApproved = vol?.approveToReceiveSms == 1,
-                        isUnresolved = shift.volunteerId == null
+                        isUnresolved = shift.volunteerId == null,
+                        locationId = shift.locationId,
+                        locationName = loc?.name ?: shift.customLocationName,
+                        locationNavigation = loc?.navigation ?: shift.customLocationNavigation,
+                        locationCity = loc?.city
                     )
                 }
 
@@ -285,9 +293,17 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                     return@post
                 }
 
-                val message = SmsReminderService.buildMessage(
+                var message = SmsReminderService.buildMessage(
                     template.content, shift.shiftName, shift.carId, volunteer.mappingName, shiftDate
                 )
+
+                if (templateId == 1) {
+                    val location = shift.locationId?.let { database.locationDao().getById(it) }
+                    val locName = location?.name ?: shift.customLocationName
+                    val locCity = location?.city
+                    val locNav = location?.navigation ?: shift.customLocationNavigation
+                    message += SmsReminderService.buildLocationText(locName, locCity, locNav)
+                }
 
                 val subIdSetting = database.appSettingDao().getByKey("sms_sim_subscription_id")
                 val subscriptionId = subIdSetting?.value?.toIntOrNull() ?: -1
@@ -378,12 +394,16 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                     shiftName = request.shiftName,
                     carId = request.carId,
                     volunteerId = request.volunteerId,
+                    locationId = request.locationId,
+                    customLocationName = request.customLocationName?.trim(),
+                    customLocationNavigation = request.customLocationNavigation?.trim(),
                     createdAt = now,
                     updatedAt = now
                 )
 
                 val newId = database.shiftDao().insert(entity)
 
+                val loc = request.locationId?.let { database.locationDao().getById(it) }
                 val dto = ShiftWithVolunteerDto(
                     id = newId.toInt(),
                     shiftDate = shiftDateIso,
@@ -393,13 +413,17 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                     volunteerName = volunteer.mappingName,
                     volunteerPhone = volunteer.mobilePhone,
                     volunteerApproved = volunteer.approveToReceiveSms == 1,
-                    isUnresolved = false
+                    isUnresolved = false,
+                    locationId = request.locationId,
+                    locationName = loc?.name ?: request.customLocationName?.trim(),
+                    locationNavigation = loc?.navigation ?: request.customLocationNavigation?.trim(),
+                    locationCity = loc?.city
                 )
 
                 call.respond(HttpStatusCode.Created, ApiResponse.ok(dto))
             }
 
-            // PUT /api/shifts/update-group - update shift name and car for a group
+            // PUT /api/shifts/update-group - update shift name, car, and location for a group
             put("/update-group") {
                 call.requireRole("Admin", "SystemManager")
 
@@ -426,33 +450,69 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                 val newShiftName = request.newShiftName.trim()
                 val newCarId = request.newCarId.trim()
 
-                // No-op if nothing changed
-                if (request.oldShiftName == newShiftName && request.oldCarId == newCarId) {
-                    call.respond(ApiResponse.ok("לא בוצעו שינויים"))
-                    return@put
-                }
-
                 val from = date.atStartOfDay(ZoneOffset.UTC)
                     .format(DateTimeFormatter.ISO_INSTANT)
                 val to = date.plusDays(1).atStartOfDay(ZoneOffset.UTC)
                     .format(DateTimeFormatter.ISO_INSTANT)
 
-                // Conflict check
-                val existingCount = database.shiftDao().countShiftGroup(newShiftName, newCarId, from, to)
-                if (existingCount > 0) {
-                    call.respond(
-                        HttpStatusCode.BadRequest,
-                        ApiResponse.fail<Unit>("קבוצת משמרת עם שם ורכב זהים כבר קיימת לתאריך זה")
-                    )
+                val nameCarChanged = request.oldShiftName != newShiftName || request.oldCarId != newCarId
+
+                // Check if location changed by comparing against first existing shift
+                val existingShifts = database.shiftDao().getByDateRange(from, to)
+                val groupShifts = existingShifts.filter { it.shiftName == request.oldShiftName && it.carId == request.oldCarId }
+                val firstShift = groupShifts.firstOrNull()
+                val locationChanged = firstShift != null && (
+                    firstShift.locationId != request.locationId ||
+                    firstShift.customLocationName != request.customLocationName?.trim() ||
+                    firstShift.customLocationNavigation != request.customLocationNavigation?.trim()
+                )
+
+                // No-op if nothing changed
+                if (!nameCarChanged && !locationChanged) {
+                    call.respond(ApiResponse.ok(mapOf("alreadySentSms" to false), "לא בוצעו שינויים"))
                     return@put
                 }
 
-                database.shiftDao().updateShiftGroup(
-                    newShiftName, newCarId, Instant.now().toString(), from, to,
-                    request.oldShiftName, request.oldCarId
+                // Conflict check only when name/car changed
+                if (nameCarChanged) {
+                    val existingCount = database.shiftDao().countShiftGroup(newShiftName, newCarId, from, to)
+                    if (existingCount > 0) {
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ApiResponse.fail<Unit>("קבוצת משמרת עם שם ורכב זהים כבר קיימת לתאריך זה")
+                        )
+                        return@put
+                    }
+
+                    database.shiftDao().updateShiftGroup(
+                        newShiftName, newCarId, Instant.now().toString(), from, to,
+                        request.oldShiftName, request.oldCarId
+                    )
+                }
+
+                // Always update location
+                val shiftNameForLocation = if (nameCarChanged) newShiftName else request.oldShiftName
+                val carIdForLocation = if (nameCarChanged) newCarId else request.oldCarId
+                database.shiftDao().updateShiftGroupLocation(
+                    request.locationId, request.customLocationName?.trim(), request.customLocationNavigation?.trim(),
+                    Instant.now().toString(), from, to, shiftNameForLocation, carIdForLocation
                 )
 
-                call.respond(ApiResponse.ok("פרטי המשמרת עודכנו בהצלחה"))
+                // Check alreadySentSms: if date is today and location changed
+                var alreadySentSms = false
+                val israelTz = ZoneId.of("Asia/Jerusalem")
+                val today = LocalDate.now(israelTz)
+                if (locationChanged && date == today) {
+                    for (shift in groupShifts) {
+                        val existingLog = database.smsLogDao().getByShiftIdAndReminderType(shift.id, "SameDay")
+                        if (existingLog != null) {
+                            alreadySentSms = true
+                            break
+                        }
+                    }
+                }
+
+                call.respond(ApiResponse.ok(mapOf("alreadySentSms" to alreadySentSms)))
             }
 
             // POST /api/shifts/import - file upload
@@ -538,6 +598,144 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                 val service = ShiftsImportService(database)
                 val result = service.importFromExcel(bytes.inputStream())
                 call.respond(ApiResponse.ok(result))
+            }
+
+            // PUT /api/shifts/update-group-location - update only location for a shift group
+            put("/update-group-location") {
+                call.requireRole("Admin", "SystemManager")
+
+                val request = call.receive<UpdateGroupLocationRequest>()
+
+                val date = try {
+                    LocalDate.parse(request.date)
+                } catch (_: Exception) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ApiResponse.fail<Unit>("פורמט תאריך לא תקין")
+                    )
+                    return@put
+                }
+
+                val from = date.atStartOfDay(ZoneOffset.UTC)
+                    .format(DateTimeFormatter.ISO_INSTANT)
+                val to = date.plusDays(1).atStartOfDay(ZoneOffset.UTC)
+                    .format(DateTimeFormatter.ISO_INSTANT)
+
+                database.shiftDao().updateShiftGroupLocation(
+                    request.locationId, request.customLocationName?.trim(), request.customLocationNavigation?.trim(),
+                    Instant.now().toString(), from, to, request.shiftName, request.carId
+                )
+
+                // Check alreadySentSms
+                var alreadySentSms = false
+                val israelTz = ZoneId.of("Asia/Jerusalem")
+                val today = LocalDate.now(israelTz)
+                if (date == today) {
+                    val allShifts = database.shiftDao().getByDateRange(from, to)
+                    val groupShifts = allShifts.filter { it.shiftName == request.shiftName && it.carId == request.carId }
+                    for (shift in groupShifts) {
+                        val existingLog = database.smsLogDao().getByShiftIdAndReminderType(shift.id, "SameDay")
+                        if (existingLog != null) {
+                            alreadySentSms = true
+                            break
+                        }
+                    }
+                }
+
+                call.respond(ApiResponse.ok(mapOf("alreadySentSms" to alreadySentSms)))
+            }
+
+            // POST /api/shifts/send-location-update - send location update SMS to shift group volunteers
+            post("/send-location-update") {
+                call.requireRole("Admin", "SystemManager")
+
+                val request = call.receive<SendLocationUpdateRequest>()
+
+                val date = try {
+                    LocalDate.parse(request.date)
+                } catch (_: Exception) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ApiResponse.fail<Unit>("פורמט תאריך לא תקין")
+                    )
+                    return@post
+                }
+
+                val israelTz = ZoneId.of("Asia/Jerusalem")
+                val today = LocalDate.now(israelTz)
+                if (date != today) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ApiResponse.fail<Unit>("ניתן לשלוח עדכון מיקום רק למשמרות של היום")
+                    )
+                    return@post
+                }
+
+                val from = date.atStartOfDay(ZoneOffset.UTC)
+                    .format(DateTimeFormatter.ISO_INSTANT)
+                val to = date.plusDays(1).atStartOfDay(ZoneOffset.UTC)
+                    .format(DateTimeFormatter.ISO_INSTANT)
+
+                val allShifts = database.shiftDao().getByDateRange(from, to)
+                val groupShifts = allShifts.filter { it.shiftName == request.shiftName && it.carId == request.carId }
+
+                if (groupShifts.isEmpty()) {
+                    call.respond(HttpStatusCode.NotFound, ApiResponse.fail<Unit>("לא נמצאו שיבוצים"))
+                    return@post
+                }
+
+                // Resolve location from first shift
+                val firstShift = groupShifts.first()
+                val loc = firstShift.locationId?.let { database.locationDao().getById(it) }
+                val locName = loc?.name ?: firstShift.customLocationName
+                val locCity = loc?.city
+                val locNav = loc?.navigation ?: firstShift.customLocationNavigation
+                val locationText = SmsReminderService.buildLocationText(locName, locCity, locNav)
+
+                if (locationText.isBlank()) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ApiResponse.fail<Unit>("לא הוגדר מיקום למשמרת")
+                    )
+                    return@post
+                }
+
+                val message = "עדכון מיקום הניידת:\n${locationText.trimStart('\n')}\nמשמרת נעימה"
+
+                val subIdSetting = database.appSettingDao().getByKey("sms_sim_subscription_id")
+                val subscriptionId = subIdSetting?.value?.toIntOrNull() ?: -1
+                val smsProvider = AndroidSmsProvider(context, subscriptionId)
+
+                val volunteers = database.volunteerDao().getAll()
+                val volunteerMap = volunteers.associateBy { it.id }
+                var smsSent = 0
+                var smsFailed = 0
+
+                for (shift in groupShifts) {
+                    val volId = shift.volunteerId ?: continue
+                    val volunteer = volunteerMap[volId] ?: continue
+                    if (volunteer.mobilePhone.isNullOrBlank() || volunteer.approveToReceiveSms != 1) continue
+
+                    try {
+                        val result = smsProvider.sendSms(volunteer.mobilePhone, message)
+                        val now = Instant.now().toString()
+                        database.smsLogDao().insert(
+                            SmsLogEntity(
+                                shiftId = shift.id,
+                                sentAt = now,
+                                status = if (result.success) "Success" else "Fail",
+                                error = result.error,
+                                reminderType = "LocationUpdate"
+                            )
+                        )
+                        if (result.success) smsSent++ else smsFailed++
+                    } catch (e: Exception) {
+                        android.util.Log.e("ShiftRoutes", "Error sending location update SMS for shift ${shift.id}", e)
+                        smsFailed++
+                    }
+                }
+
+                call.respond(ApiResponse.ok(mapOf("smsSent" to smsSent, "smsFailed" to smsFailed)))
             }
         }
     }

@@ -13,6 +13,9 @@ public class Shift
     public int? VolunteerId { get; set; }
     public string? VolunteerName { get; set; }
     public DateTime? SmsSentAt { get; set; }
+    public int? LocationId { get; set; }
+    public string? CustomLocationName { get; set; }
+    public string? CustomLocationNavigation { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }

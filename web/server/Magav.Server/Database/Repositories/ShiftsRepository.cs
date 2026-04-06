@@ -67,4 +67,37 @@ public class ShiftsRepository : Repository<Shift>
 
         return matching.Count;
     }
+
+    public async Task<int> UpdateShiftGroupLocationAsync(
+        DateTime date, string shiftName, string carId,
+        int? locationId, string? customLocationName, string? customLocationNavigation)
+    {
+        var shifts = await GetByDateAsync(date);
+        var matching = shifts.Where(s => s.ShiftName == shiftName && s.CarId == carId).ToList();
+
+        foreach (var shift in matching)
+        {
+            shift.LocationId = locationId;
+            shift.CustomLocationName = customLocationName;
+            shift.CustomLocationNavigation = customLocationNavigation;
+            shift.UpdatedAt = DateTime.UtcNow;
+            await UpdateAsync(shift);
+        }
+
+        return matching.Count;
+    }
+
+    public async Task<bool> HasSameDaySmsBeenSentAsync(DateTime date, string shiftName, string carId)
+    {
+        var dateStart = date.Date.ToString("o");
+        var dateEnd = date.Date.AddDays(1).ToString("o");
+        var count = await Db.ExecuteScalarAsync<int>(
+            @"SELECT COUNT(*) FROM SmsLog sl
+              JOIN Shifts s ON sl.ShiftId = s.Id
+              WHERE s.ShiftDate >= @0 AND s.ShiftDate < @1
+                AND s.ShiftName = @2 AND s.CarId = @3
+                AND sl.ReminderType = 'SameDay' AND sl.Status = 'Success'",
+            dateStart, dateEnd, shiftName, carId);
+        return count > 0;
+    }
 }

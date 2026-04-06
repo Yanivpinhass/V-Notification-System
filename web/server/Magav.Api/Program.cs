@@ -2,7 +2,6 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.RateLimiting;
 using Magav.Common.Database;
 using Magav.Common.Models;
 using Magav.Common.Models.Auth;
@@ -363,6 +362,139 @@ app.MapPost("/api/volunteers/import", async (HttpRequest request, MagavDbManager
 .DisableAntiforgery(); // Required for file uploads
 
 // ============================================
+// LOCATIONS ENDPOINTS
+// ============================================
+
+// GET /api/locations
+app.MapGet("/api/locations", async (MagavDbManager db) =>
+{
+    try
+    {
+        var locations = await db.Locations.GetAllAsync();
+        return Results.Ok(ApiResponse<object>.Ok(locations));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error fetching locations: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בטעינת המיקומים"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// GET /api/locations/{id}
+app.MapGet("/api/locations/{id:int}", async (int id, MagavDbManager db) =>
+{
+    try
+    {
+        var location = await db.Locations.GetByIdAsync(id);
+        if (location == null)
+            return Results.NotFound(ApiResponse<object>.Fail("מיקום לא נמצא"));
+        return Results.Ok(ApiResponse<object>.Ok(location));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error fetching location: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// POST /api/locations
+app.MapPost("/api/locations", async (CreateLocationRequest request, MagavDbManager db) =>
+{
+    try
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+            return Results.BadRequest(ApiResponse<object>.Fail("שם מיקום נדרש"));
+
+        var existing = await db.Locations.GetByNameAsync(request.Name.Trim());
+        if (existing != null)
+            return Results.BadRequest(ApiResponse<object>.Fail("מיקום עם שם זה כבר קיים"));
+
+        var now = DateTime.UtcNow;
+        var location = new Location
+        {
+            Name = request.Name.Trim(),
+            Address = request.Address?.Trim(),
+            City = request.City?.Trim(),
+            Navigation = request.Navigation?.Trim(),
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+
+        await db.Locations.InsertAsync(location);
+        return Results.Ok(ApiResponse<object>.Ok(location));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error creating location: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה ביצירת המיקום"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// PUT /api/locations/{id}
+app.MapPut("/api/locations/{id:int}", async (int id, UpdateLocationRequest request, MagavDbManager db) =>
+{
+    try
+    {
+        var location = await db.Locations.GetByIdAsync(id);
+        if (location == null)
+            return Results.NotFound(ApiResponse<object>.Fail("מיקום לא נמצא"));
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+            return Results.BadRequest(ApiResponse<object>.Fail("שם מיקום נדרש"));
+
+        var duplicate = await db.Locations.GetByNameAsync(request.Name.Trim());
+        if (duplicate != null && duplicate.Id != id)
+            return Results.BadRequest(ApiResponse<object>.Fail("מיקום עם שם זה כבר קיים"));
+
+        location.Name = request.Name.Trim();
+        location.Address = request.Address?.Trim();
+        location.City = request.City?.Trim();
+        location.Navigation = request.Navigation?.Trim();
+        location.UpdatedAt = DateTime.UtcNow;
+
+        await db.Locations.UpdateAsync(location);
+        return Results.Ok(ApiResponse<object>.Ok(location));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error updating location: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בעדכון המיקום"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// DELETE /api/locations/{id}
+app.MapDelete("/api/locations/{id:int}", async (int id, MagavDbManager db) =>
+{
+    try
+    {
+        var location = await db.Locations.GetByIdAsync(id);
+        if (location == null)
+            return Results.NotFound(ApiResponse<object>.Fail("מיקום לא נמצא"));
+
+        if (await db.Locations.IsReferencedByFutureShiftsAsync(id))
+            return Results.BadRequest(ApiResponse<object>.Fail("לא ניתן למחוק מיקום המשויך למשמרות עתידיות"));
+
+        await db.Locations.DeleteAsync(location);
+        return Results.Ok(ApiResponse<object>.Ok(null!, "המיקום נמחק בהצלחה"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error deleting location: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה במחיקת המיקום"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// ============================================
 // SHIFTS ENDPOINTS
 // ============================================
 
@@ -442,10 +574,13 @@ app.MapGet("/api/shifts/by-date", async (string? date, MagavDbManager db) =>
         var shifts = await db.Shifts.GetByDateAsync(parsedDate);
         var volunteers = await db.Volunteers.GetAllAsync();
         var volunteerMap = volunteers.ToDictionary(v => v.Id);
+        var locations = await db.Locations.GetAllAsync();
+        var locationMap = locations.ToDictionary(l => l.Id);
 
         var dtos = shifts.Select(s =>
         {
             var vol = s.VolunteerId.HasValue ? volunteerMap.GetValueOrDefault(s.VolunteerId.Value) : null;
+            var loc = s.LocationId.HasValue ? locationMap.GetValueOrDefault(s.LocationId.Value) : null;
             return new ShiftWithVolunteerDto(
                 s.Id,
                 s.ShiftDate.ToString("yyyy-MM-dd"),
@@ -455,7 +590,11 @@ app.MapGet("/api/shifts/by-date", async (string? date, MagavDbManager db) =>
                 s.VolunteerId.HasValue ? (vol?.MappingName ?? "מתנדב לא ידוע") : (s.VolunteerName ?? "?"),
                 vol?.MobilePhone,
                 vol?.ApproveToReceiveSms ?? false,
-                IsUnresolved: !s.VolunteerId.HasValue
+                IsUnresolved: !s.VolunteerId.HasValue,
+                LocationId: s.LocationId,
+                LocationName: loc?.Name ?? s.CustomLocationName,
+                LocationNavigation: loc?.Navigation ?? s.CustomLocationNavigation,
+                LocationCity: loc?.City
             );
         }).ToList();
 
@@ -664,6 +803,16 @@ app.MapPost("/api/shifts/{id:int}/send-sms", async (int id, SendShiftSmsRequest 
         };
         var message = SmsReminderService.BuildMessage(template.Content, shiftDto, shift.ShiftDate);
 
+        if (templateId == 1)
+        {
+            var loc = shift.LocationId.HasValue
+                ? await db.Locations.GetByIdAsync(shift.LocationId.Value) : null;
+            shiftDto.LocationName = loc?.Name ?? shift.CustomLocationName;
+            shiftDto.LocationNavigation = loc?.Navigation ?? shift.CustomLocationNavigation;
+            shiftDto.LocationCity = loc?.City;
+            message += SmsReminderService.BuildLocationText(shiftDto);
+        }
+
         var result = await smsProvider.SendSmsAsync(volunteer.MobilePhone, message);
 
         var reminderType = templateId.Value switch { 1 => "SameDay", 2 => "Advance", _ => "Manual" };
@@ -731,11 +880,19 @@ app.MapPost("/api/shifts", async (CreateShiftRequest request, MagavDbManager db)
             ShiftName = request.ShiftName,
             CarId = request.CarId ?? "",
             VolunteerId = request.VolunteerId,
+            LocationId = request.LocationId,
+            CustomLocationName = request.CustomLocationName?.Trim(),
+            CustomLocationNavigation = request.CustomLocationNavigation?.Trim(),
             CreatedAt = now,
             UpdatedAt = now
         };
 
         await db.Shifts.InsertAsync(shift);
+
+        // Resolve location name for the response DTO
+        Location? loc = shift.LocationId.HasValue
+            ? await db.Locations.GetByIdAsync(shift.LocationId.Value)
+            : null;
 
         var dto = new ShiftWithVolunteerDto(
             shift.Id,
@@ -746,7 +903,11 @@ app.MapPost("/api/shifts", async (CreateShiftRequest request, MagavDbManager db)
             volunteer.MappingName,
             volunteer.MobilePhone,
             volunteer.ApproveToReceiveSms,
-            IsUnresolved: false
+            IsUnresolved: false,
+            LocationId: shift.LocationId,
+            LocationName: loc?.Name ?? shift.CustomLocationName,
+            LocationNavigation: loc?.Navigation ?? shift.CustomLocationNavigation,
+            LocationCity: loc?.City
         );
 
         return Results.Ok(ApiResponse<object>.Ok(dto));
@@ -760,7 +921,7 @@ app.MapPost("/api/shifts", async (CreateShiftRequest request, MagavDbManager db)
     }
 }).RequireAuthorization("CanManageMessages");
 
-// PUT /api/shifts/update-group - update shift name and car for a group
+// PUT /api/shifts/update-group - update shift name, car, and location for a group
 app.MapPut("/api/shifts/update-group", async (UpdateShiftGroupRequest request, MagavDbManager db) =>
 {
     try
@@ -771,31 +932,111 @@ app.MapPut("/api/shifts/update-group", async (UpdateShiftGroupRequest request, M
         if (!DateTime.TryParse((string)request.Date, out var parsedDate))
             return Results.BadRequest(ApiResponse<object>.Fail("פורמט תאריך לא תקין"));
 
-        // No-op if nothing changed
-        if (request.OldShiftName == request.NewShiftName.Trim() &&
-            (request.OldCarId ?? "") == (request.NewCarId ?? "").Trim())
-            return Results.Ok(ApiResponse<object>.Ok(null!, "לא בוצעו שינויים"));
-
-        // Conflict check: does the new (name, car) already exist for this date?
         var newShiftName = request.NewShiftName.Trim();
         var newCarId = (request.NewCarId ?? "").Trim();
+        var nameCarChanged = request.OldShiftName != newShiftName ||
+                             (request.OldCarId ?? "") != newCarId;
 
-        if (await db.Shifts.HasShiftGroupAsync(parsedDate, newShiftName, newCarId))
-            return Results.BadRequest(ApiResponse<object>.Fail("קבוצת משמרת עם שם ורכב זהים כבר קיימת לתאריך זה"));
+        // Check if location changed by comparing against existing shifts
+        var existingShifts = await db.Shifts.GetByDateAsync(parsedDate);
+        var firstMatch = existingShifts.FirstOrDefault(s =>
+            s.ShiftName == request.OldShiftName && s.CarId == (request.OldCarId ?? ""));
 
-        var updated = await db.Shifts.UpdateShiftGroupAsync(
-            parsedDate, request.OldShiftName, request.OldCarId ?? "", newShiftName, newCarId);
+        var locationChanged = firstMatch == null ||
+            firstMatch.LocationId != request.LocationId ||
+            firstMatch.CustomLocationName != request.CustomLocationName?.Trim() ||
+            firstMatch.CustomLocationNavigation != request.CustomLocationNavigation?.Trim();
 
-        if (updated == 0)
-            return Results.NotFound(ApiResponse<object>.Fail("לא נמצאו שיבוצים לעדכון"));
+        // No-op if nothing changed at all
+        if (!nameCarChanged && !locationChanged)
+            return Results.Ok(ApiResponse<object>.Ok(new { AlreadySentSms = false }, "לא בוצעו שינויים"));
 
-        return Results.Ok(ApiResponse<object>.Ok(null!, "פרטי המשמרת עודכנו בהצלחה"));
+        // Conflict check only if name/car changed
+        if (nameCarChanged)
+        {
+            if (await db.Shifts.HasShiftGroupAsync(parsedDate, newShiftName, newCarId))
+                return Results.BadRequest(ApiResponse<object>.Fail("קבוצת משמרת עם שם ורכב זהים כבר קיימת לתאריך זה"));
+
+            var updated = await db.Shifts.UpdateShiftGroupAsync(
+                parsedDate, request.OldShiftName, request.OldCarId ?? "", newShiftName, newCarId);
+
+            if (updated == 0)
+                return Results.NotFound(ApiResponse<object>.Fail("לא נמצאו שיבוצים לעדכון"));
+        }
+
+        // Always update location (uses NEW name/car as key since they may have changed)
+        await db.Shifts.UpdateShiftGroupLocationAsync(
+            parsedDate, newShiftName, newCarId,
+            request.LocationId, request.CustomLocationName?.Trim(), request.CustomLocationNavigation?.Trim());
+
+        // Check if same-day SMS was already sent for this group today
+        var alreadySentSms = false;
+        if (parsedDate.Date == DateTime.UtcNow.Date && locationChanged)
+        {
+            alreadySentSms = await db.Shifts.HasSameDaySmsBeenSentAsync(parsedDate, newShiftName, newCarId);
+        }
+
+        return Results.Ok(ApiResponse<object>.Ok(new { AlreadySentSms = alreadySentSms }, "פרטי המשמרת עודכנו בהצלחה"));
     }
     catch (Exception ex)
     {
         Console.Error.WriteLine($"Error updating shift group: {ex}");
         return Results.Json(
             ApiResponse<object>.Fail("אירעה שגיאה בעדכון המשמרת"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// PUT /api/shifts/update-group-location - update only location for a shift group
+app.MapPut("/api/shifts/update-group-location", async (UpdateGroupLocationRequest request, MagavDbManager db) =>
+{
+    try
+    {
+        if (!DateTime.TryParse((string)request.Date, out var parsedDate))
+            return Results.BadRequest(ApiResponse<object>.Fail("פורמט תאריך לא תקין"));
+
+        var updated = await db.Shifts.UpdateShiftGroupLocationAsync(
+            parsedDate, request.ShiftName, request.CarId,
+            request.LocationId, request.CustomLocationName?.Trim(), request.CustomLocationNavigation?.Trim());
+
+        if (updated == 0)
+            return Results.NotFound(ApiResponse<object>.Fail("לא נמצאו שיבוצים לעדכון"));
+
+        // Check if same-day SMS was already sent
+        var alreadySentSms = parsedDate.Date == DateTime.UtcNow.Date
+            && await db.Shifts.HasSameDaySmsBeenSentAsync(parsedDate, request.ShiftName, request.CarId);
+
+        return Results.Ok(ApiResponse<object>.Ok(new { AlreadySentSms = alreadySentSms }));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error updating group location: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בעדכון המיקום"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// POST /api/shifts/send-location-update - send location update SMS to team members
+app.MapPost("/api/shifts/send-location-update", async (
+    SendLocationUpdateRequest request, MagavDbManager db, ISmsProvider smsProvider,
+    ILogger<SmsReminderService> logger) =>
+{
+    try
+    {
+        if (!DateTime.TryParse((string)request.Date, out var parsedDate))
+            return Results.BadRequest(ApiResponse<object>.Fail("פורמט תאריך לא תקין"));
+
+        var smsService = new SmsReminderService(db, smsProvider, logger);
+        var result = await smsService.SendLocationUpdateAsync(parsedDate, request.ShiftName, request.CarId);
+
+        return Results.Ok(ApiResponse<object>.Ok(result));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error sending location update SMS: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בשליחת עדכון המיקום"),
             statusCode: StatusCodes.Status500InternalServerError);
     }
 }).RequireAuthorization("CanManageMessages");
@@ -1612,11 +1853,20 @@ public record UpdateMessageTemplateRequest(string Name, string Content);
 
 // Shift Management DTOs
 public record SendShiftSmsRequest(int? TemplateId);
-public record CreateShiftRequest(string ShiftDate, string ShiftName, string CarId, int VolunteerId);
-public record UpdateShiftGroupRequest(string Date, string OldShiftName, string OldCarId, string NewShiftName, string NewCarId);
+public record CreateShiftRequest(string ShiftDate, string ShiftName, string CarId, int VolunteerId,
+    int? LocationId = null, string? CustomLocationName = null, string? CustomLocationNavigation = null);
+public record UpdateShiftGroupRequest(string Date, string OldShiftName, string OldCarId, string NewShiftName, string NewCarId,
+    int? LocationId = null, string? CustomLocationName = null, string? CustomLocationNavigation = null);
 public record ShiftWithVolunteerDto(int Id, string ShiftDate, string ShiftName, string CarId,
     int? VolunteerId, string VolunteerName, string? VolunteerPhone, bool VolunteerApproved,
-    bool IsUnresolved);
+    bool IsUnresolved, int? LocationId = null, string? LocationName = null, string? LocationNavigation = null, string? LocationCity = null);
 public record DateShiftInfo(string Date, bool HasUnresolved);
 public record DeleteShiftGroupRequest(string Date, string ShiftName, string CarId, bool SendNotifications);
 public record DeleteGroupResult(int DeletedCount, int SmsSentCount, int SmsFailedCount);
+
+// Location Management DTOs
+public record CreateLocationRequest(string Name, string? Address, string? City, string? Navigation);
+public record UpdateLocationRequest(string Name, string? Address, string? City, string? Navigation);
+public record UpdateGroupLocationRequest(string Date, string ShiftName, string CarId,
+    int? LocationId, string? CustomLocationName, string? CustomLocationNavigation);
+public record SendLocationUpdateRequest(string Date, string ShiftName, string CarId);

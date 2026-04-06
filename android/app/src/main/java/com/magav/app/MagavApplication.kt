@@ -106,7 +106,7 @@ class MagavApplication : Application() {
 
         database = Room.databaseBuilder(this, MagavDatabase::class.java, "magav.db")
             .openHelperFactory(factory)
-            .addMigrations(MagavDatabase.MIGRATION_3_4)
+            .addMigrations(MagavDatabase.MIGRATION_3_4, MagavDatabase.MIGRATION_4_5)
             .fallbackToDestructiveMigration()
             .build()
 
@@ -123,7 +123,7 @@ class MagavApplication : Application() {
             java.io.File(dbFile.path + "-journal").delete()
             database = Room.databaseBuilder(this, MagavDatabase::class.java, "magav.db")
                 .openHelperFactory(factory)
-                .addMigrations(MagavDatabase.MIGRATION_3_4)
+                .addMigrations(MagavDatabase.MIGRATION_3_4, MagavDatabase.MIGRATION_4_5)
                 .fallbackToDestructiveMigration()
                 .build()
         }
@@ -179,6 +179,7 @@ val appModule = module {
     single { get<MagavDatabase>().smsLogDao() }
     single { get<MagavDatabase>().schedulerConfigDao() }
     single { get<MagavDatabase>().schedulerRunLogDao() }
+    single { get<MagavDatabase>().locationDao() }
     single<SmsProvider> { AndroidSmsProvider(androidContext()) }
     single { AuthService(get()) }
     single { SmsReminderService(get(), get()) }

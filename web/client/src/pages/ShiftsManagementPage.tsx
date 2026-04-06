@@ -9,9 +9,11 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { shiftsService, ShiftWithVolunteerDto, UpdateShiftGroupRequest } from '@/services/shiftsService';
 import { volunteersService, VolunteerDto } from '@/services/volunteersService';
-import { Loader2, Trash2, Plus, Search, Calendar as CalendarIcon, MessageSquare, Phone, Pencil } from 'lucide-react';
+import { locationsService, LocationDto } from '@/services/locationsService';
+import { Loader2, Trash2, Plus, Search, Calendar as CalendarIcon, MessageSquare, Phone, Pencil, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { he } from 'date-fns/locale';
@@ -20,7 +22,10 @@ interface ShiftGroup {
   shiftName: string;
   carId: string;
   shifts: ShiftWithVolunteerDto[];
-  isLocal?: boolean; // locally created, not yet saved
+  isLocal?: boolean;
+  locationId?: number | null;
+  customLocationName?: string | null;
+  customLocationNavigation?: string | null;
 }
 
 export const ShiftsManagementPage: React.FC = () => {
@@ -49,23 +54,40 @@ export const ShiftsManagementPage: React.FC = () => {
   const [callConfirmTarget, setCallConfirmTarget] = useState<ShiftWithVolunteerDto | null>(null);
 
   // Add volunteer dialog
-  const [addTarget, setAddTarget] = useState<{ shiftName: string; carId: string } | null>(null);
+  const [addTarget, setAddTarget] = useState<{
+    shiftName: string; carId: string;
+    locationId?: number | null;
+    customLocationName?: string | null;
+    customLocationNavigation?: string | null;
+  } | null>(null);
   const [volunteers, setVolunteers] = useState<VolunteerDto[]>([]);
   const [volunteersLoaded, setVolunteersLoaded] = useState(false);
   const [volunteerSearch, setVolunteerSearch] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [addedVolunteerIds, setAddedVolunteerIds] = useState<Set<number>>(new Set());
 
+  // Locations for dropdown
+  const [locations, setLocations] = useState<LocationDto[]>([]);
+
   // New shift group dialog
   const [newGroupOpen, setNewGroupOpen] = useState(false);
   const [newShiftName, setNewShiftName] = useState('');
   const [newCarId, setNewCarId] = useState('');
+  const [newLocationSelection, setNewLocationSelection] = useState('');
+  const [newCustomLocationName, setNewCustomLocationName] = useState('');
+  const [newCustomLocationNavigation, setNewCustomLocationNavigation] = useState('');
 
   // Edit shift group dialog
   const [editTarget, setEditTarget] = useState<ShiftGroup | null>(null);
   const [editShiftName, setEditShiftName] = useState('');
   const [editCarId, setEditCarId] = useState('');
+  const [editLocationSelection, setEditLocationSelection] = useState('');
+  const [editCustomLocationName, setEditCustomLocationName] = useState('');
+  const [editCustomLocationNavigation, setEditCustomLocationNavigation] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+
+  // Location update SMS prompt
+  const [locationUpdatePrompt, setLocationUpdatePrompt] = useState<{ date: string; shiftName: string; carId: string } | null>(null);
 
   // Calendar dot indicators: date → hasUnresolved
   const [datesWithShifts, setDatesWithShifts] = useState<Map<string, boolean>>(new Map());
@@ -170,6 +192,56 @@ export const ShiftsManagementPage: React.FC = () => {
     }
   }, [volunteersLoaded]);
 
+  // Load locations for dropdown
+  useEffect(() => {
+    locationsService.getAll().then(setLocations).catch(() => {});
+  }, []);
+
+  const sortedLocations = useMemo(() =>
+    [...locations].sort((a, b) => a.name.localeCompare(b.name, 'he')),
+    [locations]
+  );
+
+  const renderLocationPicker = (
+    selection: string, setSelection: (v: string) => void,
+    customName: string, setCustomName: (v: string) => void,
+    customNav: string, setCustomNav: (v: string) => void,
+    datalistId: string
+  ) => (
+    <>
+      <div>
+        <label className="text-sm font-medium mb-1 block">מיקום ניידת</label>
+        <Select value={selection} onValueChange={setSelection}>
+          <SelectTrigger><SelectValue placeholder="לא נבחר" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">לא נבחר</SelectItem>
+            {sortedLocations.map(l => (
+              <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>
+            ))}
+            <SelectItem value="other">אחר</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {selection === 'other' && (
+        <>
+          <div>
+            <label className="text-sm font-medium mb-1 block">שם מיקום</label>
+            <Input value={customName} onChange={(e) => setCustomName(e.target.value)}
+              placeholder="שם בעל הבית / מיקום" list={datalistId} />
+            <datalist id={datalistId}>
+              {volunteers.map(v => <option key={v.id} value={v.mappingName} />)}
+            </datalist>
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1 block">ניווט</label>
+            <Input value={customNav} onChange={(e) => setCustomNav(e.target.value)}
+              placeholder="קישור Waze" dir="ltr" className="text-left" />
+          </div>
+        </>
+      )}
+    </>
+  );
+
   // Group shifts by (shiftName, carId)
   const groupedShifts: ShiftGroup[] = React.useMemo(() => {
     const map = new Map<string, ShiftWithVolunteerDto[]>();
@@ -273,8 +345,8 @@ export const ShiftsManagementPage: React.FC = () => {
   };
 
   // ── Add volunteer to shift ──
-  const openAddDialog = (shiftName: string, carId: string) => {
-    setAddTarget({ shiftName, carId });
+  const openAddDialog = (shiftName: string, carId: string, locationId?: number | null, customLocationName?: string | null, customLocationNavigation?: string | null) => {
+    setAddTarget({ shiftName, carId, locationId, customLocationName, customLocationNavigation });
     setVolunteerSearch('');
     setAddedVolunteerIds(new Set());
     loadVolunteers();
@@ -295,6 +367,9 @@ export const ShiftsManagementPage: React.FC = () => {
         shiftName: addTarget.shiftName,
         carId: addTarget.carId,
         volunteerId: vol.id,
+        locationId: addTarget.locationId,
+        customLocationName: addTarget.customLocationName,
+        customLocationNavigation: addTarget.customLocationNavigation,
       });
       toast.success(`${vol.mappingName} שובץ בהצלחה`);
       setAddedVolunteerIds(prev => new Set([...prev, vol.id]));
@@ -311,18 +386,28 @@ export const ShiftsManagementPage: React.FC = () => {
     if (!newShiftName.trim()) return;
     const shiftName = newShiftName.trim();
     const carId = newCarId.trim();
+    const sel = newLocationSelection;
+    const locId = sel && sel !== 'none' && sel !== 'other' ? Number(sel) : null;
+    const customName = sel === 'other' ? newCustomLocationName.trim() || null : null;
+    const customNav = sel === 'other' ? newCustomLocationNavigation.trim() || null : null;
     const group: ShiftGroup = {
       shiftName,
       carId,
       shifts: [],
       isLocal: true,
+      locationId: locId,
+      customLocationName: customName,
+      customLocationNavigation: customNav,
     };
     setLocalGroups(prev => [...prev, group]);
     setNewGroupOpen(false);
     setNewShiftName('');
     setNewCarId('');
+    setNewLocationSelection('');
+    setNewCustomLocationName('');
+    setNewCustomLocationNavigation('');
     toast.success('קבוצת משמרת חדשה נוספה');
-    openAddDialog(shiftName, carId);
+    openAddDialog(shiftName, carId, locId, customName, customNav);
   };
 
   // ── Edit shift group ──
@@ -330,20 +415,44 @@ export const ShiftsManagementPage: React.FC = () => {
     if (!editTarget || !editShiftName.trim()) return;
     setIsEditing(true);
     try {
-      await shiftsService.updateShiftGroup({
+      const editSel = editLocationSelection;
+      const locId = editSel && editSel !== 'none' && editSel !== 'other' ? Number(editSel) : null;
+      const customName = editSel === 'other' ? editCustomLocationName.trim() || null : null;
+      const customNav = editSel === 'other' ? editCustomLocationNavigation.trim() || null : null;
+
+      const result = await shiftsService.updateShiftGroup({
         date: dateStr,
         oldShiftName: editTarget.shiftName,
         oldCarId: editTarget.carId,
         newShiftName: editShiftName.trim(),
         newCarId: editCarId.trim(),
+        locationId: locId,
+        customLocationName: customName,
+        customLocationNavigation: customNav,
       });
       toast.success('פרטי המשמרת עודכנו בהצלחה');
       setEditTarget(null);
       refreshData();
+      if (result?.alreadySentSms === true) {
+        setLocationUpdatePrompt({ date: dateStr, shiftName: editShiftName.trim(), carId: editCarId.trim() });
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'שגיאה בעדכון המשמרת');
     } finally {
       setIsEditing(false);
+    }
+  };
+
+  // ── Send location update SMS ──
+  const handleSendLocationUpdate = async () => {
+    if (!locationUpdatePrompt) return;
+    try {
+      const result = await shiftsService.sendLocationUpdate(locationUpdatePrompt);
+      toast.success(`עדכון מיקום נשלח ל-${result.smsSent} מתנדבים`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'שגיאה בשליחת עדכון מיקום');
+    } finally {
+      setLocationUpdatePrompt(null);
     }
   };
 
@@ -484,6 +593,11 @@ export const ShiftsManagementPage: React.FC = () => {
                   / רכב {group.carId}
                 </span>
               )}
+              {group.shifts[0]?.locationName && (
+                <span className="text-sm font-normal text-muted-foreground flex items-center gap-1">
+                  | <MapPin className="h-3 w-3" /> {group.shifts[0].locationName}
+                </span>
+              )}
               {!group.isLocal && !isSelectedDatePast && (
                 <>
                   <Button
@@ -494,6 +608,20 @@ export const ShiftsManagementPage: React.FC = () => {
                       setEditTarget(group);
                       setEditShiftName(group.shiftName);
                       setEditCarId(group.carId);
+                      const fs = group.shifts[0];
+                      if (fs?.locationId) {
+                        setEditLocationSelection(String(fs.locationId));
+                        setEditCustomLocationName('');
+                        setEditCustomLocationNavigation('');
+                      } else if (fs?.locationName) {
+                        setEditLocationSelection('other');
+                        setEditCustomLocationName(fs.locationName ?? '');
+                        setEditCustomLocationNavigation(fs.locationNavigation ?? '');
+                      } else {
+                        setEditLocationSelection('');
+                        setEditCustomLocationName('');
+                        setEditCustomLocationNavigation('');
+                      }
                     }}
                   >
                     <Pencil className="h-4 w-4" />
@@ -599,7 +727,12 @@ export const ShiftsManagementPage: React.FC = () => {
               size="sm"
               className="mt-2 min-h-[44px]"
               disabled={isSelectedDatePast}
-              onClick={() => openAddDialog(group.shiftName, group.carId)}
+              onClick={() => openAddDialog(
+                group.shiftName, group.carId,
+                group.shifts[0]?.locationId,
+                group.shifts[0]?.locationId ? null : (group.shifts[0]?.locationName ?? null),
+                group.shifts[0]?.locationId ? null : (group.shifts[0]?.locationNavigation ?? null)
+              )}
             >
               <Plus className="h-4 w-4 ml-1" />
               הוסף מתנדב
@@ -825,6 +958,12 @@ export const ShiftsManagementPage: React.FC = () => {
                 placeholder="לדוגמה: 101"
               />
             </div>
+            {renderLocationPicker(
+              newLocationSelection, setNewLocationSelection,
+              newCustomLocationName, setNewCustomLocationName,
+              newCustomLocationNavigation, setNewCustomLocationNavigation,
+              'volunteer-names-create'
+            )}
           </div>
           <DialogFooter className="flex-row-reverse gap-2 mt-4">
             <Button
@@ -863,6 +1002,12 @@ export const ShiftsManagementPage: React.FC = () => {
                 placeholder="לדוגמה: 101"
               />
             </div>
+            {renderLocationPicker(
+              editLocationSelection, setEditLocationSelection,
+              editCustomLocationName, setEditCustomLocationName,
+              editCustomLocationNavigation, setEditCustomLocationNavigation,
+              'volunteer-names-edit'
+            )}
           </div>
           <DialogFooter className="flex-row-reverse gap-2 mt-4">
             <Button
@@ -878,6 +1023,22 @@ export const ShiftsManagementPage: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Location update SMS confirmation dialog */}
+      <AlertDialog open={!!locationUpdatePrompt} onOpenChange={(open) => !open && setLocationUpdatePrompt(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-right">שליחת עדכון מיקום</AlertDialogTitle>
+            <AlertDialogDescription className="text-right">
+              כבר נשלחו הודעות למשמרת הזאת היום. האם לשלוח הודעת עדכון מיקום?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel>לא לשלוח</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSendLocationUpdate}>שלח עדכון</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

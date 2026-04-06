@@ -87,6 +87,22 @@ public class DbInitializer
             await using var volunteersCmd = new SqliteCommand(createVolunteersSql, connection);
             await volunteersCmd.ExecuteNonQueryAsync();
 
+            // Create Locations table (must be before Shifts — FK dependency)
+            var createLocationsSql = @"
+                CREATE TABLE Locations (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Name TEXT NOT NULL UNIQUE,
+                    Address TEXT NULL,
+                    City TEXT NULL,
+                    Navigation TEXT NULL,
+                    CreatedAt TEXT NULL,
+                    UpdatedAt TEXT NULL
+                );
+            ";
+
+            await using var locationsCmd = new SqliteCommand(createLocationsSql, connection);
+            await locationsCmd.ExecuteNonQueryAsync();
+
             // Create Shifts table
             var createShiftsSql = @"
                 CREATE TABLE Shifts (
@@ -96,10 +112,14 @@ public class DbInitializer
                     CarId TEXT NOT NULL DEFAULT '',
                     VolunteerId INTEGER NULL,
                     VolunteerName TEXT NULL,
+                    LocationId INTEGER NULL,
+                    CustomLocationName TEXT NULL,
+                    CustomLocationNavigation TEXT NULL,
                     SmsSentAt TEXT NULL,
                     CreatedAt TEXT NULL,
                     UpdatedAt TEXT NULL,
-                    FOREIGN KEY (VolunteerId) REFERENCES Volunteers(Id)
+                    FOREIGN KEY (VolunteerId) REFERENCES Volunteers(Id),
+                    FOREIGN KEY (LocationId) REFERENCES Locations(Id)
                 );
                 CREATE INDEX IX_Shifts_VolunteerId ON Shifts(VolunteerId);
                 CREATE INDEX IX_Shifts_ShiftDate ON Shifts(ShiftDate);
@@ -220,6 +240,7 @@ public class DbInitializer
         {
             Console.WriteLine($"Database already exists at: {fullPath}");
             await MigrateShiftsTableAsync(connection);
+            await MigrateLocationsAsync(connection);
         }
 
     }
@@ -282,6 +303,70 @@ public class DbInitializer
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Shifts table migration error: {ex}");
+        }
+    }
+
+    private static async Task MigrateLocationsAsync(SqliteConnection connection)
+    {
+        try
+        {
+            // 1. Create Locations table if it doesn't exist
+            await using (var checkCmd = new SqliteCommand(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='Locations'", connection))
+            {
+                var exists = Convert.ToInt32(await checkCmd.ExecuteScalarAsync()) > 0;
+                if (!exists)
+                {
+                    Console.WriteLine("Creating Locations table...");
+                    var createSql = @"
+                        CREATE TABLE Locations (
+                            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            Name TEXT NOT NULL UNIQUE,
+                            Address TEXT NULL,
+                            City TEXT NULL,
+                            Navigation TEXT NULL,
+                            CreatedAt TEXT NULL,
+                            UpdatedAt TEXT NULL
+                        );
+                    ";
+                    await using var createCmd = new SqliteCommand(createSql, connection);
+                    await createCmd.ExecuteNonQueryAsync();
+                    Console.WriteLine("Locations table created.");
+                }
+            }
+
+            // 2. Add location columns to Shifts table (check each individually for partial-failure safety)
+            var columnsToAdd = new[]
+            {
+                ("LocationId", "INTEGER NULL"),
+                ("CustomLocationName", "TEXT NULL"),
+                ("CustomLocationNavigation", "TEXT NULL"),
+            };
+
+            // Read existing columns
+            var existingColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using (var pragmaCmd = new SqliteCommand("PRAGMA table_info(Shifts)", connection))
+            await using (var reader = await pragmaCmd.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    existingColumns.Add(reader.GetString(1));
+                }
+            }
+
+            foreach (var (columnName, columnType) in columnsToAdd)
+            {
+                if (existingColumns.Contains(columnName)) continue;
+
+                Console.WriteLine($"Adding column {columnName} to Shifts table...");
+                await using var alterCmd = new SqliteCommand(
+                    $"ALTER TABLE Shifts ADD COLUMN {columnName} {columnType}", connection);
+                await alterCmd.ExecuteNonQueryAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Locations migration error: {ex}");
         }
     }
 

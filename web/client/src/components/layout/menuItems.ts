@@ -1,4 +1,4 @@
-import { Users, Settings, Search, Calendar, Info } from 'lucide-react';
+import { Users, Settings, Search, Calendar, Info, MapPin } from 'lucide-react';
 import { MenuItem } from './types';
 
 export const mainMenuItems: MenuItem[] = [
@@ -20,6 +20,15 @@ export const mainMenuItems: MenuItem[] = [
     subItems: [
       { id: 'volunteers-management', title: 'ניהול מתנדבים', path: '/volunteer-management/volunteers' },
       { id: 'volunteers-import', title: 'קליטת קובץ מתנדבים', path: '/volunteer-management/import' },
+    ]
+  },
+  {
+    id: 'locations',
+    title: 'מיקומים',
+    icon: MapPin,
+    requiredRoles: ['Admin', 'SystemManager'],
+    subItems: [
+      { id: 'locations-management', title: 'מיקומי ניידות', path: '/locations/management' },
     ]
   },
   {

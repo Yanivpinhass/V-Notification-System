@@ -11,6 +11,10 @@ export interface ShiftWithVolunteerDto {
   volunteerPhone: string | null;
   volunteerApproved: boolean;
   isUnresolved: boolean;
+  locationId: number | null;
+  locationName: string | null;
+  locationNavigation: string | null;
+  locationCity: string | null;
 }
 
 export interface DateShiftInfo {
@@ -23,6 +27,9 @@ export interface CreateShiftRequest {
   shiftName: string;
   carId: string;
   volunteerId: number;
+  locationId?: number | null;
+  customLocationName?: string | null;
+  customLocationNavigation?: string | null;
 }
 
 export interface UpdateShiftGroupRequest {
@@ -31,6 +38,9 @@ export interface UpdateShiftGroupRequest {
   oldCarId: string;
   newShiftName: string;
   newCarId: string;
+  locationId?: number | null;
+  customLocationName?: string | null;
+  customLocationNavigation?: string | null;
 }
 
 class ShiftsService extends BaseApiClient {
@@ -60,12 +70,20 @@ class ShiftsService extends BaseApiClient {
     return this.get<DateShiftInfo[]>('/shifts/dates-with-shifts', { from, to });
   }
 
-  async updateShiftGroup(data: UpdateShiftGroupRequest): Promise<void> {
-    return this.put<void, UpdateShiftGroupRequest>('/shifts/update-group', data);
+  async updateShiftGroup(data: UpdateShiftGroupRequest): Promise<{ alreadySentSms: boolean }> {
+    return this.put<{ alreadySentSms: boolean }, UpdateShiftGroupRequest>('/shifts/update-group', data);
   }
 
   async deleteShiftGroup(data: { date: string; shiftName: string; carId: string; sendNotifications: boolean }): Promise<{ deletedCount: number; smsSentCount: number; smsFailedCount: number }> {
     return this.post('/shifts/delete-group', data);
+  }
+
+  async updateGroupLocation(data: { date: string; shiftName: string; carId: string; locationId?: number | null; customLocationName?: string | null; customLocationNavigation?: string | null }): Promise<{ alreadySentSms: boolean }> {
+    return this.put('/shifts/update-group-location', data);
+  }
+
+  async sendLocationUpdate(data: { date: string; shiftName: string; carId: string }): Promise<{ smsSent: number; smsFailed: number }> {
+    return this.post('/shifts/send-location-update', data);
   }
 }
 

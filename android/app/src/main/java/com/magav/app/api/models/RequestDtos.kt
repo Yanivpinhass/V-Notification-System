@@ -120,7 +120,10 @@ data class CreateShiftRequest(
     val shiftDate: String,
     val shiftName: String,
     val carId: String,
-    val volunteerId: Int
+    val volunteerId: Int,
+    val locationId: Int? = null,
+    val customLocationName: String? = null,
+    val customLocationNavigation: String? = null
 )
 
 @Serializable
@@ -129,7 +132,10 @@ data class UpdateShiftGroupRequest(
     val oldShiftName: String,
     val oldCarId: String,
     val newShiftName: String,
-    val newCarId: String
+    val newCarId: String,
+    val locationId: Int? = null,
+    val customLocationName: String? = null,
+    val customLocationNavigation: String? = null
 )
 
 @Serializable
@@ -142,7 +148,11 @@ data class ShiftWithVolunteerDto(
     val volunteerName: String,
     val volunteerPhone: String?,
     val volunteerApproved: Boolean,
-    val isUnresolved: Boolean = false
+    val isUnresolved: Boolean = false,
+    val locationId: Int? = null,
+    val locationName: String? = null,
+    val locationNavigation: String? = null,
+    val locationCity: String? = null
 )
 
 @Serializable
@@ -194,4 +204,39 @@ data class CreateMessageTemplateRequest(
 data class UpdateMessageTemplateRequest(
     val name: String,
     val content: String
+)
+
+// ── Locations ──────────────────────────────────────────────────────────────
+
+@Serializable
+data class CreateLocationRequest(
+    val name: String,
+    val address: String? = null,
+    val city: String? = null,
+    val navigation: String? = null
+)
+
+@Serializable
+data class UpdateLocationRequest(
+    val name: String,
+    val address: String? = null,
+    val city: String? = null,
+    val navigation: String? = null
+)
+
+@Serializable
+data class UpdateGroupLocationRequest(
+    val date: String,
+    val shiftName: String,
+    val carId: String,
+    val locationId: Int? = null,
+    val customLocationName: String? = null,
+    val customLocationNavigation: String? = null
+)
+
+@Serializable
+data class SendLocationUpdateRequest(
+    val date: String,
+    val shiftName: String,
+    val carId: String
 )

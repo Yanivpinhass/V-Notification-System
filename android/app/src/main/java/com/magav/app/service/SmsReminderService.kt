@@ -65,10 +65,17 @@ class SmsReminderService(
             totalEligible++
 
             try {
-                val message = buildMessage(
+                var message = buildMessage(
                     messageTemplate.content, shift.shiftName, shift.carId,
                     volunteer.mappingName, targetDate
                 )
+                if (config.reminderType == "SameDay") {
+                    val location = shift.locationId?.let { database.locationDao().getById(it) }
+                    val locName = location?.name ?: shift.customLocationName
+                    val locNav = location?.navigation ?: shift.customLocationNavigation
+                    val locCity = location?.city
+                    message += buildLocationText(locName, locCity, locNav)
+                }
                 android.util.Log.d("SmsReminder", "Sending SMS #$totalEligible to ${volunteer.mappingName} (${volunteer.mobilePhone})")
                 val result = smsProvider.sendSms(volunteer.mobilePhone, message)
                 android.util.Log.d("SmsReminder", "SMS result: success=${result.success}, error=${result.error}")
@@ -161,6 +168,13 @@ class SmsReminderService(
                 .replace("{יום}", dayName)
                 .replace("{משמרת}", shiftName)
                 .replace("{רכב}", carId)
+        }
+
+        fun buildLocationText(name: String?, city: String?, navigation: String?): String {
+            if (name.isNullOrEmpty()) return ""
+            val text = if (!city.isNullOrEmpty()) "\nהניידת נמצאת ב$city ($name)"
+                       else "\nהניידת נמצאת אצל $name"
+            return if (!navigation.isNullOrEmpty()) "$text ,נווט $navigation" else text
         }
 
         fun getHebrewDayName(day: DayOfWeek): String = when (day) {

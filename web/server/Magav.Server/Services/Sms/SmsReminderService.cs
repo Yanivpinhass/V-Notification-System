@@ -35,9 +35,14 @@ public class SmsReminderService
         // excluding those that already have a successful SmsLog for this ReminderType
         var eligibleShifts = await _db.Db.FetchAsync<ShiftVolunteerDto>(
             @"SELECT s.Id AS ShiftId, s.ShiftDate, s.ShiftName, s.CarId,
-                     v.Id AS VolunteerId, v.FirstName, v.LastName, v.MappingName, v.MobilePhone
+                     v.Id AS VolunteerId, v.FirstName, v.LastName, v.MappingName, v.MobilePhone,
+                     s.LocationId,
+                     COALESCE(l.Name, s.CustomLocationName) AS LocationName,
+                     COALESCE(l.Navigation, s.CustomLocationNavigation) AS LocationNavigation,
+                     l.City AS LocationCity
               FROM Shifts s
               JOIN Volunteers v ON s.VolunteerId = v.Id
+              LEFT JOIN Locations l ON s.LocationId = l.Id
               WHERE s.ShiftDate >= @0 AND s.ShiftDate < @1
                 AND v.ApproveToReceiveSms = 1
                 AND v.MobilePhone IS NOT NULL
@@ -86,6 +91,8 @@ public class SmsReminderService
             try
             {
                 var message = BuildMessage(template.Content, shift, targetDate);
+                if (reminderType == "SameDay")
+                    message += BuildLocationText(shift);
                 var result = await _smsProvider.SendSmsAsync(shift.MobilePhone!, message);
 
                 // Write SmsLog entry
@@ -193,6 +200,78 @@ public class SmsReminderService
             .Replace("{רכב}", shift.CarId);
     }
 
+    public static string BuildLocationText(ShiftVolunteerDto shift)
+    {
+        if (string.IsNullOrEmpty(shift.LocationName))
+            return "";
+
+        var text = !string.IsNullOrEmpty(shift.LocationCity)
+            ? $"\nהניידת נמצאת ב{shift.LocationCity} ({shift.LocationName})"
+            : $"\nהניידת נמצאת אצל {shift.LocationName}";
+
+        if (!string.IsNullOrEmpty(shift.LocationNavigation))
+            text += $" ,נווט {shift.LocationNavigation}";
+
+        return text;
+    }
+
+    public async Task<object> SendLocationUpdateAsync(DateTime date, string shiftName, string carId)
+    {
+        var dateStart = date.Date.ToString("o");
+        var dateEnd = date.Date.AddDays(1).ToString("o");
+
+        var eligibleShifts = await _db.Db.FetchAsync<ShiftVolunteerDto>(
+            @"SELECT s.Id AS ShiftId, s.ShiftDate, s.ShiftName, s.CarId,
+                     v.Id AS VolunteerId, v.FirstName, v.LastName, v.MappingName, v.MobilePhone,
+                     s.LocationId,
+                     COALESCE(l.Name, s.CustomLocationName) AS LocationName,
+                     COALESCE(l.Navigation, s.CustomLocationNavigation) AS LocationNavigation,
+                     l.City AS LocationCity
+              FROM Shifts s
+              JOIN Volunteers v ON s.VolunteerId = v.Id
+              LEFT JOIN Locations l ON s.LocationId = l.Id
+              WHERE s.ShiftDate >= @0 AND s.ShiftDate < @1
+                AND s.ShiftName = @2 AND s.CarId = @3
+                AND v.ApproveToReceiveSms = 1
+                AND v.MobilePhone IS NOT NULL
+                AND v.MobilePhone != ''",
+            dateStart, dateEnd, shiftName, carId);
+
+        var smsSent = 0;
+        var smsFailed = 0;
+
+        foreach (var shift in eligibleShifts)
+        {
+            try
+            {
+                var locationText = BuildLocationText(shift).TrimStart('\n');
+                if (string.IsNullOrEmpty(locationText)) continue;
+
+                var message = $"עדכון מיקום הניידת:\n{locationText}\nמשמרת נעימה";
+                var result = await _smsProvider.SendSmsAsync(shift.MobilePhone!, message);
+
+                await _db.SmsLog.InsertAsync(new SmsLog
+                {
+                    ShiftId = shift.ShiftId,
+                    SentAt = DateTime.UtcNow,
+                    Status = result.Success ? "Success" : "Fail",
+                    Error = result.Error,
+                    ReminderType = "LocationUpdate"
+                });
+
+                if (result.Success) smsSent++;
+                else smsFailed++;
+            }
+            catch (Exception ex)
+            {
+                smsFailed++;
+                _logger.LogError(ex, "Error sending location update SMS for ShiftId={ShiftId}", shift.ShiftId);
+            }
+        }
+
+        return new { SmsSent = smsSent, SmsFailed = smsFailed };
+    }
+
     public static string GetHebrewDayName(DayOfWeek day) => day switch
     {
         DayOfWeek.Sunday => "יום א׳",
@@ -220,4 +299,8 @@ public class ShiftVolunteerDto
     public string? LastName { get; set; }
     public string MappingName { get; set; } = string.Empty;
     public string? MobilePhone { get; set; }
+    public int? LocationId { get; set; }
+    public string? LocationName { get; set; }
+    public string? LocationNavigation { get; set; }
+    public string? LocationCity { get; set; }
 }

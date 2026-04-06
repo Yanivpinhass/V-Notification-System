@@ -5,6 +5,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.magav.app.db.dao.AppSettingDao
+import com.magav.app.db.dao.LocationDao
 import com.magav.app.db.dao.MessageTemplateDao
 import com.magav.app.db.dao.SchedulerConfigDao
 import com.magav.app.db.dao.SchedulerRunLogDao
@@ -13,6 +14,7 @@ import com.magav.app.db.dao.SmsLogDao
 import com.magav.app.db.dao.UserDao
 import com.magav.app.db.dao.VolunteerDao
 import com.magav.app.db.entity.AppSettingEntity
+import com.magav.app.db.entity.LocationEntity
 import com.magav.app.db.entity.MessageTemplateEntity
 import com.magav.app.db.entity.SchedulerConfigEntity
 import com.magav.app.db.entity.SchedulerRunLogEntity
@@ -30,9 +32,10 @@ import com.magav.app.db.entity.VolunteerEntity
         SchedulerConfigEntity::class,
         SchedulerRunLogEntity::class,
         AppSettingEntity::class,
-        MessageTemplateEntity::class
+        MessageTemplateEntity::class,
+        LocationEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class MagavDatabase : RoomDatabase() {
@@ -44,6 +47,7 @@ abstract class MagavDatabase : RoomDatabase() {
     abstract fun schedulerRunLogDao(): SchedulerRunLogDao
     abstract fun appSettingDao(): AppSettingDao
     abstract fun messageTemplateDao(): MessageTemplateDao
+    abstract fun locationDao(): LocationDao
 
     companion object {
         val MIGRATION_3_4 = object : Migration(3, 4) {
@@ -70,6 +74,26 @@ abstract class MagavDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE Shifts_new RENAME TO Shifts")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_Shifts_ShiftDate ON Shifts(ShiftDate)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_Shifts_VolunteerId ON Shifts(VolunteerId)")
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS Locations (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        Name TEXT NOT NULL,
+                        Address TEXT,
+                        City TEXT,
+                        Navigation TEXT,
+                        CreatedAt TEXT,
+                        UpdatedAt TEXT
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_Locations_Name ON Locations(Name)")
+                db.execSQL("ALTER TABLE Shifts ADD COLUMN LocationId INTEGER")
+                db.execSQL("ALTER TABLE Shifts ADD COLUMN CustomLocationName TEXT")
+                db.execSQL("ALTER TABLE Shifts ADD COLUMN CustomLocationNavigation TEXT")
             }
         }
     }
