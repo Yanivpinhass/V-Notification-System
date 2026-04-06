@@ -13,8 +13,8 @@ android {
         applicationId = "com.magav.app"
         minSdk = 29
         targetSdk = 35
-        versionCode = 53
-        versionName = "1.4.4"
+        versionCode = 54
+        versionName = "1.4.5"
 
         buildConfigField("String", "LICENSE_PHONES",
             "\"${project.findProperty("LICENSE_PHONES") ?: "0547504775,0506271989"}\"")

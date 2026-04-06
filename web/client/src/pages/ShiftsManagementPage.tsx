@@ -16,7 +16,7 @@ import { shiftsService, ShiftWithVolunteerDto, UpdateShiftGroupRequest } from '@
 import { volunteersService, VolunteerDto } from '@/services/volunteersService';
 import { locationsService, LocationDto } from '@/services/locationsService';
 import { jewishHolidaysService, JewishHolidayDto } from '@/services/jewishHolidaysService';
-import { Loader2, Trash2, Plus, Search, Calendar as CalendarIcon, MessageSquare, Phone, Pencil, MapPin } from 'lucide-react';
+import { Loader2, Trash2, Plus, Search, Calendar as CalendarIcon, MessageSquare, Phone, Pencil, MapPin, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, addDays } from 'date-fns';
 import { he } from 'date-fns/locale';
@@ -507,18 +507,29 @@ export const ShiftsManagementPage: React.FC = () => {
   return (
     <div className="space-y-4 p-4" dir="rtl">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">ניהול משמרות</h1>
-        <div className="flex items-center gap-2">
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">ניהול משמרות</h1>
           <Button onClick={() => setNewGroupOpen(true)} className="min-h-[44px]" disabled={isSelectedDatePast}>
             <Plus className="h-4 w-4 ml-2" />
             משמרת חדשה
           </Button>
+        </div>
+        <div className="flex items-center justify-center gap-1">
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-11 w-11 md:h-9 md:w-9"
+            aria-label="יום קודם"
+            onClick={() => setSelectedDate(addDays(selectedDate, -1))}
+          >
+            <ChevronRight className="h-5 w-5" />
+          </Button>
           <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="min-h-[44px] min-w-[140px]">
+              <Button variant="outline" className="min-h-[44px] min-w-[160px]">
                 <CalendarIcon className="h-4 w-4 ml-2" />
-                {format(selectedDate, 'dd/MM/yyyy')}
+                {format(selectedDate, 'EEEE dd/MM', { locale: he })}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-3" align="end">
@@ -553,6 +564,15 @@ export const ShiftsManagementPage: React.FC = () => {
               />
             </PopoverContent>
           </Popover>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-11 w-11 md:h-9 md:w-9"
+            aria-label="יום הבא"
+            onClick={() => setSelectedDate(addDays(selectedDate, 1))}
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
         </div>
       </div>
 
