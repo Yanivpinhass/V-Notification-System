@@ -103,16 +103,6 @@ public class SmsSchedulerService : BackgroundService
             var targetDate = now.Date.AddDays(config.DaysBeforeShift);
             var targetDateStr = targetDate.ToString("yyyy-MM-dd");
 
-            // Check if already ran (pre-check before INSERT)
-            if (await db.SchedulerRunLog.ExistsForConfigAndDateAsync(
-                config.Id, targetDateStr, config.ReminderType))
-            {
-                _logger.LogDebug(
-                    "Skipping ConfigId={ConfigId}: already ran for {TargetDate} {ReminderType}",
-                    config.Id, targetDateStr, config.ReminderType);
-                continue;
-            }
-
             _logger.LogInformation(
                 "Triggering scheduler run: ConfigId={ConfigId}, DayGroup={DayGroup}, ReminderType={ReminderType}, TargetDate={TargetDate}",
                 config.Id, config.DayGroup, config.ReminderType, targetDateStr);

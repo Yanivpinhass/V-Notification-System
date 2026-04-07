@@ -211,9 +211,24 @@ public class SmsReminderService
             : $"\nהניידת נמצאת אצל {shift.LocationName}";
 
         if (!string.IsNullOrEmpty(shift.LocationNavigation))
-            text += $" ,נווט {shift.LocationNavigation}";
+            text += $"\n{AppendWazeNavigate(shift.LocationNavigation)}";
 
         return text;
+    }
+
+    private static string AppendWazeNavigate(string url)
+    {
+        if (string.IsNullOrEmpty(url))
+            return url;
+
+        if (!url.Contains("waze.com", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("waze://", StringComparison.OrdinalIgnoreCase))
+            return url;
+
+        if (url.Contains("navigate=yes", StringComparison.OrdinalIgnoreCase))
+            return url;
+
+        return url.Contains('?') ? $"{url}&navigate=yes" : $"{url}?navigate=yes";
     }
 
     public async Task<object> SendLocationUpdateAsync(DateTime date, string shiftName, string carId)

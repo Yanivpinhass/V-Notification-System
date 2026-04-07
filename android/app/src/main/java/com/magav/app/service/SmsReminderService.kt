@@ -194,7 +194,18 @@ class SmsReminderService(
             if (name.isNullOrEmpty()) return ""
             val text = if (!city.isNullOrEmpty()) "\nהניידת נמצאת ב$city ($name)"
                        else "\nהניידת נמצאת אצל $name"
-            return if (!navigation.isNullOrEmpty()) "$text ,נווט $navigation" else text
+            return if (!navigation.isNullOrEmpty()) "$text\n${appendWazeNavigate(navigation)}" else text
+        }
+
+        private fun appendWazeNavigate(url: String): String {
+            if (!url.contains("waze.com", ignoreCase = true) &&
+                !url.startsWith("waze://", ignoreCase = true))
+                return url
+
+            if (url.contains("navigate=yes", ignoreCase = true))
+                return url
+
+            return if (url.contains('?')) "$url&navigate=yes" else "$url?navigate=yes"
         }
 
         fun getHebrewDayName(day: DayOfWeek): String = when (day) {

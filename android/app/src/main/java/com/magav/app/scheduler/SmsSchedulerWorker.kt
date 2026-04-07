@@ -71,16 +71,6 @@ class SmsSchedulerWorker(
                 }
 
                 val targetDate = LocalDate.now(israelTz).plusDays(config.daysBeforeShift.toLong())
-                val targetDateStr = targetDate.toString()
-
-                // Prevent re-execution on retry (same check as checkAllConfigs)
-                if (database.schedulerRunLogDao().existsForConfigAndDate(
-                        config.id, targetDateStr, config.reminderType
-                    )
-                ) {
-                    android.util.Log.d("SmsWorker", "Config $configId already ran for $targetDateStr, skipping")
-                    return Result.success()
-                }
 
                 android.util.Log.d("SmsWorker", "Executing config ${config.id} (${config.reminderType}, daysBeforeShift=${config.daysBeforeShift}) for targetDate=$targetDate")
                 reminderService.execute(config, targetDate)
@@ -124,12 +114,6 @@ class SmsSchedulerWorker(
                 if (config.time != currentTime) continue
 
                 val targetDate = now.toLocalDate().plusDays(config.daysBeforeShift.toLong())
-                val targetDateStr = targetDate.toString()
-
-                if (database.schedulerRunLogDao().existsForConfigAndDate(
-                        config.id, targetDateStr, config.reminderType
-                    )
-                ) continue
 
                 val summary = reminderService.execute(config, targetDate)
                 totalEligible += summary.totalEligible
