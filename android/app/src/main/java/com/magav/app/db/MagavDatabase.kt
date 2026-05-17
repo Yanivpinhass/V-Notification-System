@@ -38,7 +38,7 @@ import com.magav.app.db.entity.VolunteerEntity
         LocationEntity::class,
         JewishHolidayEntity::class
     ],
-    version = 6,
+    version = 8,
     exportSchema = false
 )
 abstract class MagavDatabase : RoomDatabase() {
@@ -111,6 +111,24 @@ abstract class MagavDatabase : RoomDatabase() {
                     )
                 """.trimIndent())
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_JewishHolidays_Date ON JewishHolidays(Date)")
+            }
+        }
+
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE Shifts ADD COLUMN IsCanceled INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE Shifts ADD COLUMN CanceledAt TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_Shifts_IsCanceled ON Shifts(IsCanceled)")
+            }
+        }
+
+        // v7 → v8: no schema change. Version bump exists only to re-validate the schema
+        // after the IsCanceled index was added to the @Entity annotation in app v1.4.10.
+        // Without this bump, devices that ran v1.4.9 (which created the index in SQL but
+        // not in the entity declaration) hit a schema-hash mismatch on startup.
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_Shifts_IsCanceled ON Shifts(IsCanceled)")
             }
         }
     }

@@ -106,15 +106,24 @@ class MagavApplication : Application() {
 
         database = Room.databaseBuilder(this, MagavDatabase::class.java, "magav.db")
             .openHelperFactory(factory)
-            .addMigrations(MagavDatabase.MIGRATION_3_4, MagavDatabase.MIGRATION_4_5, MagavDatabase.MIGRATION_5_6)
-            .fallbackToDestructiveMigration()
+            .addMigrations(MagavDatabase.MIGRATION_3_4, MagavDatabase.MIGRATION_4_5, MagavDatabase.MIGRATION_5_6, MagavDatabase.MIGRATION_6_7, MagavDatabase.MIGRATION_7_8)
             .build()
 
-        // Verify DB can be opened (handles restored backup encrypted with old key)
+        // Verify DB can be opened. ONLY recover on SQLCipher key errors (wrong passphrase /
+        // file is not a database). Any other exception — including Room migration / schema
+        // validation failures — must propagate so user data is never silently wiped.
         try {
             database.openHelper.writableDatabase
         } catch (e: Exception) {
-            android.util.Log.w("MagavApp", "Database wrong key or corrupted, recreating: ${e.message}")
+            val msg = e.message ?: ""
+            val isCipherKeyError = msg.contains("file is not a database")
+                || msg.contains("file is encrypted")
+                || msg.contains("not a database")
+            if (!isCipherKeyError) {
+                android.util.Log.e("MagavApp", "Database open failed — preserving DB, rethrowing: ${e.message}", e)
+                throw e
+            }
+            android.util.Log.w("MagavApp", "SQLCipher key mismatch, recreating: ${e.message}")
             try { database.close() } catch (_: Exception) {}
             val dbFile = getDatabasePath("magav.db")
             dbFile.delete()
@@ -123,8 +132,7 @@ class MagavApplication : Application() {
             java.io.File(dbFile.path + "-journal").delete()
             database = Room.databaseBuilder(this, MagavDatabase::class.java, "magav.db")
                 .openHelperFactory(factory)
-                .addMigrations(MagavDatabase.MIGRATION_3_4, MagavDatabase.MIGRATION_4_5, MagavDatabase.MIGRATION_5_6)
-                .fallbackToDestructiveMigration()
+                .addMigrations(MagavDatabase.MIGRATION_3_4, MagavDatabase.MIGRATION_4_5, MagavDatabase.MIGRATION_5_6, MagavDatabase.MIGRATION_6_7, MagavDatabase.MIGRATION_7_8)
                 .build()
         }
     }

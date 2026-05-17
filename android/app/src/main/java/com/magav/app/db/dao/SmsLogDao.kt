@@ -31,6 +31,7 @@ interface SmsLogDao {
         FROM Shifts s
         LEFT JOIN SmsLog sl ON sl.ShiftId = s.Id
         WHERE s.ShiftDate >= :from
+          AND s.IsCanceled = 0
         GROUP BY s.ShiftDate, s.ShiftName
         HAVING COUNT(sl.Id) > 0
         ORDER BY s.ShiftDate DESC, s.ShiftName

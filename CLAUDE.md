@@ -67,6 +67,27 @@ The build script: (1) builds React in `web/client/`, (2) copies `dist/` to `andr
 
 **IMPORTANT: Always bump `versionCode` (and optionally `versionName`) in `android/app/build.gradle.kts` before every APK build.** The Android WebView caches the PWA service worker; `MainActivity.clearCacheOnVersionChange()` detects the new version code and clears the cache so users get the updated frontend without needing to uninstall. Forgetting to bump = users stuck on old UI.
 
+## 🚨 CRITICAL: Room schema changes WILL DELETE USER DATA if done wrong 🚨
+
+**Any change to a Room `@Entity` annotation — columns, indices, foreign keys, primary key, `defaultValue`, `@ColumnInfo` — requires ALL of the following, every time, no exceptions:**
+
+1. **Bump `@Database(version = N)`** in `android/app/src/main/java/com/magav/app/db/MagavDatabase.kt` to N+1.
+2. **Add a `MIGRATION_N_(N+1)`** in the same file's companion object. Use idempotent SQL (`ALTER TABLE … ADD COLUMN`, `CREATE INDEX IF NOT EXISTS`). For pure-annotation changes (e.g. declaring an existing index in `@Entity(indices = [...])`) the migration body can be a no-op `CREATE INDEX IF NOT EXISTS` — the version bump alone forces Room to re-validate the schema hash against the new entity.
+3. **Register the new migration** in BOTH `Room.databaseBuilder(...).addMigrations(...)` call sites in `MagavApplication.kt` (the initial build AND the recovery rebuild — there are two, both must be updated).
+4. **Make sure the migration SQL produces a schema that matches the entity exactly**, including every index. If the migration creates `index_Shifts_IsCanceled` but the entity doesn't declare `Index(value = ["IsCanceled"])` (or vice versa), Room's schema-hash check fails after migration.
+
+**Why this matters:** Room stores a schema fingerprint hash in the DB's `room_master_table`. On every startup, Room compares that hash to the one computed from the current entity annotations. If they don't match AND no valid migration exists, Room throws. If the app has `.fallbackToDestructiveMigration()` enabled (or a broad catch block that deletes the DB on any open error), **the entire user database is silently wiped — volunteers, shifts, SMS history, scheduler configs, all of it. There is no recovery from the device side.**
+
+**Things that look harmless but break the hash:**
+- Adding `Index(value = ["X"])` to `@Entity(indices = [...])` without bumping DB version
+- Adding/changing `@ColumnInfo(defaultValue = "...")` without bumping DB version
+- Renaming a Kotlin field but keeping the same `@ColumnInfo(name = "...")` — actually safe, hash is based on `@ColumnInfo` name
+- Changing a column from nullable to non-nullable or vice versa — REQUIRES migration
+
+**Verifying before shipping:** After any entity/migration change, install the new APK on a dev device that has a populated DB from the previous version. Open the app. Verify existing data is still visible AND no "שגיאה באתחול המערכת" notification appears. Only then send to users.
+
+**Defensive code in place** (do not remove without understanding what you're trading away): `MagavApplication.initializeDatabase()` does NOT use `.fallbackToDestructiveMigration()`. Its catch block recovers ONLY on SQLCipher key/corruption errors (specific message strings) and re-throws everything else — so a future schema mismatch crashes the app visibly instead of silently destroying data. Keep it that way.
+
 There are no automated tests in this project.
 
 **Default dev credentials:** username `admin`, password `Admin123!` (.NET) or `12345` (Android seeded by DatabaseInitializer).

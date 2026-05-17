@@ -2,6 +2,10 @@ package com.magav.app.api.routes
 
 import android.content.Context
 import com.magav.app.api.models.ApiResponse
+import com.magav.app.api.models.CancelGroupResult
+import com.magav.app.api.models.CancelShiftGroupRequest
+import com.magav.app.api.models.CancelShiftRequest
+import com.magav.app.api.models.CanceledShiftDto
 import com.magav.app.api.models.CreateShiftRequest
 import com.magav.app.api.models.DateShiftInfo
 import com.magav.app.api.models.DeleteGroupResult
@@ -234,6 +238,181 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                 call.respond(ApiResponse.ok(DeleteGroupResult(matching.size, smsSent, smsFailed)))
             }
 
+            // POST /api/shifts/{id}/cancel - soft-cancel a single shift (optionally send SMS first)
+            post("/{id}/cancel") {
+                call.requireRole("Admin", "SystemManager")
+
+                val id = call.parameters["id"]?.toIntOrNull()
+                if (id == null) {
+                    call.respond(HttpStatusCode.BadRequest, ApiResponse.fail<Unit>("מזהה לא תקין"))
+                    return@post
+                }
+
+                val shift = database.shiftDao().getById(id) ?: run {
+                    call.respond(HttpStatusCode.NotFound, ApiResponse.fail<Unit>("שיבוץ לא נמצא"))
+                    return@post
+                }
+                if (shift.isCanceled == 1) {
+                    call.respond(HttpStatusCode.BadRequest, ApiResponse.fail<Unit>("המשמרת כבר מבוטלת"))
+                    return@post
+                }
+
+                val request = call.receive<CancelShiftRequest>()
+
+                if (request.sendNotification && shift.volunteerId != null) {
+                    try {
+                        val volunteer = database.volunteerDao().getById(shift.volunteerId)
+                        if (volunteer != null
+                            && !volunteer.mobilePhone.isNullOrBlank()
+                            && volunteer.approveToReceiveSms == 1) {
+                            val template = database.messageTemplateDao().getById(3)
+                            if (template != null) {
+                                val israelTz = ZoneId.of("Asia/Jerusalem")
+                                val shiftDate = Instant.parse(shift.shiftDate).atZone(israelTz).toLocalDate()
+                                val message = SmsReminderService.buildMessage(
+                                    template.content, shift.shiftName, shift.carId,
+                                    volunteer.mappingName, shiftDate
+                                )
+                                val subIdSetting = database.appSettingDao().getByKey("sms_sim_subscription_id")
+                                val subscriptionId = subIdSetting?.value?.toIntOrNull() ?: -1
+                                val smsProvider = AndroidSmsProvider(context, subscriptionId)
+                                val result = smsProvider.sendSms(volunteer.mobilePhone, message)
+                                database.smsLogDao().insert(
+                                    SmsLogEntity(
+                                        shiftId = shift.id,
+                                        sentAt = Instant.now().toString(),
+                                        status = if (result.success) SmsStatuses.SUCCESS else SmsStatuses.FAIL,
+                                        error = result.error,
+                                        reminderType = ReminderTypes.MANUAL
+                                    )
+                                )
+                            }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("ShiftRoutes", "Cancel SMS failed (continuing)", e)
+                    }
+                }
+
+                val now = Instant.now().toString()
+                database.shiftDao().cancelById(id, now, now)
+                call.respond(ApiResponse.ok("השיבוץ הועבר לרשימת המבוטלים"))
+            }
+
+            // POST /api/shifts/cancel-group - soft-cancel an entire team (optionally send SMS)
+            post("/cancel-group") {
+                call.requireRole("Admin", "SystemManager")
+
+                val request = call.receive<CancelShiftGroupRequest>()
+
+                if (request.shiftName.isBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, ApiResponse.fail<Unit>("שם משמרת נדרש"))
+                    return@post
+                }
+
+                val date = try {
+                    LocalDate.parse(request.date)
+                } catch (_: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, ApiResponse.fail<Unit>("פורמט תאריך לא תקין"))
+                    return@post
+                }
+
+                val (from, to) = date.toIsoRange()
+                // getByDateRange already excludes canceled
+                val allShifts = database.shiftDao().getByDateRange(from, to)
+                val carId = request.carId.ifBlank { "" }
+                val matching = allShifts.filter { it.shiftName == request.shiftName && it.carId == carId }
+
+                if (matching.isEmpty()) {
+                    call.respond(HttpStatusCode.NotFound, ApiResponse.fail<Unit>("לא נמצאו שיבוצים לביטול"))
+                    return@post
+                }
+
+                var smsSent = 0
+                var smsFailed = 0
+
+                if (request.sendNotifications) {
+                    val template = database.messageTemplateDao().getById(3)
+                    if (template != null) {
+                        val subIdSetting = database.appSettingDao().getByKey("sms_sim_subscription_id")
+                        val subscriptionId = subIdSetting?.value?.toIntOrNull() ?: -1
+                        val smsProvider = AndroidSmsProvider(context, subscriptionId)
+                        val israelTz = ZoneId.of("Asia/Jerusalem")
+                        val volunteers = database.volunteerDao().getAll()
+                        val volunteerMap = volunteers.associateBy { it.id }
+
+                        for (shift in matching) {
+                            if (shift.volunteerId == null) continue
+                            try {
+                                val volunteer = volunteerMap[shift.volunteerId] ?: continue
+                                if (volunteer.mobilePhone.isNullOrBlank() || volunteer.approveToReceiveSms != 1) continue
+
+                                val shiftDate = Instant.parse(shift.shiftDate).atZone(israelTz).toLocalDate()
+                                val message = SmsReminderService.buildMessage(
+                                    template.content, shift.shiftName, shift.carId,
+                                    volunteer.mappingName, shiftDate
+                                )
+                                val result = smsProvider.sendSms(volunteer.mobilePhone, message)
+                                if (result.success) smsSent++ else smsFailed++
+                            } catch (_: Exception) {
+                                smsFailed++
+                            }
+                        }
+                    }
+                }
+
+                val now = Instant.now().toString()
+                val canceled = database.shiftDao().cancelShiftGroup(now, now, from, to, request.shiftName, carId)
+
+                call.respond(ApiResponse.ok(CancelGroupResult(canceled, smsSent, smsFailed)))
+            }
+
+            // GET /api/shifts/canceled?month=YYYY-MM
+            get("/canceled") {
+                call.requireRole("Admin", "SystemManager")
+
+                val monthStr = call.request.queryParameters["month"]
+                if (monthStr.isNullOrBlank() || !Regex("""^\d{4}-\d{2}$""").matches(monthStr)) {
+                    call.respond(HttpStatusCode.BadRequest, ApiResponse.fail<Unit>("פרמטר חודש נדרש בפורמט YYYY-MM"))
+                    return@get
+                }
+
+                val parts = monthStr.split('-')
+                val year = parts[0].toIntOrNull()
+                val month = parts[1].toIntOrNull()
+                if (year == null || month == null || month !in 1..12 || year !in 2000..2100) {
+                    call.respond(HttpStatusCode.BadRequest, ApiResponse.fail<Unit>("פורמט חודש לא תקין"))
+                    return@get
+                }
+
+                val from = LocalDate.of(year, month, 1).toIsoInstant()
+                val to = LocalDate.of(year, month, 1).plusMonths(1).toIsoInstant()
+
+                val rows = database.shiftDao().getCanceledByDateRange(from, to)
+                val volunteers = database.volunteerDao().getAll().associateBy { it.id }
+                val locations = database.locationDao().getAll().associateBy { it.id }
+
+                val dtos = rows.map { shift ->
+                    val vol = shift.volunteerId?.let { volunteers[it] }
+                    val loc = shift.locationId?.let { locations[it] }
+                    CanceledShiftDto(
+                        id = shift.id,
+                        shiftDate = shift.shiftDate,
+                        shiftName = shift.shiftName,
+                        carId = shift.carId,
+                        volunteerId = shift.volunteerId,
+                        volunteerName = vol?.mappingName ?: shift.volunteerName,
+                        volunteerPhone = vol?.mobilePhone,
+                        volunteerApproved = vol?.approveToReceiveSms == 1,
+                        locationId = shift.locationId,
+                        locationName = loc?.name ?: shift.customLocationName,
+                        locationNavigation = loc?.navigation ?: shift.customLocationNavigation,
+                        locationCity = loc?.city,
+                        canceledAt = shift.canceledAt
+                    )
+                }
+                call.respond(ApiResponse.ok(dtos))
+            }
+
             // POST /api/shifts/{id}/send-sms - send SMS to a shift volunteer
             post("/{id}/send-sms") {
                 call.requireRole("Admin", "SystemManager")
@@ -243,6 +422,11 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
 
                 val shift = database.shiftDao().getById(id) ?: run {
                     call.respond(HttpStatusCode.NotFound, ApiResponse.fail<Unit>("שיבוץ לא נמצא"))
+                    return@post
+                }
+
+                if (shift.isCanceled == 1) {
+                    call.respond(HttpStatusCode.BadRequest, ApiResponse.fail<Unit>("לא ניתן לשלוח SMS למשמרת מבוטלת"))
                     return@post
                 }
 

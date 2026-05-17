@@ -13,6 +13,7 @@ import { SchedulerSettingsPage } from '@/pages/SchedulerSettingsPage';
 import { SchedulerRunLogPage } from '@/pages/SchedulerRunLogPage';
 import { SmsSettingsPage } from '@/pages/SmsSettingsPage';
 import { ShiftsManagementPage } from '@/pages/ShiftsManagementPage';
+import { CanceledShiftsPage } from '@/pages/CanceledShiftsPage';
 import { MessageTemplatesPage } from '@/pages/MessageTemplatesPage';
 import { AboutVersionPage } from '@/pages/AboutVersionPage';
 import { LocationsManagementPage } from '@/pages/LocationsManagementPage';
@@ -83,6 +84,8 @@ const Index = () => {
         return <SmsSettingsPage />;
       case 'shifts-management':
         return <ShiftsManagementPage />;
+      case 'canceled-shifts':
+        return <CanceledShiftsPage />;
       case 'message-templates':
         return <MessageTemplatesPage />;
       case 'jewish-holidays':

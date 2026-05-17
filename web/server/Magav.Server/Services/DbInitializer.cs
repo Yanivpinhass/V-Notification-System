@@ -117,6 +117,8 @@ public class DbInitializer
                     CustomLocationName TEXT NULL,
                     CustomLocationNavigation TEXT NULL,
                     SmsSentAt TEXT NULL,
+                    IsCanceled INTEGER NOT NULL DEFAULT 0,
+                    CanceledAt TEXT NULL,
                     CreatedAt TEXT NULL,
                     UpdatedAt TEXT NULL,
                     FOREIGN KEY (VolunteerId) REFERENCES Volunteers(Id),
@@ -124,6 +126,7 @@ public class DbInitializer
                 );
                 CREATE INDEX IX_Shifts_VolunteerId ON Shifts(VolunteerId);
                 CREATE INDEX IX_Shifts_ShiftDate ON Shifts(ShiftDate);
+                CREATE INDEX IX_Shifts_IsCanceled ON Shifts(IsCanceled);
             ";
 
             await using var shiftsCmd = new SqliteCommand(createShiftsSql, connection);
@@ -260,6 +263,7 @@ public class DbInitializer
             await MigrateShiftsTableAsync(connection);
             await MigrateLocationsAsync(connection);
             await MigrateJewishHolidaysAsync(connection);
+            await MigrateCancellationColumnsAsync(connection);
         }
 
     }
@@ -386,6 +390,46 @@ public class DbInitializer
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Locations migration error: {ex}");
+        }
+    }
+
+    private static async Task MigrateCancellationColumnsAsync(SqliteConnection connection)
+    {
+        try
+        {
+            var existingColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using (var pragmaCmd = new SqliteCommand("PRAGMA table_info(Shifts)", connection))
+            await using (var reader = await pragmaCmd.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    existingColumns.Add(reader.GetString(1));
+                }
+            }
+
+            if (!existingColumns.Contains("IsCanceled"))
+            {
+                Console.WriteLine("Adding column IsCanceled to Shifts table...");
+                await using var alterCmd = new SqliteCommand(
+                    "ALTER TABLE Shifts ADD COLUMN IsCanceled INTEGER NOT NULL DEFAULT 0", connection);
+                await alterCmd.ExecuteNonQueryAsync();
+            }
+
+            if (!existingColumns.Contains("CanceledAt"))
+            {
+                Console.WriteLine("Adding column CanceledAt to Shifts table...");
+                await using var alterCmd = new SqliteCommand(
+                    "ALTER TABLE Shifts ADD COLUMN CanceledAt TEXT NULL", connection);
+                await alterCmd.ExecuteNonQueryAsync();
+            }
+
+            await using var indexCmd = new SqliteCommand(
+                "CREATE INDEX IF NOT EXISTS IX_Shifts_IsCanceled ON Shifts(IsCanceled)", connection);
+            await indexCmd.ExecuteNonQueryAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Cancellation columns migration error: {ex}");
         }
     }
 

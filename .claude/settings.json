@@ -153,7 +153,29 @@
       "Bash(gh pr:*)",
       "Bash(node -e \"const {twMerge} = require\\('./web/client/node_modules/tailwind-merge'\\); console.log\\(twMerge\\('flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2', 'flex flex-col gap-2 mt-4'\\)\\)\")",
       "Bash(node -e \"const {twMerge} = require\\('./web/client/node_modules/tailwind-merge'\\); console.log\\('WITH sm:flex-col:', twMerge\\('flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2', 'flex flex-col gap-2 mt-4 sm:flex-col'\\)\\)\")",
-      "Bash(wc -l *.tsx)"
+      "Bash(wc -l *.tsx)",
+      "Bash(/c/Users/yaniv/AppData/Local/Android/Sdk/platform-tools/adb.exe devices:*)",
+      "Bash(/c/Users/yaniv/AppData/Local/Android/Sdk/platform-tools/adb.exe kill-server:*)",
+      "Bash(/c/Users/yaniv/AppData/Local/Android/Sdk/platform-tools/adb.exe start-server:*)",
+      "Bash(/c/Users/yaniv/AppData/Local/Android/Sdk/platform-tools/adb.exe logcat:*)",
+      "Bash(/c/Users/yaniv/AppData/Local/Android/Sdk/platform-tools/adb.exe forward:*)",
+      "Bash(python3 -c ' *)",
+      "Bash(Get-ChildItem -Path \"c:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\" -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(Get-ChildItem -Path \"C:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\" -Recurse -Directory)",
+      "Bash(Select-Object -First 30)",
+      "Bash(git log *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\web\\\\server\\\\Magav.Common\\\\Models\" -Filter \"*.cs\")",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(git diff *)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\tmp\" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })",
+      "PowerShell($apk = \"c:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android\\\\app\\\\build\\\\outputs\\\\apk\\\\debug\\\\app-debug.apk\"; if \\(Test-Path $apk\\) { $info = Get-Item $apk; \"APK: $\\($info.FullName\\)`nSize: $\\([math]::Round\\($info.Length/1MB, 2\\)\\) MB`nBuilt: $\\($info.LastWriteTime\\)\" } else { \"APK not found\" })",
+      "PowerShell($apk = \"c:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android\\\\app\\\\build\\\\outputs\\\\apk\\\\debug\\\\app-debug.apk\"; if \\(Test-Path $apk\\) { $info = Get-Item $apk; \"APK: $\\($info.FullName\\)`nSize: $\\([math]::Round\\($info.Length/1MB, 2\\)\\) MB`nBuilt: $\\($info.LastWriteTime\\)\" })",
+      "PowerShell($apk = \"c:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android\\\\app\\\\build\\\\outputs\\\\apk\\\\debug\\\\app-debug.apk\"; $info = Get-Item $apk; \"APK: $\\($info.FullName\\)`nSize: $\\([math]::Round\\($info.Length/1MB, 2\\)\\) MB`nBuilt: $\\($info.LastWriteTime\\)\")",
+      "Bash(git check-ignore *)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
     ]
   },
   "effortLevel": "high"

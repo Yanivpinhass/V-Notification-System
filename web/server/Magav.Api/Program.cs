@@ -866,6 +866,198 @@ app.MapPost("/api/shifts/delete-group", async (DeleteShiftGroupRequest request,
     }
 }).RequireAuthorization("CanManageMessages");
 
+// POST /api/shifts/{id}/cancel - soft-cancel a single shift (optionally send SMS first)
+app.MapPost("/api/shifts/{id:int}/cancel", async (int id, CancelShiftRequest request,
+    MagavDbManager db, ISmsProvider smsProvider) =>
+{
+    try
+    {
+        var shift = await db.Shifts.GetByIdAsync(id);
+        if (shift == null)
+            return Results.NotFound(ApiResponse<object>.Fail("שיבוץ לא נמצא"));
+        if (shift.IsCanceled)
+            return Results.BadRequest(ApiResponse<object>.Fail("המשמרת כבר מבוטלת"));
+
+        // Optional cancellation SMS (template 3). Failure does NOT block the cancel.
+        if (request.SendNotification && shift.VolunteerId != null)
+        {
+            try
+            {
+                var volunteer = await db.Volunteers.GetByIdAsync(shift.VolunteerId.Value);
+                if (volunteer != null
+                    && !string.IsNullOrEmpty(volunteer.MobilePhone)
+                    && volunteer.ApproveToReceiveSms)
+                {
+                    var template = await db.MessageTemplates.GetByIdAsync(3);
+                    if (template != null)
+                    {
+                        var shiftDto = new ShiftVolunteerDto
+                        {
+                            ShiftId = shift.Id,
+                            ShiftDate = shift.ShiftDate,
+                            ShiftName = shift.ShiftName,
+                            CarId = shift.CarId,
+                            VolunteerId = volunteer.Id,
+                            FirstName = volunteer.FirstName,
+                            LastName = volunteer.LastName,
+                            MappingName = volunteer.MappingName,
+                            MobilePhone = volunteer.MobilePhone
+                        };
+                        var message = SmsReminderService.BuildMessage(template.Content, shiftDto, shift.ShiftDate);
+                        var result = await smsProvider.SendSmsAsync(volunteer.MobilePhone, message);
+
+                        await db.SmsLog.InsertAsync(new SmsLog
+                        {
+                            ShiftId = shift.Id,
+                            SentAt = DateTime.UtcNow,
+                            Status = result.Success ? MagavConstants.SmsStatuses.Success : MagavConstants.SmsStatuses.Fail,
+                            Error = result.Error,
+                            ReminderType = MagavConstants.ReminderTypes.Manual
+                        });
+                    }
+                }
+            }
+            catch (Exception smsEx)
+            {
+                Console.Error.WriteLine($"Cancel SMS failed (continuing with cancel): {smsEx}");
+            }
+        }
+
+        var nowIso = DateTime.UtcNow.ToString("o");
+        await db.Db.ExecuteQueryAsync(
+            "UPDATE Shifts SET IsCanceled = 1, CanceledAt = @0, UpdatedAt = @1 WHERE Id = @2",
+            nowIso, nowIso, id);
+
+        return Results.Ok(ApiResponse<object>.Ok(null!, "השיבוץ הועבר לרשימת המבוטלים"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error canceling shift: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בביטול השיבוץ"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// POST /api/shifts/cancel-group - soft-cancel an entire team for a date (optionally send SMS)
+app.MapPost("/api/shifts/cancel-group", async (CancelShiftGroupRequest request,
+    MagavDbManager db, ISmsProvider smsProvider) =>
+{
+    try
+    {
+        if (string.IsNullOrWhiteSpace(request.ShiftName))
+            return Results.BadRequest(ApiResponse<object>.Fail("שם משמרת נדרש"));
+
+        if (!DateTime.TryParse(request.Date, out var parsedDate))
+            return Results.BadRequest(ApiResponse<object>.Fail("פורמט תאריך לא תקין"));
+
+        // GetByDateAsync already filters canceled — only active rows are returned.
+        var allShifts = await db.Shifts.GetByDateAsync(parsedDate);
+        var matching = allShifts
+            .Where(s => s.ShiftName == request.ShiftName && s.CarId == (request.CarId ?? ""))
+            .ToList();
+
+        if (matching.Count == 0)
+            return Results.NotFound(ApiResponse<object>.Fail("לא נמצאו שיבוצים לביטול"));
+
+        var smsSent = 0;
+        var smsFailed = 0;
+
+        if (request.SendNotifications)
+        {
+            var template = await db.MessageTemplates.GetByIdAsync(3);
+            if (template != null)
+            {
+                var allVolunteers = await db.Volunteers.GetAllAsync();
+                var volunteerMap = allVolunteers.ToDictionary(v => v.Id);
+
+                foreach (var shift in matching)
+                {
+                    if (shift.VolunteerId == null) continue;
+
+                    try
+                    {
+                        if (!volunteerMap.TryGetValue(shift.VolunteerId.Value, out var volunteer)) continue;
+                        if (string.IsNullOrEmpty(volunteer.MobilePhone) || !volunteer.ApproveToReceiveSms)
+                            continue;
+
+                        var shiftDto = new ShiftVolunteerDto
+                        {
+                            ShiftId = shift.Id,
+                            ShiftDate = shift.ShiftDate,
+                            ShiftName = shift.ShiftName,
+                            CarId = shift.CarId,
+                            VolunteerId = volunteer.Id,
+                            FirstName = volunteer.FirstName,
+                            LastName = volunteer.LastName,
+                            MappingName = volunteer.MappingName,
+                            MobilePhone = volunteer.MobilePhone
+                        };
+                        var message = SmsReminderService.BuildMessage(template.Content, shiftDto, shift.ShiftDate);
+                        var result = await smsProvider.SendSmsAsync(volunteer.MobilePhone, message);
+
+                        if (result.Success) smsSent++;
+                        else smsFailed++;
+                    }
+                    catch
+                    {
+                        smsFailed++;
+                    }
+                }
+            }
+        }
+
+        var nowIso = DateTime.UtcNow.ToString("o");
+        var dateStart = parsedDate.Date.ToString("o");
+        var dateEnd = parsedDate.Date.AddDays(1).ToString("o");
+        await db.Db.ExecuteQueryAsync(
+            @"UPDATE Shifts SET IsCanceled = 1, CanceledAt = @0, UpdatedAt = @1
+              WHERE ShiftDate >= @2 AND ShiftDate < @3
+                AND ShiftName = @4 AND CarId = @5
+                AND IsCanceled = 0",
+            nowIso, nowIso, dateStart, dateEnd, request.ShiftName, request.CarId ?? "");
+
+        return Results.Ok(ApiResponse<CancelGroupResult>.Ok(
+            new CancelGroupResult(matching.Count, smsSent, smsFailed),
+            "הצוות הועבר לרשימת המבוטלים"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error canceling shift group: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בביטול הצוות"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// GET /api/shifts/canceled?month=YYYY-MM - list canceled shifts for a calendar month
+app.MapGet("/api/shifts/canceled", async (string? month, MagavDbManager db) =>
+{
+    try
+    {
+        if (string.IsNullOrWhiteSpace(month)
+            || !System.Text.RegularExpressions.Regex.IsMatch(month, @"^\d{4}-\d{2}$"))
+            return Results.BadRequest(ApiResponse<object>.Fail("פרמטר חודש נדרש בפורמט YYYY-MM"));
+
+        var parts = month.Split('-');
+        if (!int.TryParse(parts[0], out var year)
+            || !int.TryParse(parts[1], out var m)
+            || m < 1 || m > 12
+            || year < 2000 || year > 2100)
+            return Results.BadRequest(ApiResponse<object>.Fail("פורמט חודש לא תקין"));
+
+        var rows = await db.Shifts.GetCanceledByMonthAsync(year, m);
+        return Results.Ok(ApiResponse<List<CanceledShiftRow>>.Ok(rows));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error fetching canceled shifts: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בטעינת המשמרות המבוטלות"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
 // POST /api/shifts/{id}/send-sms - send SMS to a shift volunteer
 app.MapPost("/api/shifts/{id:int}/send-sms", async (int id, SendShiftSmsRequest request,
     MagavDbManager db, ISmsProvider smsProvider) =>
@@ -875,6 +1067,9 @@ app.MapPost("/api/shifts/{id:int}/send-sms", async (int id, SendShiftSmsRequest 
         var shift = await db.Shifts.GetByIdAsync(id);
         if (shift == null)
             return Results.NotFound(ApiResponse<object>.Fail("שיבוץ לא נמצא"));
+
+        if (shift.IsCanceled)
+            return Results.BadRequest(ApiResponse<object>.Fail("לא ניתן לשלוח SMS למשמרת מבוטלת"));
 
         if (shift.VolunteerId == null)
             return Results.BadRequest(ApiResponse<object>.Fail("לא ניתן לשלוח SMS למתנדב לא מזוהה"));
@@ -1665,6 +1860,7 @@ app.MapGet("/api/sms-log/summary", async (int? days, MagavDbManager db) =>
               FROM Shifts s
               LEFT JOIN SmsLog sl ON sl.ShiftId = s.Id
               WHERE s.ShiftDate >= @0
+                AND s.IsCanceled = 0
               GROUP BY s.ShiftDate, s.ShiftName
               HAVING COUNT(sl.Id) > 0
               ORDER BY s.ShiftDate DESC, s.ShiftName", from, MagavConstants.SmsStatuses.Success, MagavConstants.SmsStatuses.Fail);
@@ -1979,6 +2175,9 @@ public record ShiftWithVolunteerDto(int Id, string ShiftDate, string ShiftName, 
 public record DateShiftInfo(string Date, bool HasUnresolved);
 public record DeleteShiftGroupRequest(string Date, string ShiftName, string CarId, bool SendNotifications);
 public record DeleteGroupResult(int DeletedCount, int SmsSentCount, int SmsFailedCount);
+public record CancelShiftRequest(bool SendNotification);
+public record CancelShiftGroupRequest(string Date, string ShiftName, string CarId, bool SendNotifications);
+public record CancelGroupResult(int CanceledCount, int SmsSentCount, int SmsFailedCount);
 
 // Location Management DTOs
 public record LocationRequest(string Name, string? Address, string? City, string? Navigation);

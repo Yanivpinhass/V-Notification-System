@@ -9,6 +9,7 @@ export const mainMenuItems: MenuItem[] = [
     requiredRoles: ['Admin', 'SystemManager'],
     subItems: [
       { id: 'shifts-management', title: 'משמרות', path: '/shift-management/shifts' },
+      { id: 'canceled-shifts', title: 'משמרות מבוטלות', path: '/shift-management/canceled' },
       { id: 'shifts-import', title: 'קליטת קובץ משמרות', path: '/shift-management/import' },
     ]
   },

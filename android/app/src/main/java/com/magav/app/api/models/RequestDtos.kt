@@ -181,6 +181,43 @@ data class DeleteGroupResult(
     val smsFailedCount: Int
 )
 
+@Serializable
+data class CancelShiftRequest(
+    val sendNotification: Boolean
+)
+
+@Serializable
+data class CancelShiftGroupRequest(
+    val date: String,
+    val shiftName: String,
+    val carId: String,
+    val sendNotifications: Boolean
+)
+
+@Serializable
+data class CancelGroupResult(
+    val canceledCount: Int,
+    val smsSentCount: Int,
+    val smsFailedCount: Int
+)
+
+@Serializable
+data class CanceledShiftDto(
+    val id: Int,
+    val shiftDate: String,
+    val shiftName: String,
+    val carId: String,
+    val volunteerId: Int?,
+    val volunteerName: String?,
+    val volunteerPhone: String?,
+    val volunteerApproved: Boolean,
+    val locationId: Int? = null,
+    val locationName: String? = null,
+    val locationNavigation: String? = null,
+    val locationCity: String? = null,
+    val canceledAt: String?
+)
+
 // ── Scheduler ────────────────────────────────────────────────────────────────
 
 @Serializable

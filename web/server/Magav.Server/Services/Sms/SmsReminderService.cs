@@ -45,6 +45,7 @@ public class SmsReminderService
               JOIN Volunteers v ON s.VolunteerId = v.Id
               LEFT JOIN Locations l ON s.LocationId = l.Id
               WHERE s.ShiftDate >= @0 AND s.ShiftDate < @1
+                AND s.IsCanceled = 0
                 AND v.ApproveToReceiveSms = 1
                 AND v.MobilePhone IS NOT NULL
                 AND v.MobilePhone != ''
@@ -248,6 +249,7 @@ public class SmsReminderService
               LEFT JOIN Locations l ON s.LocationId = l.Id
               WHERE s.ShiftDate >= @0 AND s.ShiftDate < @1
                 AND s.ShiftName = @2 AND s.CarId = @3
+                AND s.IsCanceled = 0
                 AND v.ApproveToReceiveSms = 1
                 AND v.MobilePhone IS NOT NULL
                 AND v.MobilePhone != ''",

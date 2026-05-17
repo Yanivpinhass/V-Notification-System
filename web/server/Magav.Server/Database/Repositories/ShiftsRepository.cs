@@ -14,25 +14,48 @@ public class ShiftsRepository : Repository<Shift>
         // Use date range comparison (works reliably with SQLite TEXT dates)
         var startOfDay = date.Date;
         var endOfDay = date.Date.AddDays(1);
-        return await Db.FetchAsync<Shift>(s => s.ShiftDate >= startOfDay && s.ShiftDate < endOfDay);
+        return await Db.FetchAsync<Shift>(s => s.ShiftDate >= startOfDay && s.ShiftDate < endOfDay && !s.IsCanceled);
     }
 
     public async Task<List<DateTime>> GetDatesWithShiftsAsync(DateTime from, DateTime to)
     {
-        var shifts = await Db.FetchAsync<Shift>(s => s.ShiftDate >= from && s.ShiftDate < to);
+        var shifts = await Db.FetchAsync<Shift>(s => s.ShiftDate >= from && s.ShiftDate < to && !s.IsCanceled);
         return shifts.Select(s => s.ShiftDate.Date).Distinct().ToList();
     }
 
     public async Task<List<DateTime>> GetDatesWithUnresolvedAsync(DateTime from, DateTime to)
     {
         var shifts = await Db.FetchAsync<Shift>(
-            "SELECT DISTINCT ShiftDate FROM Shifts WHERE VolunteerId IS NULL AND ShiftDate >= @0 AND ShiftDate < @1",
+            "SELECT DISTINCT ShiftDate FROM Shifts WHERE VolunteerId IS NULL AND IsCanceled = 0 AND ShiftDate >= @0 AND ShiftDate < @1",
             from, to);
         return shifts.Select(s => s.ShiftDate.Date).Distinct().ToList();
     }
 
     public async Task<List<Shift>> GetByVolunteerIdAsync(int volunteerId)
-        => await Db.FetchAsync<Shift>(s => s.VolunteerId == volunteerId);
+        => await Db.FetchAsync<Shift>(s => s.VolunteerId == volunteerId && !s.IsCanceled);
+
+    public async Task<List<CanceledShiftRow>> GetCanceledByMonthAsync(int year, int month)
+    {
+        var start = new DateTime(year, month, 1);
+        var end = start.AddMonths(1);
+        return await Db.FetchAsync<CanceledShiftRow>(
+            @"SELECT s.Id, s.ShiftDate, s.ShiftName, s.CarId, s.VolunteerId,
+                     s.LocationId, s.CustomLocationName, s.CustomLocationNavigation,
+                     s.CanceledAt,
+                     v.MappingName AS VolunteerName, v.MobilePhone AS VolunteerPhone,
+                     v.ApproveToReceiveSms AS VolunteerApproved,
+                     COALESCE(l.Name, s.CustomLocationName) AS LocationName,
+                     COALESCE(l.Navigation, s.CustomLocationNavigation) AS LocationNavigation,
+                     l.City AS LocationCity
+              FROM Shifts s
+              LEFT JOIN Volunteers v ON s.VolunteerId = v.Id
+              LEFT JOIN Locations  l ON s.LocationId  = l.Id
+              WHERE s.IsCanceled = 1
+                AND s.ShiftDate >= @0
+                AND s.ShiftDate <  @1
+              ORDER BY s.ShiftDate, s.ShiftName, v.MappingName",
+            start, end);
+    }
 
     public async Task<Shift?> GetByIdAsync(int id) => await GetByIdAsync((long)id);
 
@@ -107,6 +130,7 @@ public class ShiftsRepository : Repository<Shift>
               JOIN Shifts s ON sl.ShiftId = s.Id
               WHERE s.ShiftDate >= @0 AND s.ShiftDate < @1
                 AND s.ShiftName = @2 AND s.CarId = @3
+                AND s.IsCanceled = 0
                 AND sl.ReminderType = @4 AND sl.Status = @5",
             dateStart, dateEnd, shiftName, carId, MagavConstants.ReminderTypes.SameDay, MagavConstants.SmsStatuses.Success);
         return count > 0;

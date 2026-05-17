@@ -22,6 +22,22 @@ export interface DateShiftInfo {
   hasUnresolved: boolean;
 }
 
+export interface CanceledShiftDto {
+  id: number;
+  shiftDate: string;
+  shiftName: string;
+  carId: string;
+  volunteerId: number | null;
+  volunteerName: string | null;
+  volunteerPhone: string | null;
+  volunteerApproved: boolean;
+  locationId: number | null;
+  locationName: string | null;
+  locationNavigation: string | null;
+  locationCity: string | null;
+  canceledAt: string | null;
+}
+
 export interface CreateShiftRequest {
   shiftDate: string;
   shiftName: string;
@@ -84,6 +100,18 @@ class ShiftsService extends BaseApiClient {
 
   async sendLocationUpdate(data: { date: string; shiftName: string; carId: string }): Promise<{ smsSent: number; smsFailed: number }> {
     return this.post('/shifts/send-location-update', data);
+  }
+
+  async cancelShift(id: number, body: { sendNotification: boolean }): Promise<void> {
+    return this.post<void, { sendNotification: boolean }>(`/shifts/${id}/cancel`, body);
+  }
+
+  async cancelShiftGroup(data: { date: string; shiftName: string; carId: string; sendNotifications: boolean }): Promise<{ canceledCount: number; smsSentCount: number; smsFailedCount: number }> {
+    return this.post('/shifts/cancel-group', data);
+  }
+
+  async getCanceledShifts(month: string): Promise<CanceledShiftDto[]> {
+    return this.get<CanceledShiftDto[]>('/shifts/canceled', { month });
   }
 }
 

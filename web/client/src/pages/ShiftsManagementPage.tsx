@@ -12,6 +12,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { shiftsService, ShiftWithVolunteerDto, UpdateShiftGroupRequest } from '@/services/shiftsService';
 import { volunteersService, VolunteerDto } from '@/services/volunteersService';
 import { locationsService, LocationDto } from '@/services/locationsService';
@@ -45,11 +47,13 @@ export const ShiftsManagementPage: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<ShiftWithVolunteerDto | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingWithNotify, setDeletingWithNotify] = useState(false);
+  const [moveSingleToCanceled, setMoveSingleToCanceled] = useState(true);
 
   // Delete group dialog
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<ShiftGroup | null>(null);
   const [isDeletingGroup, setIsDeletingGroup] = useState(false);
   const [deletingGroupWithNotify, setDeletingGroupWithNotify] = useState(false);
+  const [moveGroupToCanceled, setMoveGroupToCanceled] = useState(true);
 
   // SMS sending
   const [sendingSmsId, setSendingSmsId] = useState<number | null>(null);
@@ -330,8 +334,13 @@ export const ShiftsManagementPage: React.FC = () => {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      await shiftsService.deleteShift(deleteTarget.id);
-      toast.success('השיבוץ נמחק בהצלחה');
+      if (moveSingleToCanceled) {
+        await shiftsService.cancelShift(deleteTarget.id, { sendNotification: false });
+        toast.success('השיבוץ הועבר לרשימת המבוטלים');
+      } else {
+        await shiftsService.deleteShift(deleteTarget.id);
+        toast.success('השיבוץ נמחק בהצלחה');
+      }
       setDeleteTarget(null);
       refreshData();
     } catch (err) {
@@ -346,13 +355,18 @@ export const ShiftsManagementPage: React.FC = () => {
     if (!deleteTarget) return;
     setDeletingWithNotify(true);
     try {
-      try {
-        await shiftsService.sendShiftSms(deleteTarget.id, 3);
-      } catch {
-        // SMS failed — still proceed with delete
+      if (moveSingleToCanceled) {
+        await shiftsService.cancelShift(deleteTarget.id, { sendNotification: true });
+        toast.success('השיבוץ הועבר לרשימת המבוטלים והמתנדב עודכן');
+      } else {
+        try {
+          await shiftsService.sendShiftSms(deleteTarget.id, 3);
+        } catch {
+          // SMS failed — still proceed with delete
+        }
+        await shiftsService.deleteShift(deleteTarget.id);
+        toast.success('השיבוץ נמחק והמתנדב עודכן');
       }
-      await shiftsService.deleteShift(deleteTarget.id);
-      toast.success('השיבוץ נמחק והמתנדב עודכן');
       setDeleteTarget(null);
       refreshData();
     } catch (err) {
@@ -367,17 +381,31 @@ export const ShiftsManagementPage: React.FC = () => {
     const setLoading = sendNotifications ? setDeletingGroupWithNotify : setIsDeletingGroup;
     setLoading(true);
     try {
-      const result = await shiftsService.deleteShiftGroup({
-        date: dateStr,
-        shiftName: deleteGroupTarget.shiftName,
-        carId: deleteGroupTarget.carId,
-        sendNotifications,
-      });
-      toast.success(
-        sendNotifications
-          ? `הצוות נמחק, ${result.smsSentCount} הודעות נשלחו`
-          : `הצוות נמחק בהצלחה (${result.deletedCount} שיבוצים)`
-      );
+      if (moveGroupToCanceled) {
+        const result = await shiftsService.cancelShiftGroup({
+          date: dateStr,
+          shiftName: deleteGroupTarget.shiftName,
+          carId: deleteGroupTarget.carId,
+          sendNotifications,
+        });
+        toast.success(
+          sendNotifications
+            ? `הצוות הועבר לרשימת המבוטלים, ${result.smsSentCount} הודעות נשלחו`
+            : `הצוות הועבר לרשימת המבוטלים (${result.canceledCount} שיבוצים)`
+        );
+      } else {
+        const result = await shiftsService.deleteShiftGroup({
+          date: dateStr,
+          shiftName: deleteGroupTarget.shiftName,
+          carId: deleteGroupTarget.carId,
+          sendNotifications,
+        });
+        toast.success(
+          sendNotifications
+            ? `הצוות נמחק, ${result.smsSentCount} הודעות נשלחו`
+            : `הצוות נמחק בהצלחה (${result.deletedCount} שיבוצים)`
+        );
+      }
       setDeleteGroupTarget(null);
       refreshData();
     } catch (err) {
@@ -708,7 +736,7 @@ export const ShiftsManagementPage: React.FC = () => {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => setDeleteGroupTarget(group)}
+                    onClick={() => { setMoveGroupToCanceled(true); setDeleteGroupTarget(group); }}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -797,7 +825,7 @@ export const ShiftsManagementPage: React.FC = () => {
                             size="icon"
                             className="h-11 w-11 md:h-8 md:w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                             disabled={isSelectedDatePast}
-                            onClick={() => setDeleteTarget(shift)}
+                            onClick={() => { setMoveSingleToCanceled(true); setDeleteTarget(shift); }}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -837,6 +865,17 @@ export const ShiftsManagementPage: React.FC = () => {
               האם למחוק את השיבוץ של {deleteTarget?.volunteerName}?
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="flex items-center gap-2 pt-2 pb-1">
+            <Checkbox
+              id="move-single-to-canceled"
+              checked={moveSingleToCanceled}
+              onCheckedChange={(c) => setMoveSingleToCanceled(c === true)}
+              disabled={isDeleting || deletingWithNotify}
+            />
+            <Label htmlFor="move-single-to-canceled" className="cursor-pointer text-sm font-normal">
+              העבר את המתנדב לרשימת המבוטלים
+            </Label>
+          </div>
           <div className="flex flex-row flex-wrap gap-2 pt-2">
             <AlertDialogCancel disabled={isDeleting || deletingWithNotify} className="mt-0">ביטול</AlertDialogCancel>
             <Button
@@ -872,6 +911,17 @@ export const ShiftsManagementPage: React.FC = () => {
               {' '}({deleteGroupTarget?.shifts.length} מתנדבים)?
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="flex items-center gap-2 pt-2 pb-1">
+            <Checkbox
+              id="move-group-to-canceled"
+              checked={moveGroupToCanceled}
+              onCheckedChange={(c) => setMoveGroupToCanceled(c === true)}
+              disabled={isDeletingGroup || deletingGroupWithNotify}
+            />
+            <Label htmlFor="move-group-to-canceled" className="cursor-pointer text-sm font-normal">
+              העבר את הצוות לרשימת המבוטלים
+            </Label>
+          </div>
           <div className="flex flex-row flex-wrap gap-2 pt-2">
             <AlertDialogCancel disabled={isDeletingGroup || deletingGroupWithNotify} className="mt-0">ביטול</AlertDialogCancel>
             <Button
