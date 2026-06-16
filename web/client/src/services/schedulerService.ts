@@ -38,8 +38,11 @@ class SchedulerService extends BaseApiClient {
     return this.get<SchedulerConfigEntry[]>('/scheduler/config');
   }
 
-  async updateConfig(configs: SchedulerConfigUpdate[]): Promise<void> {
-    return this.put<void>('/scheduler/config', configs);
+  // Per-row save: updates one config. The route id is authoritative; the body carries the full
+  // SchedulerConfigUpdate (id required — Ktor's kotlinx deserializer has no field defaults).
+  // Returns the updated row so callers can patch just that row's updatedAt.
+  async updateOne(update: SchedulerConfigUpdate): Promise<SchedulerConfigEntry> {
+    return this.put<SchedulerConfigEntry>(`/scheduler/config/${update.id}`, update);
   }
 
   async getRunLog(): Promise<SchedulerRunLogEntry[]> {

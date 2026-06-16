@@ -1918,36 +1918,17 @@ app.MapPut("/api/scheduler/config", async (
         if (configs.Count != configsById.Count || !submittedIds.SetEquals(configsById.Keys))
             return Results.BadRequest(ApiResponse<object>.Fail("רשימת ההגדרות אינה תואמת את ההגדרות הקיימות"));
 
-        var timeRegex = new Regex(@"^([01]\d|2[0-3]):[0-5]\d$");
-
         // Validate and collect existing records in one pass. The id-set check above already
         // guarantees every submitted id is present, so the dictionary lookup can't miss.
+        // Field validation is shared with the single-row endpoint via SchedulerConfigValidation.
         var existingConfigs = new List<SchedulerConfig>();
         foreach (var config in configs)
         {
             var existing = configsById[config.Id];
-
-            if (!timeRegex.IsMatch(config.Time))
-                return Results.BadRequest(ApiResponse<object>.Fail("פורמט שעה לא תקין (HH:mm)"));
-
-            if (config.IsEnabled != 0 && config.IsEnabled != 1)
-                return Results.BadRequest(ApiResponse<object>.Fail("ערך הפעלה לא תקין"));
-
-            if (config.DaysBeforeShift < 0 || config.DaysBeforeShift > 7)
-                return Results.BadRequest(ApiResponse<object>.Fail("ימים לפני משמרת חייב להיות בין 0 ל-7"));
-
-            // Cross-validate DaysBeforeShift against ReminderType
-            if (existing.ReminderType == MagavConstants.ReminderTypes.SameDay && config.DaysBeforeShift != 0)
-                return Results.BadRequest(ApiResponse<object>.Fail("תזכורת ליום המשמרת חייבת להיות 0 ימים לפני"));
-            if (existing.ReminderType == MagavConstants.ReminderTypes.Advance && config.DaysBeforeShift < 1)
-                return Results.BadRequest(ApiResponse<object>.Fail("תזכורת מוקדמת חייבת להיות לפחות יום אחד לפני"));
-            if (existing.ReminderType == MagavConstants.ReminderTypes.WeekdayAdvance && config.DaysBeforeShift < 1)
-                return Results.BadRequest(ApiResponse<object>.Fail("תזכורת מוקדמת (ימי חול בלבד) חייבת להיות לפחות יום אחד לפני"));
-
-            // Validate MessageTemplateId references an existing template
             var template = await db.MessageTemplates.GetByIdAsync(config.MessageTemplateId);
-            if (template == null)
-                return Results.BadRequest(ApiResponse<object>.Fail("תבנית הודעה לא נמצאה"));
+            var error = SchedulerConfigValidation.Validate(config, existing.ReminderType, template);
+            if (error != null)
+                return Results.BadRequest(ApiResponse<object>.Fail(error));
 
             existingConfigs.Add(existing);
         }
@@ -1975,6 +1956,47 @@ app.MapPut("/api/scheduler/config", async (
     catch (Exception ex)
     {
         Console.Error.WriteLine($"Error updating scheduler config: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בשמירת ההגדרות"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("AdminOnly");
+
+// PUT a single scheduler config by id (Admin only). The route {id} is authoritative — the body's
+// Id is ignored. ReminderType/DayGroup are server-owned and read from the stored row. Returns the
+// updated row so the client can patch just that row's UpdatedAt.
+app.MapPut("/api/scheduler/config/{id:int}", async (
+    int id,
+    SchedulerConfigUpdateDto config,
+    MagavDbManager db,
+    HttpContext context) =>
+{
+    try
+    {
+        var existing = await db.SchedulerConfig.GetByIdAsync(id);
+        if (existing == null)
+            return Results.NotFound(ApiResponse<object>.Fail("הגדרת תזמון לא נמצאה"));
+
+        var template = await db.MessageTemplates.GetByIdAsync(config.MessageTemplateId);
+        var error = SchedulerConfigValidation.Validate(config, existing.ReminderType, template);
+        if (error != null)
+            return Results.BadRequest(ApiResponse<object>.Fail(error));
+
+        var username = context.User.FindFirst(ClaimTypes.Name)?.Value ?? "unknown";
+
+        existing.Time = config.Time;
+        existing.DaysBeforeShift = config.DaysBeforeShift;
+        existing.IsEnabled = config.IsEnabled;
+        existing.MessageTemplateId = config.MessageTemplateId;
+        existing.UpdatedAt = DateTime.UtcNow;
+        existing.UpdatedBy = username;
+        await db.SchedulerConfig.UpdateAsync(existing);
+
+        return Results.Ok(ApiResponse<SchedulerConfig>.Ok(existing, "ההגדרה נשמרה בהצלחה"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error updating scheduler config {id}: {ex}");
         return Results.Json(
             ApiResponse<object>.Fail("אירעה שגיאה בשמירת ההגדרות"),
             statusCode: StatusCodes.Status500InternalServerError);
@@ -2167,6 +2189,34 @@ public class SmsLogSummaryDto
 
 // Scheduler Config DTO (editable fields only)
 public record SchedulerConfigUpdateDto(int Id, string Time, int DaysBeforeShift, int IsEnabled, int MessageTemplateId);
+
+// Shared field validation for scheduler config updates — used by BOTH the bulk PUT and the
+// single-row PUT so the two endpoints can never diverge. Returns null when valid, otherwise the
+// Hebrew error message. The caller resolves ReminderType (server-owned, not in the request) and
+// pre-fetches the template; checks run in the same order the bulk handler historically used.
+static class SchedulerConfigValidation
+{
+    private static readonly Regex TimeRegex = new(@"^([01]\d|2[0-3]):[0-5]\d$", RegexOptions.Compiled);
+
+    public static string? Validate(SchedulerConfigUpdateDto config, string reminderType, MessageTemplate? template)
+    {
+        if (!TimeRegex.IsMatch(config.Time))
+            return "פורמט שעה לא תקין (HH:mm)";
+        if (config.IsEnabled != 0 && config.IsEnabled != 1)
+            return "ערך הפעלה לא תקין";
+        if (config.DaysBeforeShift < 0 || config.DaysBeforeShift > 7)
+            return "ימים לפני משמרת חייב להיות בין 0 ל-7";
+        if (reminderType == MagavConstants.ReminderTypes.SameDay && config.DaysBeforeShift != 0)
+            return "תזכורת ליום המשמרת חייבת להיות 0 ימים לפני";
+        if (reminderType == MagavConstants.ReminderTypes.Advance && config.DaysBeforeShift < 1)
+            return "תזכורת מוקדמת חייבת להיות לפחות יום אחד לפני";
+        if (reminderType == MagavConstants.ReminderTypes.WeekdayAdvance && config.DaysBeforeShift < 1)
+            return "תזכורת מוקדמת (ימי חול בלבד) חייבת להיות לפחות יום אחד לפני";
+        if (template == null)
+            return "תבנית הודעה לא נמצאה";
+        return null;
+    }
+}
 
 // Message Template DTOs
 public record CreateMessageTemplateRequest(string Name, string Content);

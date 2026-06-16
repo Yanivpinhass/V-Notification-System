@@ -5,6 +5,7 @@ import com.magav.app.api.models.ApiResponse
 import com.magav.app.api.models.SchedulerConfigUpdateDto
 import com.magav.app.api.requireRole
 import com.magav.app.db.MagavDatabase
+import com.magav.app.db.entity.SchedulerConfigEntity
 import com.magav.app.scheduler.AlarmScheduler
 import com.magav.app.util.ReminderTypes
 import android.content.Context
@@ -55,21 +56,7 @@ fun Route.schedulerRoutes(database: MagavDatabase, context: Context) {
                 call.requireRole("Admin", "SystemManager")
 
                 val configs = database.schedulerConfigDao().getAll()
-                val response = configs.map { entity ->
-                    SchedulerConfigDto(
-                        id = entity.id,
-                        dayGroup = entity.dayGroup,
-                        reminderType = entity.reminderType,
-                        time = entity.time,
-                        daysBeforeShift = entity.daysBeforeShift,
-                        isEnabled = entity.isEnabled,
-                        messageTemplateId = entity.messageTemplateId,
-                        updatedAt = entity.updatedAt,
-                        updatedBy = entity.updatedBy
-                    )
-                }
-
-                call.respond(ApiResponse.ok(response))
+                call.respond(ApiResponse.ok(configs.map { toDto(it) }))
             }
 
             // PUT /api/scheduler/config - update scheduler configs
@@ -95,47 +82,11 @@ fun Route.schedulerRoutes(database: MagavDatabase, context: Context) {
                     return@put
                 }
 
-                // Validate each entry
+                // Validate each entry (field rules shared with the single-row endpoint). The
+                // id-set check above guarantees every submitted id is present in configsById.
                 for (update in updates) {
-                    // Time format HH:mm
-                    if (!TIME_REGEX.matches(update.time)) {
-                        throw IllegalArgumentException("פורמט שעה לא תקין: ${update.time}. נדרש HH:mm")
-                    }
-
-                    // IsEnabled 0 or 1
-                    if (update.isEnabled !in listOf(0, 1)) {
-                        throw IllegalArgumentException("ערך isEnabled חייב להיות 0 או 1")
-                    }
-
-                    // DaysBeforeShift 0-7
-                    if (update.daysBeforeShift !in 0..7) {
-                        throw IllegalArgumentException("ימים לפני משמרת חייב להיות בין 0 ל-7")
-                    }
-
-                    // Validate MessageTemplateId exists
-                    val template = database.messageTemplateDao().getById(update.messageTemplateId)
-                    if (template == null) {
-                        throw IllegalArgumentException("תבנית הודעה לא נמצאה")
-                    }
-
-                    // Cross-validate reminderType using the already-fetched config (the id-set
-                    // check above guarantees the id is present).
                     val existingConfig = configsById.getValue(update.id)
-
-                    // SameDay must have DaysBeforeShift=0
-                    if (existingConfig.reminderType == ReminderTypes.SAME_DAY && update.daysBeforeShift != 0) {
-                        throw IllegalArgumentException("תזכורת ביום המשמרת חייבת להיות עם 0 ימים לפני")
-                    }
-
-                    // Advance must have DaysBeforeShift>=1
-                    if (existingConfig.reminderType == ReminderTypes.ADVANCE && update.daysBeforeShift < 1) {
-                        throw IllegalArgumentException("תזכורת מקדימה חייבת להיות עם לפחות יום אחד לפני")
-                    }
-
-                    // WeekdayAdvance must have DaysBeforeShift>=1
-                    if (existingConfig.reminderType == ReminderTypes.WEEKDAY_ADVANCE && update.daysBeforeShift < 1) {
-                        throw IllegalArgumentException("תזכורת מוקדמת (ימי חול בלבד) חייבת להיות לפחות יום אחד לפני")
-                    }
+                    validateSchedulerFields(update, existingConfig.reminderType, database)
                 }
 
                 // Update each config
@@ -157,21 +108,43 @@ fun Route.schedulerRoutes(database: MagavDatabase, context: Context) {
 
                 // Return updated configs
                 val configs = database.schedulerConfigDao().getAll()
-                val response = configs.map { entity ->
-                    SchedulerConfigDto(
-                        id = entity.id,
-                        dayGroup = entity.dayGroup,
-                        reminderType = entity.reminderType,
-                        time = entity.time,
-                        daysBeforeShift = entity.daysBeforeShift,
-                        isEnabled = entity.isEnabled,
-                        messageTemplateId = entity.messageTemplateId,
-                        updatedAt = entity.updatedAt,
-                        updatedBy = entity.updatedBy
+                call.respond(ApiResponse.ok(configs.map { toDto(it) }))
+            }
+
+            // PUT /api/scheduler/config/{id} - update a single scheduler config. The route {id} is
+            // authoritative; the body's id is ignored. reminderType is read from the stored row.
+            put("/config/{id}") {
+                call.requireRole("Admin")
+
+                val id = call.parameters["id"]?.toIntOrNull()
+                    ?: throw IllegalArgumentException("מזהה לא תקין")
+
+                val existing = database.schedulerConfigDao().getById(id)
+                if (existing == null) {
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        ApiResponse.fail<Unit>("הגדרת תזמון לא נמצאה")
                     )
+                    return@put
                 }
 
-                call.respond(ApiResponse.ok(response))
+                val update = call.receive<SchedulerConfigUpdateDto>()
+                validateSchedulerFields(update, existing.reminderType, database)
+
+                val updated = existing.copy(
+                    time = update.time,
+                    daysBeforeShift = update.daysBeforeShift,
+                    isEnabled = update.isEnabled,
+                    messageTemplateId = update.messageTemplateId,
+                    updatedAt = Instant.now().toString(),
+                    updatedBy = call.getUserName() ?: "unknown"
+                )
+                database.schedulerConfigDao().update(updated)
+
+                // Re-schedule alarms with the updated config (parity with the bulk PUT)
+                AlarmScheduler(context).scheduleAllAlarms()
+
+                call.respond(ApiResponse.ok(toDto(updated)))
             }
 
             // GET /api/scheduler/run-log - recent 50 run logs
@@ -197,5 +170,49 @@ fun Route.schedulerRoutes(database: MagavDatabase, context: Context) {
                 call.respond(ApiResponse.ok(response))
             }
         }
+    }
+}
+
+private fun toDto(entity: SchedulerConfigEntity): SchedulerConfigDto =
+    SchedulerConfigDto(
+        id = entity.id,
+        dayGroup = entity.dayGroup,
+        reminderType = entity.reminderType,
+        time = entity.time,
+        daysBeforeShift = entity.daysBeforeShift,
+        isEnabled = entity.isEnabled,
+        messageTemplateId = entity.messageTemplateId,
+        updatedAt = entity.updatedAt,
+        updatedBy = entity.updatedBy
+    )
+
+// Shared field validation for scheduler config updates — used by BOTH the bulk PUT and the
+// single-row PUT so they can never diverge. Throws IllegalArgumentException (mapped to 400 by
+// StatusPages) with the Hebrew message. Caller resolves reminderType from the stored row.
+private suspend fun validateSchedulerFields(
+    update: SchedulerConfigUpdateDto,
+    reminderType: String,
+    database: MagavDatabase
+) {
+    if (!TIME_REGEX.matches(update.time)) {
+        throw IllegalArgumentException("פורמט שעה לא תקין: ${update.time}. נדרש HH:mm")
+    }
+    if (update.isEnabled !in listOf(0, 1)) {
+        throw IllegalArgumentException("ערך isEnabled חייב להיות 0 או 1")
+    }
+    if (update.daysBeforeShift !in 0..7) {
+        throw IllegalArgumentException("ימים לפני משמרת חייב להיות בין 0 ל-7")
+    }
+    if (database.messageTemplateDao().getById(update.messageTemplateId) == null) {
+        throw IllegalArgumentException("תבנית הודעה לא נמצאה")
+    }
+    if (reminderType == ReminderTypes.SAME_DAY && update.daysBeforeShift != 0) {
+        throw IllegalArgumentException("תזכורת ביום המשמרת חייבת להיות עם 0 ימים לפני")
+    }
+    if (reminderType == ReminderTypes.ADVANCE && update.daysBeforeShift < 1) {
+        throw IllegalArgumentException("תזכורת מקדימה חייבת להיות עם לפחות יום אחד לפני")
+    }
+    if (reminderType == ReminderTypes.WEEKDAY_ADVANCE && update.daysBeforeShift < 1) {
+        throw IllegalArgumentException("תזכורת מוקדמת (ימי חול בלבד) חייבת להיות לפחות יום אחד לפני")
     }
 }
