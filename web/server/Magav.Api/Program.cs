@@ -1905,20 +1905,27 @@ app.MapPut("/api/scheduler/config", async (
 {
     try
     {
-        // Validate exactly 6 entries
-        if (configs == null || configs.Count != 6)
-            return Results.BadRequest(ApiResponse<object>.Fail("נדרשות בדיוק 6 רשומות הגדרה"));
+        // Validate the submitted id-set EXACTLY matches the existing config id-set:
+        // reject unknown ids, missing ids, and duplicate ids — without a hardcoded count
+        // (so adding/removing a config row never silently breaks saving).
+        if (configs == null || configs.Count == 0)
+            return Results.BadRequest(ApiResponse<object>.Fail("לא התקבלו רשומות הגדרה"));
+
+        // Fetch all configs once and reuse for both the id-set validation and the update loop,
+        // instead of re-fetching each row by id inside the loop below.
+        var configsById = (await db.SchedulerConfig.GetAllAsync()).ToDictionary(c => c.Id);
+        var submittedIds = configs.Select(c => c.Id).ToHashSet();
+        if (configs.Count != configsById.Count || !submittedIds.SetEquals(configsById.Keys))
+            return Results.BadRequest(ApiResponse<object>.Fail("רשימת ההגדרות אינה תואמת את ההגדרות הקיימות"));
 
         var timeRegex = new Regex(@"^([01]\d|2[0-3]):[0-5]\d$");
 
-        // Validate and collect existing records in one pass
+        // Validate and collect existing records in one pass. The id-set check above already
+        // guarantees every submitted id is present, so the dictionary lookup can't miss.
         var existingConfigs = new List<SchedulerConfig>();
         foreach (var config in configs)
         {
-            // Verify ID exists in DB
-            var existing = await db.SchedulerConfig.GetByIdAsync(config.Id);
-            if (existing == null)
-                return Results.BadRequest(ApiResponse<object>.Fail("רשומת הגדרה לא נמצאה"));
+            var existing = configsById[config.Id];
 
             if (!timeRegex.IsMatch(config.Time))
                 return Results.BadRequest(ApiResponse<object>.Fail("פורמט שעה לא תקין (HH:mm)"));
@@ -1934,6 +1941,8 @@ app.MapPut("/api/scheduler/config", async (
                 return Results.BadRequest(ApiResponse<object>.Fail("תזכורת ליום המשמרת חייבת להיות 0 ימים לפני"));
             if (existing.ReminderType == MagavConstants.ReminderTypes.Advance && config.DaysBeforeShift < 1)
                 return Results.BadRequest(ApiResponse<object>.Fail("תזכורת מוקדמת חייבת להיות לפחות יום אחד לפני"));
+            if (existing.ReminderType == MagavConstants.ReminderTypes.WeekdayAdvance && config.DaysBeforeShift < 1)
+                return Results.BadRequest(ApiResponse<object>.Fail("תזכורת מוקדמת (ימי חול בלבד) חייבת להיות לפחות יום אחד לפני"));
 
             // Validate MessageTemplateId references an existing template
             var template = await db.MessageTemplates.GetByIdAsync(config.MessageTemplateId);

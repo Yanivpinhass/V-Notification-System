@@ -16,6 +16,7 @@ class DatabaseInitializer(private val database: MagavDatabase) {
         seedAdminUser()
         seedMessageTemplates()
         seedSchedulerConfigs()
+        migrateSchedulerConfigs()
         seedAppSettings()
         seedJewishHolidays()
     }
@@ -166,6 +167,31 @@ class DatabaseInitializer(private val database: MagavDatabase) {
         }
     }
 
+    // IMPORTANT: Keep the WeekdayAdvance default values (time / daysBeforeShift / messageTemplateId /
+    // isEnabled) in sync with web/server/Magav.Server/Services/DbInitializer.cs MigrateSchedulerConfigAsync().
+    // Idempotent: ensures the WeekdayAdvance scheduler config row exists on BOTH fresh AND
+    // upgraded installs. Called unconditionally every startup (after seedSchedulerConfigs, which
+    // bails on a non-empty table). insertOrIgnore conflicts on UNIQUE(DayGroup, ReminderType) →
+    // never touches existing rows or admin edits. Ships DISABLED (isEnabled = 0). Template id 2
+    // ("תזכורת מוקדמת") is seeded earlier in initialize(); there is no @ForeignKey on
+    // MessageTemplateId, so this can't throw an FK error. Mirrors seedJewishHolidays idempotency.
+    private suspend fun migrateSchedulerConfigs() {
+        val now = Instant.now().toString()
+        database.schedulerConfigDao().insertOrIgnore(
+            SchedulerConfigEntity(
+                id = 0,
+                dayGroup = DayGroups.SUN_THU,
+                reminderType = ReminderTypes.WEEKDAY_ADVANCE,
+                time = "06:00",
+                daysBeforeShift = 5,
+                isEnabled = 0,
+                messageTemplateId = 2,
+                updatedAt = now,
+                updatedBy = null
+            )
+        )
+    }
+
     private suspend fun seedAppSettings() {
         val existing = database.appSettingDao().getByKey("sms_sim_subscription_id")
         if (existing != null) return
@@ -178,7 +204,7 @@ class DatabaseInitializer(private val database: MagavDatabase) {
     // IMPORTANT: Keep holiday dates in sync with web/server/Magav.Server/Services/DbInitializer.cs SeedJewishHolidaysAsync()
     // Uses insertOrIgnore so this is safe to call on every startup — duplicates are skipped
     private suspend fun seedJewishHolidays() {
-        // Israeli holidays for 2025-2030
+        // Israeli holidays for 2025-2035
         val holidays = listOf(
             // 2025
             "2025-02-13" to "ט\"ו בשבט",
@@ -273,12 +299,91 @@ class DatabaseInitializer(private val database: MagavDatabase) {
             "2030-10-07" to "יום כיפור",
             "2030-10-12" to "סוכות",
             "2030-10-19" to "שמיני עצרת / שמחת תורה",
+            // 2031
+            "2031-02-08" to "ט\"ו בשבט",
+            "2031-03-09" to "פורים",
+            "2031-04-08" to "פסח יום א׳",
+            "2031-04-14" to "פסח יום ז׳",
+            "2031-04-21" to "יום השואה",
+            "2031-04-28" to "יום הזיכרון",
+            "2031-04-29" to "יום העצמאות",
+            "2031-05-11" to "ל\"ג בעומר",
+            "2031-05-28" to "שבועות",
+            "2031-07-29" to "ט' באב",
+            "2031-09-18" to "ראש השנה א׳",
+            "2031-09-19" to "ראש השנה ב׳",
+            "2031-09-27" to "יום כיפור",
+            "2031-10-02" to "סוכות",
+            "2031-10-09" to "שמיני עצרת / שמחת תורה",
+            // 2032
+            "2032-01-28" to "ט\"ו בשבט",
+            "2032-02-26" to "פורים",
+            "2032-03-27" to "פסח יום א׳",
+            "2032-04-02" to "פסח יום ז׳",
+            "2032-04-08" to "יום השואה",
+            "2032-04-14" to "יום הזיכרון",
+            "2032-04-15" to "יום העצמאות",
+            "2032-04-29" to "ל\"ג בעומר",
+            "2032-05-16" to "שבועות",
+            "2032-07-18" to "ט' באב",
+            "2032-09-06" to "ראש השנה א׳",
+            "2032-09-07" to "ראש השנה ב׳",
+            "2032-09-15" to "יום כיפור",
+            "2032-09-20" to "סוכות",
+            "2032-09-27" to "שמיני עצרת / שמחת תורה",
+            // 2033
+            "2033-01-15" to "ט\"ו בשבט",
+            "2033-03-15" to "פורים",
+            "2033-04-14" to "פסח יום א׳",
+            "2033-04-20" to "פסח יום ז׳",
+            "2033-04-26" to "יום השואה",
+            "2033-05-03" to "יום הזיכרון",
+            "2033-05-04" to "יום העצמאות",
+            "2033-05-17" to "ל\"ג בעומר",
+            "2033-06-03" to "שבועות",
+            "2033-08-04" to "ט' באב",
+            "2033-09-24" to "ראש השנה א׳",
+            "2033-09-25" to "ראש השנה ב׳",
+            "2033-10-03" to "יום כיפור",
+            "2033-10-08" to "סוכות",
+            "2033-10-15" to "שמיני עצרת / שמחת תורה",
+            // 2034
+            "2034-02-04" to "ט\"ו בשבט",
+            "2034-03-05" to "פורים",
+            "2034-04-04" to "פסח יום א׳",
+            "2034-04-10" to "פסח יום ז׳",
+            "2034-04-17" to "יום השואה",
+            "2034-04-24" to "יום הזיכרון",
+            "2034-04-25" to "יום העצמאות",
+            "2034-05-07" to "ל\"ג בעומר",
+            "2034-05-24" to "שבועות",
+            "2034-07-25" to "ט' באב",
+            "2034-09-14" to "ראש השנה א׳",
+            "2034-09-15" to "ראש השנה ב׳",
+            "2034-09-23" to "יום כיפור",
+            "2034-09-28" to "סוכות",
+            "2034-10-05" to "שמיני עצרת / שמחת תורה",
+            // 2035
+            "2035-01-25" to "ט\"ו בשבט",
+            "2035-03-25" to "פורים",
+            "2035-04-24" to "פסח יום א׳",
+            "2035-04-30" to "פסח יום ז׳",
+            "2035-05-07" to "יום השואה",
+            "2035-05-14" to "יום הזיכרון",
+            "2035-05-15" to "יום העצמאות",
+            "2035-05-27" to "ל\"ג בעומר",
+            "2035-06-13" to "שבועות",
+            "2035-08-14" to "ט' באב",
+            "2035-10-04" to "ראש השנה א׳",
+            "2035-10-05" to "ראש השנה ב׳",
+            "2035-10-13" to "יום כיפור",
+            "2035-10-18" to "סוכות",
+            "2035-10-25" to "שמיני עצרת / שמחת תורה",
         )
 
-        holidays.forEach { (date, name) ->
-            database.jewishHolidayDao().insertOrIgnore(
-                JewishHolidayEntity(date = date, name = name)
-            )
-        }
+        // Single bulk insert → Room wraps it in one transaction (vs ~160 per-row commits every startup).
+        database.jewishHolidayDao().insertOrIgnore(
+            holidays.map { (date, name) -> JewishHolidayEntity(date = date, name = name) }
+        )
     }
 }

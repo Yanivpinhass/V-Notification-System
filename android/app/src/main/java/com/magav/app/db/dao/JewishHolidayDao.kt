@@ -28,6 +28,11 @@ interface JewishHolidayDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertOrIgnore(holiday: JewishHolidayEntity): Long
 
+    // Bulk overload: Room runs the whole list in a SINGLE transaction (one commit instead of one
+    // per row). Used by the startup seed, which inserts ~160 rows on every launch.
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertOrIgnore(holidays: List<JewishHolidayEntity>)
+
     @Update
     suspend fun update(holiday: JewishHolidayEntity)
 

@@ -18,6 +18,7 @@ import {
 const REMINDER_TYPE_LABELS: Record<string, string> = {
   SameDay: 'ליום המשמרת',
   Advance: 'מוקדמת',
+  WeekdayAdvance: 'מוקדמת (ימי חול)',
 };
 
 const STATUS_LABELS: Record<string, string> = {

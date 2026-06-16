@@ -99,15 +99,36 @@ public class SmsSchedulerService : BackgroundService
             if (config.Time != currentTime)
                 continue;
 
-            // Calculate target date
-            var targetDate = now.Date.AddDays(config.DaysBeforeShift);
-            var targetDateStr = targetDate.ToString("yyyy-MM-dd");
+            // Compute the eligibility window and the RunLog key:
+            //  • SameDay/Advance: single-day window [today+N, today+N+1); RunLog key = today+N
+            //    (byte-identical to the previous single-date behavior).
+            //  • WeekdayAdvance: half-open window [today+N, nextWorkingDay(today)+N) so shifts whose
+            //    natural send day lands on Fri/Sat/holiday/holiday-eve are pulled back onto this
+            //    working day; RunLog key = today (the firing day, so one row per windowed run).
+            var today = now.Date;
+            var n = config.DaysBeforeShift;
+            var windowStart = today.AddDays(n);
+            DateTime windowEnd;
+            DateTime runLogTargetDate;
+
+            if (config.ReminderType == MagavConstants.ReminderTypes.WeekdayAdvance)
+            {
+                var nextWorkingDay = await NextWorkingDayAsync(today, db);
+                windowEnd = nextWorkingDay.AddDays(n);
+                runLogTargetDate = today;
+            }
+            else
+            {
+                windowEnd = windowStart.AddDays(1);
+                runLogTargetDate = windowStart;
+            }
 
             _logger.LogInformation(
-                "Triggering scheduler run: ConfigId={ConfigId}, DayGroup={DayGroup}, ReminderType={ReminderType}, TargetDate={TargetDate}",
-                config.Id, config.DayGroup, config.ReminderType, targetDateStr);
+                "Triggering scheduler run: ConfigId={ConfigId}, DayGroup={DayGroup}, ReminderType={ReminderType}, FiringDay={FiringDay}, EffectiveGroup={EffectiveGroup}, Window=[{Start}..{End})",
+                config.Id, config.DayGroup, config.ReminderType, today.ToString("yyyy-MM-dd"),
+                effectiveDayGroup, windowStart.ToString("yyyy-MM-dd"), windowEnd.ToString("yyyy-MM-dd"));
 
-            await reminderService.ExecuteAsync(config, targetDate, stoppingToken);
+            await reminderService.ExecuteAsync(config, windowStart, windowEnd, runLogTargetDate, stoppingToken);
         }
     }
 
@@ -142,5 +163,50 @@ public class SmsSchedulerService : BackgroundService
             return MagavConstants.DayGroups.Fri;
 
         return MagavConstants.DayGroups.SunThu;
+    }
+
+    /// <summary>
+    /// True when <paramref name="date"/> is a working day (effective group SunThu — not Fri/Sat/holiday/
+    /// holiday-eve). Propagates DB exceptions so the caller decides the fallback.
+    /// </summary>
+    private static async Task<bool> IsWorkingDayAsync(DateTime date, MagavDbManager db)
+        => await GetEffectiveDayGroupAsync(date, db) == MagavConstants.DayGroups.SunThu;
+
+    /// <summary>
+    /// Smallest date strictly after <paramref name="from"/> that is a working day. Bounded walk
+    /// (max 14 days) with its own try/catch so a holiday-data gap or DB error can never crash the
+    /// tick or loop forever — falls back to the next plain Sun–Thu weekday.
+    /// </summary>
+    private async Task<DateTime> NextWorkingDayAsync(DateTime from, MagavDbManager db)
+    {
+        try
+        {
+            var candidate = from.Date.AddDays(1);
+            for (var i = 0; i < 14; i++)
+            {
+                if (await IsWorkingDayAsync(candidate, db))
+                    return candidate;
+                candidate = candidate.AddDays(1);
+            }
+            _logger.LogWarning(
+                "NextWorkingDayAsync exceeded 14-day bound from {From}; falling back to next weekday",
+                from.ToString("yyyy-MM-dd"));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "NextWorkingDayAsync failed from {From}; falling back to next weekday",
+                from.ToString("yyyy-MM-dd"));
+        }
+        return NextPlainWeekday(from.Date);
+    }
+
+    /// <summary>Next Sun–Thu strictly after <paramref name="from"/>, ignoring holidays (pure-weekday fallback).</summary>
+    private static DateTime NextPlainWeekday(DateTime from)
+    {
+        var d = from.AddDays(1);
+        while (d.DayOfWeek == DayOfWeek.Friday || d.DayOfWeek == DayOfWeek.Saturday)
+            d = d.AddDays(1);
+        return d;
     }
 }

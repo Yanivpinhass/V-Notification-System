@@ -266,6 +266,10 @@ public class DbInitializer
             await MigrateCancellationColumnsAsync(connection);
         }
 
+        // Idempotent: ensure the WeekdayAdvance scheduler config row exists on BOTH fresh AND
+        // existing DBs. MUST be unconditional (outside the if/else) — placing it inside the else
+        // would skip fresh installs, and inside the if would skip upgraded installs.
+        await MigrateSchedulerConfigAsync(connection);
     }
 
     public string GetConnectionString()
@@ -568,17 +572,104 @@ public class DbInitializer
             ("2030-10-07", "יום כיפור"),
             ("2030-10-12", "סוכות"),
             ("2030-10-19", "שמיני עצרת / שמחת תורה"),
+            // 2031
+            ("2031-02-08", "ט\"ו בשבט"),
+            ("2031-03-09", "פורים"),
+            ("2031-04-08", "פסח יום א׳"),
+            ("2031-04-14", "פסח יום ז׳"),
+            ("2031-04-21", "יום השואה"),
+            ("2031-04-28", "יום הזיכרון"),
+            ("2031-04-29", "יום העצמאות"),
+            ("2031-05-11", "ל\"ג בעומר"),
+            ("2031-05-28", "שבועות"),
+            ("2031-07-29", "ט' באב"),
+            ("2031-09-18", "ראש השנה א׳"),
+            ("2031-09-19", "ראש השנה ב׳"),
+            ("2031-09-27", "יום כיפור"),
+            ("2031-10-02", "סוכות"),
+            ("2031-10-09", "שמיני עצרת / שמחת תורה"),
+            // 2032
+            ("2032-01-28", "ט\"ו בשבט"),
+            ("2032-02-26", "פורים"),
+            ("2032-03-27", "פסח יום א׳"),
+            ("2032-04-02", "פסח יום ז׳"),
+            ("2032-04-08", "יום השואה"),
+            ("2032-04-14", "יום הזיכרון"),
+            ("2032-04-15", "יום העצמאות"),
+            ("2032-04-29", "ל\"ג בעומר"),
+            ("2032-05-16", "שבועות"),
+            ("2032-07-18", "ט' באב"),
+            ("2032-09-06", "ראש השנה א׳"),
+            ("2032-09-07", "ראש השנה ב׳"),
+            ("2032-09-15", "יום כיפור"),
+            ("2032-09-20", "סוכות"),
+            ("2032-09-27", "שמיני עצרת / שמחת תורה"),
+            // 2033
+            ("2033-01-15", "ט\"ו בשבט"),
+            ("2033-03-15", "פורים"),
+            ("2033-04-14", "פסח יום א׳"),
+            ("2033-04-20", "פסח יום ז׳"),
+            ("2033-04-26", "יום השואה"),
+            ("2033-05-03", "יום הזיכרון"),
+            ("2033-05-04", "יום העצמאות"),
+            ("2033-05-17", "ל\"ג בעומר"),
+            ("2033-06-03", "שבועות"),
+            ("2033-08-04", "ט' באב"),
+            ("2033-09-24", "ראש השנה א׳"),
+            ("2033-09-25", "ראש השנה ב׳"),
+            ("2033-10-03", "יום כיפור"),
+            ("2033-10-08", "סוכות"),
+            ("2033-10-15", "שמיני עצרת / שמחת תורה"),
+            // 2034
+            ("2034-02-04", "ט\"ו בשבט"),
+            ("2034-03-05", "פורים"),
+            ("2034-04-04", "פסח יום א׳"),
+            ("2034-04-10", "פסח יום ז׳"),
+            ("2034-04-17", "יום השואה"),
+            ("2034-04-24", "יום הזיכרון"),
+            ("2034-04-25", "יום העצמאות"),
+            ("2034-05-07", "ל\"ג בעומר"),
+            ("2034-05-24", "שבועות"),
+            ("2034-07-25", "ט' באב"),
+            ("2034-09-14", "ראש השנה א׳"),
+            ("2034-09-15", "ראש השנה ב׳"),
+            ("2034-09-23", "יום כיפור"),
+            ("2034-09-28", "סוכות"),
+            ("2034-10-05", "שמיני עצרת / שמחת תורה"),
+            // 2035
+            ("2035-01-25", "ט\"ו בשבט"),
+            ("2035-03-25", "פורים"),
+            ("2035-04-24", "פסח יום א׳"),
+            ("2035-04-30", "פסח יום ז׳"),
+            ("2035-05-07", "יום השואה"),
+            ("2035-05-14", "יום הזיכרון"),
+            ("2035-05-15", "יום העצמאות"),
+            ("2035-05-27", "ל\"ג בעומר"),
+            ("2035-06-13", "שבועות"),
+            ("2035-08-14", "ט' באב"),
+            ("2035-10-04", "ראש השנה א׳"),
+            ("2035-10-05", "ראש השנה ב׳"),
+            ("2035-10-13", "יום כיפור"),
+            ("2035-10-18", "סוכות"),
+            ("2035-10-25", "שמיני עצרת / שמחת תורה"),
         };
 
         var sql = @"INSERT OR IGNORE INTO JewishHolidays (Date, Name) VALUES (@Date, @Name)";
 
+        // Batch all rows in ONE transaction with a single reused command — this seed runs on every
+        // startup (via MigrateJewishHolidaysAsync), so without a transaction each INSERT OR IGNORE
+        // would be its own fsync/commit (162 of them) and noticeably slow startup.
+        await using var transaction = connection.BeginTransaction();
+        await using var cmd = new SqliteCommand(sql, connection, transaction);
+        var dateParam = cmd.Parameters.Add("@Date", SqliteType.Text);
+        var nameParam = cmd.Parameters.Add("@Name", SqliteType.Text);
         foreach (var (date, name) in holidays)
         {
-            await using var cmd = new SqliteCommand(sql, connection);
-            cmd.Parameters.AddWithValue("@Date", date);
-            cmd.Parameters.AddWithValue("@Name", name);
+            dateParam.Value = date;
+            nameParam.Value = name;
             await cmd.ExecuteNonQueryAsync();
         }
+        await transaction.CommitAsync();
 
         Console.WriteLine($"Jewish holidays seeded with {holidays.Length} entries.");
     }
@@ -637,6 +728,36 @@ public class DbInitializer
         }
 
         Console.WriteLine("Scheduler config seeded with 6 default entries.");
+    }
+
+    // IMPORTANT: Keep the WeekdayAdvance default values (Time / DaysBeforeShift / MessageTemplateId /
+    // IsEnabled) in sync with android/app/src/main/java/com/magav/app/db/DatabaseInitializer.kt
+    // migrateSchedulerConfigs().
+    // Idempotent seed of the WeekdayAdvance scheduler config row. Safe to call on every startup
+    // (fresh AND existing DBs) — INSERT OR IGNORE on UNIQUE(DayGroup, ReminderType) skips the row
+    // if it already exists, so existing rows and admin edits are NEVER touched. Ships DISABLED
+    // (IsEnabled=0). MessageTemplateId 2 = "תזכורת מוקדמת" (Advance) — already seeded, FK valid.
+    private static async Task MigrateSchedulerConfigAsync(SqliteConnection connection)
+    {
+        try
+        {
+            var sql = @"INSERT OR IGNORE INTO SchedulerConfig (DayGroup, ReminderType, Time, DaysBeforeShift, IsEnabled, MessageTemplateId)
+                        VALUES (@DayGroup, @ReminderType, @Time, @DaysBeforeShift, 0, @MessageTemplateId)";
+
+            await using var cmd = new SqliteCommand(sql, connection);
+            cmd.Parameters.AddWithValue("@DayGroup", MagavConstants.DayGroups.SunThu);
+            cmd.Parameters.AddWithValue("@ReminderType", MagavConstants.ReminderTypes.WeekdayAdvance);
+            cmd.Parameters.AddWithValue("@Time", "06:00");
+            cmd.Parameters.AddWithValue("@DaysBeforeShift", 5);
+            cmd.Parameters.AddWithValue("@MessageTemplateId", 2);
+            await cmd.ExecuteNonQueryAsync();
+
+            Console.WriteLine("Scheduler config migration: WeekdayAdvance row ensured (INSERT OR IGNORE, disabled).");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Scheduler config migration error: {ex}");
+        }
     }
 
     // === SAMPLE DATA FOR TESTING — remove this method before production ===

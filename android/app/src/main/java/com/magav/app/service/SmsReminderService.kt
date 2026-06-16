@@ -10,10 +10,11 @@ import com.magav.app.sms.SmsProvider
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import com.magav.app.util.ReminderTypes
 import com.magav.app.util.SmsStatuses
-import com.magav.app.util.toIsoRange
+import com.magav.app.util.toIsoInstant
 
 data class SmsSummary(val totalEligible: Int, val smsSent: Int, val smsFailed: Int)
 
@@ -21,12 +22,23 @@ class SmsReminderService(
     private val database: MagavDatabase,
     private val smsProvider: SmsProvider
 ) {
-    suspend fun execute(config: SchedulerConfigEntity, targetDate: LocalDate): SmsSummary {
-        val (targetDateStart, targetDateEnd) = targetDate.toIsoRange()
-        val targetDateStr = targetDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
+    private val israelTz = ZoneId.of("Asia/Jerusalem")
+
+    suspend fun execute(
+        config: SchedulerConfigEntity,
+        windowStart: LocalDate,
+        windowEnd: LocalDate,
+        runLogTargetDate: LocalDate
+    ): SmsSummary {
+        // [windowStart, windowEnd) is the half-open shift-date query range. For SameDay/Advance it is a
+        // single day (windowEnd == windowStart + 1) and runLogTargetDate == windowStart, byte-identical
+        // to before. For WeekdayAdvance the window may span several days; runLogTargetDate is the firing day.
+        val targetDateStart = windowStart.toIsoInstant()
+        val targetDateEnd = windowEnd.toIsoInstant()
+        val runLogDateStr = runLogTargetDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
         val reminderType = config.reminderType
 
-        android.util.Log.d("SmsReminder", "execute: config=${config.id}, type=$reminderType, target=$targetDateStr, range=[$targetDateStart, $targetDateEnd)")
+        android.util.Log.d("SmsReminder", "execute: config=${config.id}, type=$reminderType, window=[$targetDateStart, $targetDateEnd), runLogDate=$runLogDateStr")
 
         // Resolve message template once before the loop
         val messageTemplate = database.messageTemplateDao().getById(config.messageTemplateId)
@@ -36,7 +48,7 @@ class SmsReminderService(
         }
 
         val shifts = database.shiftDao().getByDateRange(targetDateStart, targetDateEnd)
-        android.util.Log.d("SmsReminder", "Found ${shifts.size} shifts for $targetDateStr")
+        android.util.Log.d("SmsReminder", "Found ${shifts.size} shifts in window [$targetDateStart, $targetDateEnd)")
 
         // Bulk loads (replaces N+1 per-shift queries)
         val volunteerMap: Map<Int, VolunteerEntity>
@@ -59,6 +71,9 @@ class SmsReminderService(
         var totalEligible = 0
         var smsSent = 0
         var smsFailed = 0
+        // Monitoring: eligible shifts pulled back from a later (non-working) day onto this run.
+        // Always 0 for the single-day SameDay/Advance window.
+        var pullBackCount = 0
 
         for (shift in shifts) {
             val volId = shift.volunteerId ?: continue
@@ -85,9 +100,14 @@ class SmsReminderService(
             totalEligible++
 
             try {
+                // 🆕A: derive {תאריך}/{יום} from each shift's OWN date (the window may span several
+                // days for WeekdayAdvance). Byte-identical for SameDay/Advance, where the single-day
+                // window guarantees the shift date == windowStart.
+                val shiftDate = Instant.parse(shift.shiftDate).atZone(israelTz).toLocalDate()
+                if (shiftDate != windowStart) pullBackCount++
                 var message = buildMessage(
                     messageTemplate.content, shift.shiftName, shift.carId,
-                    volunteer.mappingName, targetDate
+                    volunteer.mappingName, shiftDate
                 )
                 if (reminderType == ReminderTypes.SAME_DAY) {
                     val location = shift.locationId?.let { locationMap[it] }
@@ -148,7 +168,7 @@ class SmsReminderService(
         }
         val runError = if (smsFailed > 0) "$smsFailed הודעות נכשלו" else null
 
-        android.util.Log.d("SmsReminder", "Summary: eligible=$totalEligible, sent=$smsSent, failed=$smsFailed, status=$status")
+        android.util.Log.i("SmsReminder", "Summary: config=${config.id} type=$reminderType window=[$windowStart..$windowEnd) eligible=$totalEligible sent=$smsSent failed=$smsFailed pulledBack=$pullBackCount status=$status")
 
         // Insert SchedulerRunLog
         try {
@@ -157,7 +177,7 @@ class SmsReminderService(
                     configId = config.id,
                     reminderType = reminderType,
                     ranAt = Instant.now().toString(),
-                    targetDate = targetDateStr,
+                    targetDate = runLogDateStr,
                     totalEligible = totalEligible,
                     smsSent = smsSent,
                     smsFailed = smsFailed,

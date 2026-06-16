@@ -16,10 +16,12 @@ import com.magav.app.MainActivity
 import com.magav.app.MagavApplication
 import com.magav.app.R
 import com.magav.app.db.MagavDatabase
+import com.magav.app.db.entity.SchedulerConfigEntity
 import com.magav.app.service.SmsSummary
 import com.magav.app.service.SmsReminderService
 import com.magav.app.sms.AndroidSmsProvider
 import com.magav.app.util.DayGroups
+import com.magav.app.util.ReminderTypes
 import kotlinx.coroutines.delay
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -70,10 +72,11 @@ class SmsSchedulerWorker(
                     return Result.success()
                 }
 
-                val targetDate = LocalDate.now(israelTz).plusDays(config.daysBeforeShift.toLong())
+                val today = LocalDate.now(israelTz)
+                val (windowStart, windowEnd, runLogDate) = computeWindow(config, today, database)
 
-                android.util.Log.d("SmsWorker", "Executing config ${config.id} (${config.reminderType}, daysBeforeShift=${config.daysBeforeShift}) for targetDate=$targetDate")
-                reminderService.execute(config, targetDate)
+                android.util.Log.d("SmsWorker", "Executing config ${config.id} (${config.reminderType}, daysBeforeShift=${config.daysBeforeShift}) firingDay=$today window=[$windowStart..$windowEnd) runLogDate=$runLogDate")
+                reminderService.execute(config, windowStart, windowEnd, runLogDate)
             } else {
                 checkAllConfigs(database, reminderService)
             }
@@ -113,9 +116,10 @@ class SmsSchedulerWorker(
                 if (config.dayGroup != effectiveGroup) continue
                 if (config.time != currentTime) continue
 
-                val targetDate = now.toLocalDate().plusDays(config.daysBeforeShift.toLong())
+                val today = now.toLocalDate()
+                val (windowStart, windowEnd, runLogDate) = computeWindow(config, today, database)
 
-                val summary = reminderService.execute(config, targetDate)
+                val summary = reminderService.execute(config, windowStart, windowEnd, runLogDate)
                 totalEligible += summary.totalEligible
                 totalSent += summary.smsSent
                 totalFailed += summary.smsFailed
@@ -215,13 +219,65 @@ class SmsSchedulerWorker(
         else -> DayGroups.SUN_THU
     }
 
-    private suspend fun getEffectiveDayGroup(now: ZonedDateTime, database: MagavDatabase): String {
-        if (now.dayOfWeek == DayOfWeek.SATURDAY) return DayGroups.SAT
-        val todayStr = now.toLocalDate().toString()
-        if (database.jewishHolidayDao().isHoliday(todayStr) > 0) return DayGroups.SAT
-        if (now.dayOfWeek == DayOfWeek.FRIDAY) return DayGroups.FRI
-        val tomorrowStr = now.toLocalDate().plusDays(1).toString()
-        if (database.jewishHolidayDao().isHoliday(tomorrowStr) > 0) return DayGroups.FRI
+    private suspend fun getEffectiveDayGroup(now: ZonedDateTime, database: MagavDatabase): String =
+        effectiveDayGroupForDate(now.toLocalDate(), database)
+
+    /**
+     * Per-date holiday-aware day group. Preserves the exact priority/short-circuit order:
+     * Saturday > today is holiday > Friday > tomorrow is holiday > default (SunThu).
+     * Propagates exceptions — the tick gate caller (getEffectiveDayGroupSafe) owns the fallback.
+     */
+    private suspend fun effectiveDayGroupForDate(date: LocalDate, database: MagavDatabase): String {
+        if (date.dayOfWeek == DayOfWeek.SATURDAY) return DayGroups.SAT
+        if (database.jewishHolidayDao().isHoliday(date.toString()) > 0) return DayGroups.SAT
+        if (date.dayOfWeek == DayOfWeek.FRIDAY) return DayGroups.FRI
+        if (database.jewishHolidayDao().isHoliday(date.plusDays(1).toString()) > 0) return DayGroups.FRI
         return DayGroups.SUN_THU
+    }
+
+    private suspend fun isWorkingDay(date: LocalDate, database: MagavDatabase): Boolean =
+        effectiveDayGroupForDate(date, database) == DayGroups.SUN_THU
+
+    /**
+     * Smallest date strictly after [from] that is a working day. Bounded walk (max 14 days) with its
+     * own try/catch so a holiday-data gap or DB error can never crash the worker or loop forever —
+     * falls back to the next plain Sun–Thu weekday.
+     */
+    private suspend fun nextWorkingDay(from: LocalDate, database: MagavDatabase): LocalDate {
+        try {
+            var candidate = from.plusDays(1)
+            for (i in 0 until 14) {
+                if (isWorkingDay(candidate, database)) return candidate
+                candidate = candidate.plusDays(1)
+            }
+            android.util.Log.w("SmsWorker", "nextWorkingDay exceeded 14-day bound from $from; falling back to next weekday")
+        } catch (e: Exception) {
+            android.util.Log.w("SmsWorker", "nextWorkingDay failed from $from; falling back to next weekday", e)
+        }
+        return nextPlainWeekday(from)
+    }
+
+    private fun nextPlainWeekday(from: LocalDate): LocalDate {
+        var d = from.plusDays(1)
+        while (d.dayOfWeek == DayOfWeek.FRIDAY || d.dayOfWeek == DayOfWeek.SATURDAY) d = d.plusDays(1)
+        return d
+    }
+
+    /**
+     * Computes (windowStart, windowEnd, runLogDate) for the eligibility query + RunLog key.
+     *  • SameDay/Advance: single-day window [today+N, today+N+1); runLogDate = today+N (byte-identical).
+     *  • WeekdayAdvance: half-open window [today+N, nextWorkingDay(today)+N); runLogDate = today (firing day),
+     *    so shifts whose natural send day lands on Fri/Sat/holiday/holiday-eve are pulled back onto this run.
+     */
+    private suspend fun computeWindow(
+        config: SchedulerConfigEntity, today: LocalDate, database: MagavDatabase
+    ): Triple<LocalDate, LocalDate, LocalDate> {
+        val n = config.daysBeforeShift.toLong()
+        val windowStart = today.plusDays(n)
+        return if (config.reminderType == ReminderTypes.WEEKDAY_ADVANCE) {
+            Triple(windowStart, nextWorkingDay(today, database).plusDays(n), today)
+        } else {
+            Triple(windowStart, windowStart.plusDays(1), windowStart)
+        }
     }
 }

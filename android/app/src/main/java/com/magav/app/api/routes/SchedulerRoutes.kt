@@ -80,11 +80,17 @@ fun Route.schedulerRoutes(database: MagavDatabase, context: Context) {
                 val now = Instant.now().toString()
                 val updatedBy = call.getUserName() ?: "unknown"
 
-                // Validate exactly 6 entries
-                if (updates.size != 6) {
+                // Fetch all configs once and reuse for both the id-set validation and the update
+                // loop, instead of re-fetching each row by id below.
+                val configsById = database.schedulerConfigDao().getAll().associateBy { it.id }
+                val submittedIds = updates.map { it.id }.toSet()
+                // Validate the submitted id-set EXACTLY matches the existing config id-set:
+                // reject unknown ids, missing ids, and duplicate ids — without a hardcoded count
+                // (so adding/removing a config row never silently breaks saving).
+                if (updates.size != configsById.size || submittedIds != configsById.keys) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        ApiResponse.fail<Unit>("נדרשות בדיוק 6 הגדרות")
+                        ApiResponse.fail<Unit>("רשימת ההגדרות אינה תואמת את ההגדרות הקיימות")
                     )
                     return@put
                 }
@@ -112,11 +118,9 @@ fun Route.schedulerRoutes(database: MagavDatabase, context: Context) {
                         throw IllegalArgumentException("תבנית הודעה לא נמצאה")
                     }
 
-                    // Cross-validate: fetch existing config to check reminderType
-                    val existingConfig = database.schedulerConfigDao().getById(update.id)
-                    if (existingConfig == null) {
-                        throw IllegalArgumentException("הגדרת תזמון עם מזהה ${update.id} לא נמצאה")
-                    }
+                    // Cross-validate reminderType using the already-fetched config (the id-set
+                    // check above guarantees the id is present).
+                    val existingConfig = configsById.getValue(update.id)
 
                     // SameDay must have DaysBeforeShift=0
                     if (existingConfig.reminderType == ReminderTypes.SAME_DAY && update.daysBeforeShift != 0) {
@@ -127,11 +131,16 @@ fun Route.schedulerRoutes(database: MagavDatabase, context: Context) {
                     if (existingConfig.reminderType == ReminderTypes.ADVANCE && update.daysBeforeShift < 1) {
                         throw IllegalArgumentException("תזכורת מקדימה חייבת להיות עם לפחות יום אחד לפני")
                     }
+
+                    // WeekdayAdvance must have DaysBeforeShift>=1
+                    if (existingConfig.reminderType == ReminderTypes.WEEKDAY_ADVANCE && update.daysBeforeShift < 1) {
+                        throw IllegalArgumentException("תזכורת מוקדמת (ימי חול בלבד) חייבת להיות לפחות יום אחד לפני")
+                    }
                 }
 
                 // Update each config
                 for (update in updates) {
-                    val existingConfig = database.schedulerConfigDao().getById(update.id)!!
+                    val existingConfig = configsById.getValue(update.id)
                     val updatedConfig = existingConfig.copy(
                         time = update.time,
                         daysBeforeShift = update.daysBeforeShift,

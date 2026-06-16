@@ -71,6 +71,9 @@ export const SchedulerSettingsPage: React.FC = () => {
       if (config.reminderType === 'Advance' && config.daysBeforeShift < 1) {
         return 'תזכורת מוקדמת חייבת להיות לפחות יום אחד לפני';
       }
+      if (config.reminderType === 'WeekdayAdvance' && config.daysBeforeShift < 1) {
+        return 'תזכורת מוקדמת (ימי חול בלבד) חייבת להיות לפחות יום אחד לפני';
+      }
     }
     return null;
   };
@@ -113,7 +116,10 @@ export const SchedulerSettingsPage: React.FC = () => {
   const groupedConfigs = DAY_GROUP_ORDER.map((dayGroup) => {
     const sameDay = configs.find((c) => c.dayGroup === dayGroup && c.reminderType === 'SameDay');
     const advance = configs.find((c) => c.dayGroup === dayGroup && c.reminderType === 'Advance');
-    return { dayGroup, sameDay, advance };
+    // Only the SunThu group carries a WeekdayAdvance config (optional). Do NOT add it to the
+    // filter predicate below — that must stay `sameDay && advance` so the Fri/Sat cards still render.
+    const weekdayAdvance = configs.find((c) => c.dayGroup === dayGroup && c.reminderType === 'WeekdayAdvance');
+    return { dayGroup, sameDay, advance, weekdayAdvance };
   }).filter((g) => g.sameDay && g.advance);
 
   return (
@@ -134,12 +140,13 @@ export const SchedulerSettingsPage: React.FC = () => {
         </div>
       )}
 
-      {groupedConfigs.map(({ dayGroup, sameDay, advance }) => (
+      {groupedConfigs.map(({ dayGroup, sameDay, advance, weekdayAdvance }) => (
         <DayGroupConfigCard
           key={dayGroup}
           title={DAY_GROUP_TITLES[dayGroup] || dayGroup}
           sameDayConfig={sameDay!}
           advanceConfig={advance!}
+          weekdayAdvanceConfig={weekdayAdvance}
           isReadOnly={isReadOnly}
           templates={templates}
           onConfigChange={handleConfigChange}

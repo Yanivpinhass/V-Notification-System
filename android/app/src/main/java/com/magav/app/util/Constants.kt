@@ -5,6 +5,7 @@ object ReminderTypes {
     const val ADVANCE = "Advance"
     const val LOCATION_UPDATE = "LocationUpdate"
     const val MANUAL = "Manual"
+    const val WEEKDAY_ADVANCE = "WeekdayAdvance"
 }
 
 object SmsStatuses {

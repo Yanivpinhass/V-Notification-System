@@ -12,6 +12,7 @@
             public const string Advance = "Advance";
             public const string LocationUpdate = "LocationUpdate";
             public const string Manual = "Manual";
+            public const string WeekdayAdvance = "WeekdayAdvance";
         }
 
         public static class SmsStatuses

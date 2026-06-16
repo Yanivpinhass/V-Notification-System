@@ -21,18 +21,27 @@ public class SmsReminderService
         _logger = logger;
     }
 
-    public async Task ExecuteAsync(SchedulerConfig config, DateTime targetDate, CancellationToken ct)
+    public async Task ExecuteAsync(
+        SchedulerConfig config,
+        DateTime windowStart,
+        DateTime windowEnd,
+        DateTime runLogTargetDate,
+        CancellationToken ct)
     {
-        var targetDateStart = targetDate.Date.ToString("o");
-        var targetDateEnd = targetDate.Date.AddDays(1).ToString("o");
-        var targetDateStr = targetDate.Date.ToString("yyyy-MM-dd");
+        // [windowStart, windowEnd) is the half-open shift-date query range. For SameDay/Advance it
+        // is a single day (windowEnd == windowStart + 1) and runLogTargetDate == windowStart, so the
+        // query bounds and the RunLog key are byte-identical to the previous single-date behavior.
+        // For WeekdayAdvance the window may span several days and runLogTargetDate is the firing day.
+        var windowStartStr = windowStart.Date.ToString("o");
+        var windowEndStr = windowEnd.Date.ToString("o");
+        var runLogDateStr = runLogTargetDate.Date.ToString("yyyy-MM-dd");
         var reminderType = config.ReminderType;
 
         _logger.LogInformation(
-            "Scheduler run starting: ConfigId={ConfigId}, ReminderType={ReminderType}, TargetDate={TargetDate}",
-            config.Id, reminderType, targetDateStr);
+            "Scheduler run starting: ConfigId={ConfigId}, ReminderType={ReminderType}, Window=[{Start}..{End}), RunLogDate={RunLogDate}",
+            config.Id, reminderType, windowStart.ToString("yyyy-MM-dd"), windowEnd.ToString("yyyy-MM-dd"), runLogDateStr);
 
-        // Query eligible shifts: shifts on target date with approved volunteers,
+        // Query eligible shifts in the window with approved volunteers,
         // excluding those that already have a successful SmsLog for this ReminderType
         var eligibleShifts = await _db.Db.FetchAsync<ShiftVolunteerDto>(
             @"SELECT s.Id AS ShiftId, s.ShiftDate, s.ShiftName, s.CarId,
@@ -55,15 +64,20 @@ public class SmsReminderService
                       AND sl.ReminderType = @2
                       AND sl.Status = @3
                 )",
-            targetDateStart, targetDateEnd, reminderType, MagavConstants.SmsStatuses.Success);
+            windowStartStr, windowEndStr, reminderType, MagavConstants.SmsStatuses.Success);
 
         var totalEligible = eligibleShifts.Count;
         var smsSent = 0;
         var smsFailed = 0;
         string? runError = null;
 
-        _logger.LogInformation("Found {Count} eligible shifts for {ReminderType} on {TargetDate}",
-            totalEligible, reminderType, targetDateStr);
+        // Monitoring: how many eligible shifts were pulled back from a later (non-working) day onto
+        // this run. Always 0 for the single-day SameDay/Advance window.
+        var pullBackCount = eligibleShifts.Count(s => s.ShiftDate.Date != windowStart.Date);
+
+        _logger.LogInformation(
+            "Found {Count} eligible shifts for {ReminderType}, window [{Start}..{End}), pulled-back={PullBack}",
+            totalEligible, reminderType, windowStart.ToString("yyyy-MM-dd"), windowEnd.ToString("yyyy-MM-dd"), pullBackCount);
 
         // Resolve message template once before the loop
         var template = await _db.MessageTemplates.GetByIdAsync(config.MessageTemplateId);
@@ -76,7 +90,7 @@ public class SmsReminderService
                 ConfigId = config.Id,
                 ReminderType = config.ReminderType,
                 RanAt = DateTime.UtcNow.ToString("o"),
-                TargetDate = targetDate.Date.ToString("yyyy-MM-dd"),
+                TargetDate = runLogDateStr,
                 TotalEligible = 0,
                 SmsSent = 0,
                 SmsFailed = 0,
@@ -92,7 +106,10 @@ public class SmsReminderService
 
             try
             {
-                var message = BuildMessage(template.Content, shift, targetDate);
+                // 🆕A: derive {תאריך}/{יום} from each shift's OWN date (the window may span several
+                // days for WeekdayAdvance). Byte-identical for SameDay/Advance, where the single-day
+                // query guarantees shift.ShiftDate == windowStart.
+                var message = BuildMessage(template.Content, shift, shift.ShiftDate);
                 if (reminderType == MagavConstants.ReminderTypes.SameDay)
                     message += BuildLocationText(shift);
                 var result = await _smsProvider.SendSmsAsync(shift.MobilePhone!, message);
@@ -163,7 +180,7 @@ public class SmsReminderService
             ConfigId = config.Id,
             ReminderType = reminderType,
             RanAt = DateTime.UtcNow.ToString("o"),
-            TargetDate = targetDateStr,
+            TargetDate = runLogDateStr,
             TotalEligible = totalEligible,
             SmsSent = smsSent,
             SmsFailed = smsFailed,
@@ -176,7 +193,7 @@ public class SmsReminderService
         {
             _logger.LogWarning(
                 "SchedulerRunLog already exists for ConfigId={ConfigId}, TargetDate={TargetDate}, ReminderType={ReminderType}",
-                config.Id, targetDateStr, reminderType);
+                config.Id, runLogDateStr, reminderType);
         }
 
         _logger.LogInformation(

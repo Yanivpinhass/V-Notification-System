@@ -17,6 +17,7 @@ interface DayGroupConfigCardProps {
   title: string;
   sameDayConfig: SchedulerConfigEntry;
   advanceConfig: SchedulerConfigEntry;
+  weekdayAdvanceConfig?: SchedulerConfigEntry;
   isReadOnly: boolean;
   templates: MessageTemplateEntry[];
   onConfigChange: (updated: SchedulerConfigEntry) => void;
@@ -29,7 +30,8 @@ const ReminderSection: React.FC<{
   showDaysBefore: boolean;
   templates: MessageTemplateEntry[];
   onChange: (updated: SchedulerConfigEntry) => void;
-}> = ({ label, config, isReadOnly, showDaysBefore, templates, onChange }) => {
+  helperText?: string;
+}> = ({ label, config, isReadOnly, showDaysBefore, templates, onChange, helperText }) => {
   const selectedTemplate = templates.find((t) => t.id === config.messageTemplateId);
 
   return (
@@ -50,6 +52,10 @@ const ReminderSection: React.FC<{
           </Label>
         </div>
       </div>
+
+      {helperText && (
+        <p className="text-xs text-muted-foreground" dir="rtl">{helperText}</p>
+      )}
 
       <div className="flex gap-4">
         <div className="space-y-1 w-40">
@@ -123,6 +129,7 @@ export const DayGroupConfigCard: React.FC<DayGroupConfigCardProps> = ({
   title,
   sameDayConfig,
   advanceConfig,
+  weekdayAdvanceConfig,
   isReadOnly,
   templates,
   onConfigChange,
@@ -148,7 +155,19 @@ export const DayGroupConfigCard: React.FC<DayGroupConfigCardProps> = ({
           showDaysBefore={true}
           templates={templates}
           onChange={onConfigChange}
+          helperText="נשלחת בדיוק מספר הימים שנקבע לפני המשמרת — גם אם יום השליחה יוצא בשישי, שבת או חג."
         />
+        {weekdayAdvanceConfig && (
+          <ReminderSection
+            label="תזכורת מוקדמת (ימי חול בלבד)"
+            config={weekdayAdvanceConfig}
+            isReadOnly={isReadOnly}
+            showDaysBefore={true}
+            templates={templates}
+            onChange={onConfigChange}
+            helperText="כמו תזכורת מוקדמת, אך אם יום השליחה יוצא בשישי/שבת/חג/ערב חג — היא נשלחת מוקדם יותר, ביום העבודה הקודם. מוגדרת לימים א׳–ה׳ בלבד."
+          />
+        )}
       </CardContent>
     </Card>
   );
