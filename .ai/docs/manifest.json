@@ -1,0 +1,63 @@
+{
+  "schema_version": 4,
+  "deepinit_version": "0.32.0",
+  "run_id": "deepinit-2026-06-18",
+  "generated": "2026-06-18",
+  "profile": { "depth": "deep", "review": "thorough (2 cycles, gate passed — no adaptive 3rd)", "issues": "on", "db": "skipped (R7 — SQLCipher-encrypted, no live read)", "graphify": "unavailable (grep-inferred imports)" },
+  "components": {
+    "common": {
+      "doc": ".ai/docs/components/common.md",
+      "path": "web/server/Magav.Common",
+      "files": 33,
+      "content_hash": "sha256:7256da12eb8fc900",
+      "interface_hash": "sha256:7256da12eb8fc900",
+      "verified_at": "2026-06-18",
+      "metrics": { "risk": 3158.0, "churn": 8, "bus_factor": 1, "coverage": 0, "criticality": "Core" }
+    },
+    "server": {
+      "doc": ".ai/docs/components/server.md",
+      "path": "web/server/Magav.Server",
+      "files": 22,
+      "content_hash": "sha256:c8f8e752ee9aa0a1",
+      "interface_hash": "sha256:c8f8e752ee9aa0a1",
+      "verified_at": "2026-06-18",
+      "metrics": { "risk": 3164.0, "churn": 14, "bus_factor": 1, "coverage": 0, "criticality": "Core" }
+    },
+    "api": {
+      "doc": ".ai/docs/components/api.md",
+      "path": "web/server/Magav.Api",
+      "files": 4,
+      "content_hash": "sha256:4be8125e16201fd8",
+      "interface_hash": "sha256:4be8125e16201fd8",
+      "verified_at": "2026-06-18",
+      "metrics": { "risk": 3166.0, "churn": 16, "bus_factor": 1, "coverage": 0, "criticality": "Core" }
+    },
+    "web-client": {
+      "doc": ".ai/docs/components/web-client.md",
+      "path": "web/client/src",
+      "files": 110,
+      "content_hash": "sha256:a0bf2ac021ad02f5",
+      "interface_hash": "sha256:a0bf2ac021ad02f5",
+      "verified_at": "2026-06-18",
+      "metrics": { "risk": 3183.0, "churn": 33, "bus_factor": 1, "coverage": 0, "criticality": "Core" }
+    },
+    "android": {
+      "doc": ".ai/docs/components/android.md",
+      "path": "android/app/src/main",
+      "files": 47,
+      "content_hash": "sha256:c936c1b590092480",
+      "interface_hash": "sha256:c936c1b590092480",
+      "verified_at": "2026-06-18",
+      "metrics": { "risk": 3179.0, "churn": 29, "bus_factor": 1, "coverage": 0, "criticality": "Core" }
+    }
+  },
+  "deep_docs": ["decisions.md", "domain-model.md", "technical-dependencies.md", "data-layer.md", "functional-workflows.md", "cross-references.md", "discovery.md", "git-intelligence.md"],
+  "issues": {
+    "ledger": ".ai/docs/issues.md",
+    "sarif": ".ai/deepinit.sarif",
+    "baseline": ".ai/docs/.issue_baseline.json",
+    "counts": { "open": 9, "resolved": 0, "regressed": 0, "by_severity": { "High": 2, "Medium": 5, "Low": 1, "ranking": 1 } }
+  },
+  "lean_tier": { "canonical": "CLAUDE.md", "emit_agents_export": false, "agents_export_reason": "not_needed (no .cursor/.windsurf/.github cross-tool consumer detected)", "gitignore_policy": "committed/visible (mirrors tracked CLAUDE.md)" },
+  "lean_budget": { "root": 150 }
+}

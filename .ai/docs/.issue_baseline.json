@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "generated": "2026-06-18",
+  "run_id": "deepinit-2026-06-18",
+  "note": "First run — no issues accepted yet (no auto-accept on first run, per issues.md lifecycle). All 8 location-bound issues are lifecycle=new/open. Run `deep-init --issues-baseline=accept` to baseline-accept the current open set (write-once-per-id); a reappearing accepted issue is then surfaced as 'persisting' and a fixed one as 'resolved' on the next --update.",
+  "accepted": [],
+  "open": [
+    { "match_key": "IF-4:web/client/src/App.tsx:Routes#sms-approval", "iss": "ISS-001", "first_seen_run": "deepinit-2026-06-18", "lifecycle": "open", "baseline": "new" },
+    { "match_key": "IF-4:web/client/src/pages/RevokeSmsApprovalPage.tsx:revokeSmsApproval#call", "iss": "ISS-002", "first_seen_run": "deepinit-2026-06-18", "lifecycle": "open", "baseline": "new" },
+    { "match_key": "IF-3a:android/app/src/main/java/com/magav/app/db/entity/VolunteerEntity.kt:VolunteerEntity#schema", "iss": "ISS-003", "first_seen_run": "deepinit-2026-06-18", "lifecycle": "open", "baseline": "new" },
+    { "match_key": "IF-3a:web/server/Magav.Api/Program.cs:contract#triplicated", "iss": "ISS-004", "first_seen_run": "deepinit-2026-06-18", "lifecycle": "open", "baseline": "new" },
+    { "match_key": "IF-4:web/server/Magav.Api/Program.cs:login#ResultsProblem", "iss": "ISS-005", "first_seen_run": "deepinit-2026-06-18", "lifecycle": "open", "baseline": "new" },
+    { "match_key": "IF-7:web/server/Magav.Server/Database/Repositories/SchedulerRunLogRepository.cs:InsertAsync#catch", "iss": "ISS-006", "first_seen_run": "deepinit-2026-06-18", "lifecycle": "open", "baseline": "new" },
+    { "match_key": "IF-1:web/server/Magav.Common/MagavConstants.cs:PasswordKey#hardcoded", "iss": "ISS-007", "first_seen_run": "deepinit-2026-06-18", "lifecycle": "open", "baseline": "new" },
+    { "match_key": "IF-1:web/server/Magav.Api/Program.cs:change-password#passwordpolicy", "iss": "ISS-009", "first_seen_run": "deepinit-2026-06-18", "lifecycle": "open", "baseline": "new" }
+  ]
+}

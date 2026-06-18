@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "DeepInit",
+          "informationUri": "https://github.com/deepfusionlabs/deep-init-internal",
+          "version": "0.32.0",
+          "rules": [
+            { "id": "deepinit/IF-1", "name": "BusinessRuleViolation", "shortDescription": { "text": "Business-rule violation / inconsistent enforcement" } },
+            { "id": "deepinit/IF-3a", "name": "SilentCrossComponentCoupling", "shortDescription": { "text": "A resource/contract shared across components with no explicit interface" } },
+            { "id": "deepinit/IF-4", "name": "IntentDecisionContradiction", "shortDescription": { "text": "Code contradicts a documented decision/convention, or a name/route lies" } },
+            { "id": "deepinit/IF-7", "name": "ErrorPathContradiction", "shortDescription": { "text": "Error/exception path swallows or contradicts intended behaviour" } }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "deepinit/IF-4", "level": "warning",
+          "message": { "text": "Documented public SMS-approval route (/sms-approval/:accessKey) is unwired: App.tsx registers only '/' and '*'; the page components are imported nowhere. The server access-key endpoint is live, so the documented volunteer-facing flow is unreachable from the SPA. [ISS-001, possible]" },
+          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "web/client/src/App.tsx" }, "region": { "startLine": 22 } } } ],
+          "partialFingerprints": { "deepinitBaselineKey/v1": "IF-4:web/client/src/App.tsx:Routes#sms-approval" }
+        },
+        {
+          "ruleId": "deepinit/IF-4", "level": "note",
+          "message": { "text": "Orphan RevokeSmsApprovalPage calls volunteersService.revokeSmsApproval(), which does not exist on volunteersService.ts — would throw at runtime, masked only by the page being unreachable. [ISS-002, possible]" },
+          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "web/client/src/pages/RevokeSmsApprovalPage.tsx" }, "region": { "startLine": 33 } } } ],
+          "partialFingerprints": { "deepinitBaselineKey/v1": "IF-4:web/client/src/pages/RevokeSmsApprovalPage.tsx:revokeSmsApproval#call" }
+        },
+        {
+          "ruleId": "deepinit/IF-3a", "level": "warning",
+          "message": { "text": "Volunteer entity diverges (additively) across backends: .NET adds InternalIdHash (canonical SMS-approval id), FirstName, LastName, RoleId; Android VolunteerEntity has none of those (keys on MappingName only). The .NET hashed-id approval path has no Android landing column. [ISS-003, possible]" },
+          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "android/app/src/main/java/com/magav/app/db/entity/VolunteerEntity.kt" }, "region": { "startLine": 8 } } } ],
+          "partialFingerprints": { "deepinitBaselineKey/v1": "IF-3a:android/app/src/main/java/com/magav/app/db/entity/VolunteerEntity.kt:VolunteerEntity#schema" }
+        },
+        {
+          "ruleId": "deepinit/IF-3a", "level": "warning",
+          "message": { "text": "One REST + domain contract is implemented three times with no shared source of truth (.NET Program.cs, Android Ktor routes, React services; entity model triplicated) and no tests. A change to one is silently uncoupled from the others (refresh-token TTL already diverges 7d/3d). [ISS-004, possible]" },
+          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "web/server/Magav.Api/Program.cs" }, "region": { "startLine": 1 } } } ],
+          "partialFingerprints": { "deepinitBaselineKey/v1": "IF-3a:web/server/Magav.Api/Program.cs:contract#triplicated" }
+        },
+        {
+          "ruleId": "deepinit/IF-4", "level": "warning",
+          "message": { "text": "Auth error responses use Results.Problem with English text (login/refresh/logout), breaking the mandated Results.Json(ApiResponse.Fail('<Hebrew>')) pattern and risking dev-mode detail leakage that CLAUDE.md explicitly warns against. [ISS-005, possible]" },
+          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "web/server/Magav.Api/Program.cs" }, "region": { "startLine": 186 } } } ],
+          "partialFingerprints": { "deepinitBaselineKey/v1": "IF-4:web/server/Magav.Api/Program.cs:login#ResultsProblem" }
+        },
+        {
+          "ruleId": "deepinit/IF-7", "level": "warning",
+          "message": { "text": "SchedulerRunLogRepository.InsertAsync catches ALL exceptions and returns null, assuming a UNIQUE-constraint 'already ran' — so a transient DB error is indistinguishable from a dedup hit and can silently skip a legitimate SMS run. [ISS-006, possible]" },
+          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "web/server/Magav.Server/Database/Repositories/SchedulerRunLogRepository.cs" }, "region": { "startLine": 24 } } } ],
+          "partialFingerprints": { "deepinitBaselineKey/v1": "IF-7:web/server/Magav.Server/Database/Repositories/SchedulerRunLogRepository.cs:InsertAsync#catch" }
+        },
+        {
+          "ruleId": "deepinit/IF-1", "level": "warning",
+          "message": { "text": "Credentials committed in tracked appsettings.json (dev-placeholder values) and a hardcoded encryption-key constant in MagavConstants.cs (PasswordKey) used to decrypt the connection string — the tracked-config practice + hardcoded key are the standing risks. [ISS-007, possible]" },
+          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "web/server/Magav.Common/MagavConstants.cs" }, "region": { "startLine": 7 } } } ],
+          "partialFingerprints": { "deepinitBaselineKey/v1": "IF-1:web/server/Magav.Common/MagavConstants.cs:PasswordKey#hardcoded" }
+        },
+        {
+          "ruleId": "deepinit/IF-1", "level": "warning",
+          "message": { "text": "Two divergent password policies: change-password (Program.cs:249) inline-enforces >=6 chars+letter+digit and never calls PasswordValidator (8+ chars+complexity), which is referenced nowhere — dead validator, weaker-than-intended enforced policy. [ISS-009, possible]" },
+          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "web/server/Magav.Api/Program.cs" }, "region": { "startLine": 249 } } } ],
+          "partialFingerprints": { "deepinitBaselineKey/v1": "IF-1:web/server/Magav.Api/Program.cs:change-password#passwordpolicy" }
+        }
+      ]
+    }
+  ]
+}

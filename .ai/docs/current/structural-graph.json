@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "source": "grep-inferred (Graphify/ctags unavailable)",
+  "note": "Edges from project references (.csproj) + documented architecture. web-client/android integrate with api over HTTP / mirrored surface, not compile-time imports.",
+  "components": {
+    "common": {
+      "path": "web/server/Magav.Common",
+      "exports": ["Models.*", "DbHelper", "MagavConstants", "ExcelHelper", "Encryption.*"],
+      "imports_from": {},
+      "imported_by": { "server": ["DbHelper", "Models.*", "MagavConstants"], "api": ["Models.*", "MagavConstants", "ApiResponse"] }
+    },
+    "server": {
+      "path": "web/server/Magav.Server",
+      "exports": ["MagavDbManager", "AuthService", "SmsReminderService", "SmsSchedulerService", "Repositories.*", "DbInitializer"],
+      "imports_from": { "common": ["DbHelper", "Models.*", "MagavConstants"] },
+      "imported_by": { "api": ["MagavDbManager", "AuthService", "SmsReminderService", "SmsSchedulerService"] }
+    },
+    "api": {
+      "path": "web/server/Magav.Api",
+      "exports": ["Program (Minimal API endpoints)", "request/response DTO records"],
+      "imports_from": { "server": ["MagavDbManager", "AuthService", "SmsReminderService", "SmsSchedulerService"], "common": ["Models.*", "ApiResponse", "MagavConstants"] },
+      "imported_by": {}
+    },
+    "web-client": {
+      "path": "web/client/src",
+      "exports": ["React SPA build (consumed by api static host AND android WebView)"],
+      "imports_from": { "api": ["HTTP /api/* (runtime, not compile-time)"] },
+      "imported_by": {}
+    },
+    "android": {
+      "path": "android/app/src/main",
+      "exports": ["Ktor server (localhost:5015) mirroring the .NET API surface", "WebView host of the React build"],
+      "imports_from": { "web-client": ["React dist copied to assets (build-time)"] },
+      "imported_by": {}
+    }
+  },
+  "external_dependencies": {
+    "common": ["NPoco", "SQLitePCLRaw/SQLCipher"],
+    "server": ["Microsoft.Extensions.Hosting", "System.Net.Http (InforUMobile)"],
+    "api": ["ASP.NET Core 8", "JWT bearer"],
+    "web-client": ["react@18.3", "vite", "tailwind", "@radix-ui/*", "react-hook-form", "zod", "sonner"],
+    "android": ["ktor@2.3.12", "room@2.6.1", "sqlcipher@4.5.4", "koin@3.5.6", "apache-poi@5.2.5"]
+  }
+}

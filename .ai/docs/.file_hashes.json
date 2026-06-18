@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "generated": "2026-06-18",
+  "run_id": "deepinit-2026-06-18",
+  "note": "Graphify/ctags unavailable — interface_hash folded to content_hash (degrade-safe per generation.md: --update conservatively re-analyzes dependents on any change rather than risk a missed propagation). content_hash = sha256(sorted component file contents), truncated.",
+  "components": {
+    "common":     { "content_hash": "sha256:7256da12eb8fc900", "interface_hash": "sha256:7256da12eb8fc900", "files": 33, "path": "web/server/Magav.Common", "last_analyzed": "2026-06-18" },
+    "server":     { "content_hash": "sha256:c8f8e752ee9aa0a1", "interface_hash": "sha256:c8f8e752ee9aa0a1", "files": 22, "path": "web/server/Magav.Server", "last_analyzed": "2026-06-18" },
+    "api":        { "content_hash": "sha256:4be8125e16201fd8", "interface_hash": "sha256:4be8125e16201fd8", "files": 4,  "path": "web/server/Magav.Api", "last_analyzed": "2026-06-18" },
+    "web-client": { "content_hash": "sha256:a0bf2ac021ad02f5", "interface_hash": "sha256:a0bf2ac021ad02f5", "files": 110, "path": "web/client/src", "last_analyzed": "2026-06-18" },
+    "android":    { "content_hash": "sha256:c936c1b590092480", "interface_hash": "sha256:c936c1b590092480", "files": 47, "path": "android/app/src/main", "last_analyzed": "2026-06-18" }
+  }
+}

@@ -1,465 +1,61 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## Project Overview
-
-Magav is a Hebrew RTL volunteer shift management and SMS reminder system. It manages volunteer patrol shifts, sends SMS reminders, and provides admin tools for user/volunteer/shift management. The UI is entirely in Hebrew with right-to-left layout.
-
-The system has two deployment targets:
-1. **Web** — .NET 8 backend + React frontend, deployed to Ubuntu server
-2. **Android** — Kotlin app with embedded Ktor server + WebView, sends SMS natively via Android SmsManager
-
-Both targets share the same React frontend.
-
-## Repository Structure
-
-```
-├── web/
-│   ├── client/          # React 18 + TypeScript + Vite frontend
-│   └── server/          # .NET 8 Minimal API backend (3 projects)
-├── android/             # Kotlin Android app (Ktor server + Room DB + native SMS)
-├── build-apk.bat        # Builds React → copies to android assets → builds APK
-├── input/               # Shift schedule Excel files for import
-└── db/                  # Local SQLCipher database (web dev)
-```
-
-## Security First
-
-**Security is the top priority.** Key rules:
-- Use parameterized queries only (`@0`, `@1`, ... for .NET; Room `@Query` params for Android) — never concatenate SQL
-- All new API endpoints MUST include `.RequireAuthorization()` (.NET) or `authenticate("auth-bearer")` (Ktor) unless intentionally public
-- Never expose exception details in API responses — use generic Hebrew error messages
-- Use `Results.Json()` with `ApiResponse<T>` instead of `Results.Problem()` (which can leak details in dev mode)
-- File uploads require CSRF header check, extension validation, and magic byte verification
-- Validate all inputs server-side even if validated client-side
-
-## Development Commands
-
-### Web Client (from `web/client/`)
-```bash
-cd web/client
-npm install       # Install dependencies
-npm run dev       # Start dev server at http://localhost:8080
-npm run build     # Production build
-npm run lint      # Run ESLint
-```
-
-### Web Server (from `web/server/Magav.Api/`)
-```bash
-cd web/server/Magav.Api
-dotnet build      # Build server
-dotnet run        # Run server at http://localhost:5015
-```
-
-Both must run simultaneously for web development. Vite proxies `/api/*` requests to `localhost:5015`.
-
-### Android App
-```bash
-# Full build: React → Android assets → APK
-build-apk.bat
-
-# Install to connected device
-adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-The build script: (1) builds React in `web/client/`, (2) copies `dist/` to `android/app/src/main/assets/web/`, (3) runs `gradlew assembleDebug`.
-
-**IMPORTANT: Always bump `versionCode` (and optionally `versionName`) in `android/app/build.gradle.kts` before every APK build.** The Android WebView caches the PWA service worker; `MainActivity.clearCacheOnVersionChange()` detects the new version code and clears the cache so users get the updated frontend without needing to uninstall. Forgetting to bump = users stuck on old UI.
-
-## 🚨 CRITICAL: Room schema changes WILL DELETE USER DATA if done wrong 🚨
-
-**Any change to a Room `@Entity` annotation — columns, indices, foreign keys, primary key, `defaultValue`, `@ColumnInfo` — requires ALL of the following, every time, no exceptions:**
-
-1. **Bump `@Database(version = N)`** in `android/app/src/main/java/com/magav/app/db/MagavDatabase.kt` to N+1.
-2. **Add a `MIGRATION_N_(N+1)`** in the same file's companion object. Use idempotent SQL (`ALTER TABLE … ADD COLUMN`, `CREATE INDEX IF NOT EXISTS`). For pure-annotation changes (e.g. declaring an existing index in `@Entity(indices = [...])`) the migration body can be a no-op `CREATE INDEX IF NOT EXISTS` — the version bump alone forces Room to re-validate the schema hash against the new entity.
-3. **Register the new migration** in BOTH `Room.databaseBuilder(...).addMigrations(...)` call sites in `MagavApplication.kt` (the initial build AND the recovery rebuild — there are two, both must be updated).
-4. **Make sure the migration SQL produces a schema that matches the entity exactly**, including every index. If the migration creates `index_Shifts_IsCanceled` but the entity doesn't declare `Index(value = ["IsCanceled"])` (or vice versa), Room's schema-hash check fails after migration.
-
-**Why this matters:** Room stores a schema fingerprint hash in the DB's `room_master_table`. On every startup, Room compares that hash to the one computed from the current entity annotations. If they don't match AND no valid migration exists, Room throws. If the app has `.fallbackToDestructiveMigration()` enabled (or a broad catch block that deletes the DB on any open error), **the entire user database is silently wiped — volunteers, shifts, SMS history, scheduler configs, all of it. There is no recovery from the device side.**
-
-**Things that look harmless but break the hash:**
-- Adding `Index(value = ["X"])` to `@Entity(indices = [...])` without bumping DB version
-- Adding/changing `@ColumnInfo(defaultValue = "...")` without bumping DB version
-- Renaming a Kotlin field but keeping the same `@ColumnInfo(name = "...")` — actually safe, hash is based on `@ColumnInfo` name
-- Changing a column from nullable to non-nullable or vice versa — REQUIRES migration
-
-**Verifying before shipping:** After any entity/migration change, install the new APK on a dev device that has a populated DB from the previous version. Open the app. Verify existing data is still visible AND no "שגיאה באתחול המערכת" notification appears. Only then send to users.
-
-**Defensive code in place** (do not remove without understanding what you're trading away): `MagavApplication.initializeDatabase()` does NOT use `.fallbackToDestructiveMigration()`. Its catch block recovers ONLY on SQLCipher key/corruption errors (specific message strings) and re-throws everything else — so a future schema mismatch crashes the app visibly instead of silently destroying data. Keep it that way.
-
-There are no automated tests in this project.
-
-**Default dev credentials:** username `admin`, password `Admin123!` (.NET) or `12345` (Android seeded by DatabaseInitializer).
-
-## Web Architecture
-
-### .NET Solution Structure
-
-Three .NET 8 projects under `web/server/`:
-
-```
-web/server/
-├── Magav.Common/     # Shared: Models, DbHelper ORM wrapper, extensions, Excel utilities
-├── Magav.Server/     # Business logic: Services, Repositories, SMS subsystem
-└── Magav.Api/        # Entry point: Program.cs (Minimal API endpoints, DI, middleware)
-```
-
-- `Magav.Api` references both `Magav.Server` and `Magav.Common`
-- `Magav.Server` references `Magav.Common`
-- All entity/model classes go in `Magav.Common/Models/` (namespace `Magav.Common.Models`)
-- Request/response DTOs are defined as records at the bottom of `Program.cs`
-
-### Tech Stack
-
-- **Frontend:** React 18 + TypeScript + Vite
-- **Backend:** ASP.NET 8 with Minimal APIs
-- **Database:** SQLCipher (encrypted SQLite) with WAL mode + 30s busy timeout
-- **ORM:** NPoco via custom `DbHelper` wrapper
-- **Styling:** Tailwind CSS + Shadcn/UI (Radix primitives)
-- **Forms:** React Hook Form + Zod validation (used in AuthScreen, UserDialog, ChangePasswordDialog, VolunteerSmsApprovalPage)
-- **Data fetching:** `useState` + `useEffect` with direct service calls (TanStack Query provider is set up but not actively used)
-- **Toast notifications:** Sonner (`toast` from `sonner`)
-- **PWA:** vite-plugin-pwa with service worker
-
-### Client Key Directories
-
-```
-web/client/src/
-├── components/
-│   ├── ui/              # Shadcn/UI components (modified: switch.tsx, dialog.tsx for RTL)
-│   ├── layout/          # Header, Sidebar, SubNavigation, menuItems
-│   ├── AdminLayout.tsx  # Main layout wrapper with resizable panels
-│   └── AuthScreen.tsx   # Username/password login form (uses RHF + Zod)
-├── services/
-│   ├── api/BaseApiClient.ts  # HTTP client with auth headers + token management
-│   └── *.ts                  # Domain service classes extending BaseApiClient
-├── pages/               # Page components rendered by Index.tsx
-│   └── components/      # Shared page sub-components (e.g. DayGroupConfigCard)
-├── hooks/               # Custom hooks (use-mobile, use-toast)
-├── config/auth.ts       # API base URL configuration
-└── lib/utils.ts         # Tailwind cn() helper
-```
-
-### TypeScript Configuration
-
-The project uses relaxed TypeScript settings:
-- `strictNullChecks: false`
-- `noImplicitAny: false`
-
-### Database Layer (.NET)
-
-**DbHelper** wraps NPoco and provides async CRUD operations. Key method names (these differ from NPoco defaults):
-- `FetchAsync<T>(expression)` — query with lambda predicate
-- `FetchAsync<T>(sql, args)` — raw SQL with parameterized args (`@0`, `@1`, ...)
-- `FetchAllAsync<T>()` — all rows (no-argument; use this, NOT `FetchAsync<T>()` with 0 args)
-- `InsertAsync<T>`, `UpdateAsync<T>`, `DeleteAsync<T>` — standard CRUD
-- `ExecuteQueryAsync(sql, args)` — raw SQL execution (NOT `ExecuteAsync`)
-- `ExecuteScalarAsync<T>(sql, args)` — scalar queries
-- `SingleOrDefaultByIdAsync<T>(id)` — by primary key
-
-**Repository pattern**: `Repository<T>` base class provides virtual CRUD methods. Specialized repositories in `Magav.Server/Database/Repositories/` add domain-specific queries.
-
-**MagavDbManager**: Scoped (per-request) facade with lazy-initialized repository properties:
-```csharp
-db.Users             // UsersRepository
-db.Volunteers        // VolunteersRepository
-db.Shifts            // ShiftsRepository
-db.SmsLog            // SmsLogRepository
-db.SchedulerConfig   // SchedulerConfigRepository
-db.SchedulerRunLog   // SchedulerRunLogRepository
-db.Db                // Direct DbHelper for raw SQL
-```
-
-### Routing & Navigation
-
-**Two-tier routing:**
-
-1. **React Router** (`App.tsx`) handles top-level routes:
-   - `/` → `Index` (the admin SPA)
-   - `/sms-approval/:accessKey` → `VolunteerSmsApprovalPage` (public page, no auth)
-   - `*` → `NotFound`
-
-2. **State-based navigation** inside the admin app (`Index.tsx`):
-   - `activeSubItem` state determines which page component renders
-   - Menu items defined in `components/layout/menuItems.ts` with `requiredRoles` filtering
-   - Not URL-based — no browser back/forward for internal pages
-
-**To add a new admin page:**
-1. Create component in `pages/`
-2. Add menu item in `menuItems.ts` (with `requiredRoles` if needed)
-3. Add `case` in `Index.tsx` `renderContent()` switch
-
-### Authentication & Authorization
-
-**JWT flow:**
-- Login returns `accessToken` (15min), `refreshToken` (7 days), and `user` object
-- Refresh tokens stored as SHA256 hashes server-side, rotated on each refresh
-- `BaseApiClient` auto-attaches `Authorization: Bearer {token}` header
-- Account lockout after 5 failed attempts (15 min)
-
-**Roles** (case-sensitive strings): `"Admin"`, `"SystemManager"`, `"User"`
-
-**Authorization policies** (defined in Program.cs):
-- `"AdminOnly"` — Admin role only
-- `"CanManageMessages"` — Admin + SystemManager
-- `"CanImportVolunteers"` — Admin + SystemManager
-
-**User object in localStorage** (key: `"user"`):
-```typescript
-{
-  id: string;
-  name: string;
-  roles: string[];    // Array, e.g. ["Admin"] — NOT a single string
-  permissions: Record<string, any>;
-}
-```
-
-**Important:** The role field is `user.roles` (string array), not `user.role`. Always check with `roles.includes("Admin")`.
-
-### API Integration
-
-- All API responses wrapped in `ApiResponse<T>` with `success`, `data`, `message` fields
-- Auth tokens stored in localStorage: `accessToken`, `refreshToken`, `user`
-- File uploads use `postFormData()` with `X-Requested-With: XMLHttpRequest` CSRF header
-
-**Intentionally public endpoints (no auth required):**
-- `POST /api/auth/login`, `POST /api/auth/refresh`
-- `GET /api/health`
-- `POST /api/public/sms-approval/{accessKey}/*` (rate-limited, 3 req/5 min)
-
-### Error Handling Pattern
-
-```csharp
-catch (Exception ex)
-{
-    Console.Error.WriteLine($"Error context: {ex}");  // Full details server-side only
-    return Results.Json(
-        ApiResponse<object>.Fail("אירעה שגיאה"),       // Generic Hebrew message to client
-        statusCode: StatusCodes.Status500InternalServerError);
-}
-```
-
-Never include exception messages, stack traces, DB column names, internal paths, or user IDs in API error responses.
-
-### File Upload Validation Pattern
-
-All file upload endpoints must follow this pattern (see volunteers/shifts import):
-1. **CSRF header**: Require `X-Requested-With: XMLHttpRequest`
-2. **File existence + size**: Max 10MB
-3. **Extension**: `.xlsx` or `.xls` only
-4. **Magic bytes**: ZIP signature (`0x50 0x4B`) or OLE signature (`0xD0 0xCF`)
-5. Process in memory via `MemoryStream` — never save to disk
-
-### SMS Scheduler Subsystem (.NET)
-
-Background service that sends shift reminders to volunteers. Lives in `Magav.Server/Services/Sms/`:
-
-- **ISmsProvider** — Interface for SMS sending
-- **InforUMobileSmsProvider** — InforUMobile XML API implementation (registered via `AddHttpClient<ISmsProvider, InforUMobileSmsProvider>`)
-- **SmsSchedulerService** — `BackgroundService` polling every 60s, uses `IServiceScopeFactory` to resolve scoped services
-- **SmsReminderService** — Scoped service that queries eligible shifts, builds messages from templates, sends SMS, logs results
-
-### DI Registration Patterns
-
-In `Program.cs`:
-```csharp
-builder.Services.AddSingleton<DbInitializer>();                              // DB init, singleton
-builder.Services.AddScoped<MagavDbManager>(...);                             // Per-request DB access
-builder.Services.AddScoped<AuthService>(...);                                // Per-request auth
-builder.Services.AddScoped<SmsReminderService>();                            // Per-scope SMS logic
-builder.Services.AddHttpClient<ISmsProvider, InforUMobileSmsProvider>(...);   // Transient via factory
-builder.Services.AddHostedService<SmsSchedulerService>();                    // Singleton background service
-```
-
-The `SmsSchedulerService` (singleton) resolves scoped services via `IServiceScopeFactory.CreateScope()`.
-
-### Public Pages (Access Key Pattern)
-
-The SMS approval page (`/sms-approval/:accessKey`) is a public route that does not require authentication. Instead, it uses a secret access key configured in `appsettings.json` under `PublicPages:SmsApprovalAccessKey`. The server validates this key on every request. Rate limiting (3 requests/5 min per IP) is applied via `RequireRateLimiting("sms-approval")`.
-
-## Android Architecture
-
-### Hybrid Mobile-Server Design
-
-The Android app embeds a **Ktor HTTP server** (port 5015, localhost only) inside a foreground service. A WebView loads the same React UI from `http://localhost:5015`. The Ktor server serves both the static web files and REST API endpoints, mirroring the .NET API surface.
-
-### Key Components
-
-```
-android/app/src/main/java/com/magav/app/
-├── MagavApplication.kt          # App init: notification channel, SQLCipher DB, Koin DI
-├── MainActivity.kt              # WebView host, permissions, waits for server startup
-├── MagavServerService.kt        # Foreground service: starts Ktor, inits DB, schedules alarms
-├── api/
-│   ├── KtorServer.kt            # Ktor app: ContentNegotiation, CORS, JWT auth, routes, static files
-│   ├── auth/JwtConfig.kt        # JWT token generation/validation (HMAC256)
-│   ├── models/                   # ApiResponse<T>, request/response DTOs
-│   └── routes/                   # Route files mirroring .NET endpoints
-├── db/
-│   ├── MagavDatabase.kt          # Room database (SQLCipher encrypted)
-│   ├── DatabaseInitializer.kt    # Seeds admin user + scheduler configs
-│   ├── entity/                   # Room entities (User, Volunteer, Shift, SmsLog, etc.)
-│   └── dao/                      # Room DAOs
-├── scheduler/
-│   ├── AlarmScheduler.kt         # Schedules exact alarms per config + day group
-│   ├── SmsSchedulerWorker.kt     # WorkManager worker: executes SMS sending
-│   ├── SmsAlarmReceiver.kt       # Broadcast receiver: alarm → enqueue worker
-│   └── BootReceiver.kt           # Re-schedules alarms on device boot
-├── service/
-│   ├── AuthService.kt            # Login, token refresh, password management
-│   ├── SmsReminderService.kt     # Core SMS logic: query shifts, build messages, send, log
-│   ├── ShiftsImportService.kt    # Excel import + volunteer name matching
-│   └── ShiftScheduleParser.kt    # Apache POI Excel parsing
-└── sms/
-    ├── SmsProvider.kt            # Interface
-    └── AndroidSmsProvider.kt     # Native SmsManager: Mutex-serialized, 15s timeout, broadcast receiver
-```
-
-### Android Tech Stack
-
-- **Language:** Kotlin 1.9.22, Java 17
-- **HTTP Server:** Ktor 2.3.12 (CIO engine)
-- **Database:** Room 2.6.1 + SQLCipher 4.5.4 (encrypted with key in EncryptedSharedPreferences)
-- **DI:** Koin 3.5.6
-- **Excel parsing:** Apache POI 5.2.5
-- **Background work:** AlarmManager (exact alarms) + WorkManager
-- **SMS:** Android SmsManager (native, supports dual SIM via subscription ID)
-- **Min SDK:** 29, Target SDK: 35
-
-### Android SMS Flow
-
-1. **SchedulerConfig** in DB defines: day group (SunThu/Fri/Sat), reminder type (SameDay/Advance), trigger time, days before shift, message template
-2. **AlarmScheduler** schedules exact alarms (Israel timezone) for each enabled config
-3. **SmsAlarmReceiver** → enqueues **SmsSchedulerWorker** via WorkManager
-4. Worker queries eligible shifts, checks volunteer approval + phone + dedup via SmsLog, builds message from template (placeholders: `{שם}`, `{תאריך}`, `{יום}`, `{משמרת}`, `{רכב}`), calls **AndroidSmsProvider**
-5. AndroidSmsProvider sends via SmsManager with Mutex serialization, logs result
-
-### Android Settings (AppSetting table)
-
-- `sms_sim_subscription_id`: Which SIM card to use (-1 = system default)
-- Secrets (DB passphrase, JWT key) stored in EncryptedSharedPreferences (AES256-GCM)
-
-### Android Permissions
-
-`SEND_SMS`, `READ_PHONE_STATE`, `RECEIVE_BOOT_COMPLETED`, `FOREGROUND_SERVICE`, `SCHEDULE_EXACT_ALARM`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`
-
-## Shared Design Decisions
-
-- **Timezone:** Israel Standard Time (Windows) / Asia/Jerusalem (Linux/Android)
-- **Duplicate SMS prevention:** SmsLog table indexed on (ShiftId, ReminderType); SchedulerRunLog UNIQUE on (ConfigId, TargetDate, ReminderType)
-- **Template placeholders:** `{שם}`, `{שם מלא}`, `{תאריך}`, `{יום}`, `{משמרת}`, `{רכב}`
-
-### RTL/Hebrew Considerations
-
-- All components use `dir="rtl"` and Hebrew font (Noto Sans Hebrew)
-- CSS uses RTL-aware flexbox positioning
-- Error messages and labels are in Hebrew
-- **Dialog close buttons (X):** Must be positioned on the LEFT side (`left-4`) not the right, since RTL reverses the expected close button position. The Shadcn/UI `dialog.tsx` has been modified to reflect this.
-- **Directional UI primitives:** Components that use CSS `translate-x` for positioning (e.g., Switch thumb) break in RTL because the browser mirrors the entire component, causing the transform to move in the wrong direction. Fix: add `dir="ltr"` to the component root so it renders in a fixed LTR context. The Shadcn/UI `switch.tsx` has been modified with this fix. Apply the same pattern to any new components using directional transforms.
-
-### Android WebView Keyboard & Fixed Positioning
-
-**Critical:** `position: fixed` elements do NOT move when the soft keyboard opens in Android WebView. Unlike Chrome browser, Android WebView does not support `interactive-widget=resizes-content` (it's a Chrome-only feature), so the CSS layout viewport does NOT shrink when the keyboard appears. This means:
-
-- `position: fixed; bottom: 0` stays at the bottom of the full screen, hidden behind the keyboard
-- CSS `vh` units do NOT update when the keyboard opens
-- `window.visualViewport` resize events may not fire reliably
-- `window.innerHeight` / `window.resize` may not reflect the keyboard
-
-**The working solution for dialogs/modals with form inputs:**
-1. Position dialogs at the **top** of the screen (`top: 0` or `top: 8px`), NOT as a bottom sheet
-2. Make the dialog scrollable (`overflow-y: auto`) with generous bottom padding (`pb-[40vh]` on mobile) so the last inputs can be scrolled well above where the keyboard sits
-3. On `focusin`, use `scrollIntoView({ block: 'start' })` to scroll the focused input to the top of the dialog — far from the keyboard at the bottom
-4. Do NOT rely on CSS viewport units, `visualViewport` API, or `window.resize` for keyboard detection in WebView — none of these are reliable
-
-**What does NOT work in Android WebView:**
-- `interactive-widget=resizes-content` meta tag (Chrome-only)
-- `max-h-[85dvh]` or any `dvh`/`svh` units (not supported)
-- CSS variables set via `visualViewport.resize` events
-- `window.innerHeight`-based pixel calculations on resize
-- Bottom-sheet dialogs (`bottom: 0`) — keyboard covers them
-
-The Shadcn/UI `dialog.tsx` has been modified with this top-aligned + scroll approach.
-
-## Shift Schedule Excel File Format
-
-The system processes volunteer shift schedule Excel files (`.xlsx`). Input files are placed in the `input/` directory.
-
-### File Structure
-
-- **Sheets:** 1 or more per file. Each sheet typically covers a month (e.g., "1.26" = January 2026). **All sheets must be parsed.**
-- **Relevant columns:** Only columns **A through G** (7 days, Sunday through Saturday).
-- **Row 1:** Title header row — ignore during parsing.
-
-### Weekly Block Layout
-
-```
-Row 1:  [Date Sun] [Date Mon] [Date Tue] [Date Wed] [Date Thu] [Date Fri] [Date Sat]
-Row 2:  [Day-of-week indicators — 1900-era Excel serial dates]
-Row 3:  [Empty separator]
---- Team Block (6 rows each, back-to-back) ---
-Row 4:  [Shift/team name — same value across all 7 columns]
-Row 5:  [Car number — same value across all 7 columns]
-Row 6-9: [4 volunteer name rows, some cells may be empty]
---- Next Team Block ---
-```
-
-Each team block is exactly **6 rows** (name + car + 4 volunteers). Typically **4 teams per weekly block**. Day-of-week row uses Excel serial dates from 1900 (`01/01/1900` = Sunday through `07/01/1900` = Saturday).
-
-## Production Deployment (Ubuntu Server)
-
-### Server Layout
-
-```
-/opt/magav/
-├── server/          # .NET published output (Magav.Api.dll + dependencies)
-│   └── appsettings.json  # Production config (secrets, real credentials)
-├── client/          # Vite production build (static files)
-└── db/              # SQLCipher database (magav.db, auto-created on first run)
-```
-
-### Publishing
-
-**Server** (from Windows, targets Linux):
-```bash
-cd web/server/Magav.Api
-dotnet publish -c Release -r linux-x64 --self-contained false -o ../../../publish/server
-```
-
-**Client:**
-```bash
-cd web/client
-npm run build
-# Copy web/client/dist/* to publish/client/
-```
-
-**Copy to server:**
-```bash
-scp -r publish/* user@server-ip:/tmp/magav-deploy/
-# Then on server: sudo cp -r /tmp/magav-deploy/* /opt/magav/
-```
-
-### Runtime
-
-- **Runtime:** .NET 8 ASP.NET Core Runtime (`aspnetcore-runtime-8.0`)
-- **Process manager:** systemd (`/etc/systemd/system/magav.service`)
-- **Reverse proxy:** Nginx serves client static files and proxies `/api/` to `http://localhost:5015`
-- **Service user:** `www-data`
-
-### Common Server Commands
-
-```bash
-sudo systemctl restart magav       # Restart after deploy
-sudo systemctl status magav        # Check status
-sudo journalctl -u magav -f        # Tail logs
-sudo chown -R www-data:www-data /opt/magav  # Fix permissions after deploy
-```
-
-### Database Reset
-
-Delete DB file and restart — `DbInitializer` recreates all tables and seeds default data:
-```bash
-sudo rm /opt/magav/db/magav.db
-sudo systemctl restart magav
-```
+<!-- DEEPINIT:START (managed — regenerated on each `deep-init` run; edit OUTSIDE these markers) -->
+# Magav V-Notification-System — Agent Context
+
+Hebrew RTL volunteer-shift management + SMS-reminder system for patrol ("ניידת") coordination. Manages volunteers, Excel-imported shifts, and scheduled SMS reminders, with Hebrew/RTL admin tooling. **Two deployment targets share ONE React frontend:** (1) **Web** — .NET 8 Minimal API + React SPA on Ubuntu (Nginx/systemd); (2) **Android** — Kotlin app embedding a Ktor server + WebView (same React build), sending SMS natively via `SmsManager`.
+
+## Architecture
+Hybrid, layered. Web backend = .NET project chain `Magav.Common → Magav.Server → Magav.Api` (acyclic). React SPA served by the API and by the Android WebView. Android = embedded Ktor server (localhost:5015) mirroring the .NET API surface. Components map to `.ai/docs/components/`.
+
+## Components (5)
+- **common** — shared .NET lib: Models, the custom `DbHelper`/NPoco ORM wrapper, `MagavConstants`, Excel, encryption. → `.ai/docs/components/common.md`
+- **server** — .NET business logic: SMS scheduler subsystem, JWT auth, repositories, `DbInitializer`. → `.ai/docs/components/server.md`
+- **api** — .NET 8 Minimal-API entry: all endpoints + DI + middleware live in one `Program.cs`. → `.ai/docs/components/api.md`
+- **web-client** — React 18 + TS + Vite SPA (Tailwind/Shadcn, RHF+Zod, PWA); shared by web + Android. → `.ai/docs/components/web-client.md`
+- **android** — Kotlin: Ktor + Room/SQLCipher + AlarmManager/WorkManager + native SMS. → `.ai/docs/components/android.md`
+
+## Critical to know (non-obvious, load-bearing)
+- **The same REST contract + domain model is implemented THREE times with no shared code and no tests** — .NET `web/server/Magav.Api/Program.cs`, Android Ktor `android/.../api/routes/*`, consumed by React `web/client/src/services/*` (entities triplicated: .NET Models / Room entities / TS types). A contract or rule change must be applied to ALL THREE or it silently drifts. Drift is already present (refresh-token TTL 7d .NET vs 3d Android; the Volunteer entity below). [ISS-004]
+- **Room schema changes can SILENTLY WIPE ALL USER DATA if done wrong.** Any `@Entity` change requires: bump `@Database(version=N)` in `android/.../db/MagavDatabase.kt` (currently **8**), add `MIGRATION_N_(N+1)`, and register it in BOTH `addMigrations(...)` sites in `MagavApplication.kt`. `initializeDatabase()` (`android/.../MagavApplication.kt:102-137`) deliberately omits `fallbackToDestructiveMigration` and recovers ONLY on SQLCipher key/corruption errors — every other error (incl. a forgotten-migration schema-hash mismatch) is re-thrown so it crashes VISIBLY instead of wiping data. Verify on a populated dev device before shipping. [ADR-004 — born from a real data-loss incident]
+- **DayGroup = the day the SMS is SENT (run day), not the shift's day**; `DaysBeforeShift` is the look-ahead. Holiday-aware ladder (Sat → today/tomorrow-is-holiday → Fri → SunThu). `web/server/Magav.Server/Services/Sms/SmsSchedulerService.cs`; mirrored `android/.../scheduler/SmsSchedulerWorker.kt:268`. Easy to get backwards.
+- **Same-day reminders APPEND the location** (city/name + Waze link) after the template; **Advance / WeekdayAdvance / Manual do NOT** (location may change before the shift). Changing a location after the same-day SMS went out triggers a `LocationUpdate` re-notify.
+- **SMS dedup is two-tier:** `SmsLog` indexed on (ShiftId, ReminderType) + `SchedulerRunLog` UNIQUE on (ConfigId, TargetDate, ReminderType). Caveat: `SchedulerRunLogRepository.InsertAsync` (`web/server/Magav.Server/Database/Repositories/SchedulerRunLogRepository.cs:24`) catches ALL exceptions as "already ran" — a transient DB error reads as a dedup hit. [ISS-006]
+- **Soft-cancel:** cancelling sets `IsCanceled=1` + `CanceledAt` (never deletes). **EVERY query listing active shifts MUST filter `IsCanceled = 0`** (eligibility, by-range, available-dates…). Hard-delete only via the canceled-shifts page after soft-cancel.
+- **5 ReminderTypes:** `SameDay, Advance, WeekdayAdvance, LocationUpdate, Manual` (`web/server/Magav.Common/MagavConstants.cs:11-15`). `WeekdayAdvance` uses a half-open `[today+N, NextWorkingDay(today)+N)` window to pull weekend/holiday advance-sends onto a working day (`SmsSchedulerService.cs:114`). **`MagavConstants` is canonical; Android `util/Constants.kt` MUST mirror it exactly** — verified in sync today (incl. SmsStatuses Success/Fail, DayGroups SunThu/Fri/Sat).
+- **`user.roles` is a string ARRAY** (`["Admin"]`), NOT `user.role` — always `roles.includes("Admin")`. Roles: `Admin`, `SystemManager`, `User`. localStorage keys: `accessToken`, `refreshToken`, `user`.
+- **Bump `versionCode`** in `android/app/build.gradle.kts` (currently **62** / 1.4.13) before EVERY APK build — the WebView caches the PWA service worker; `MainActivity.clearCacheOnVersionChange()` clears it on a version bump. Forgetting = users stuck on the old UI.
+- **Seeding (scheduler configs + message templates) runs ONLY on a fresh DB** — new seed rows do NOT reach existing installs (`DbInitializer.cs` / Android `DatabaseInitializer.kt`); add such rows in all the hardcoded seed sites.
+- **RTL gotchas:** dialog close (X) is on the LEFT (`left-4`); `Switch` needs `dir="ltr"` to stop transform-mirroring (`components/ui/switch.tsx`); Android WebView does NOT move `position:fixed` for the keyboard, so dialogs are TOP-aligned + scrollable — do not rely on `dvh`/`visualViewport`/bottom-sheets (`components/ui/dialog.tsx`).
+- **`DbHelper` method names differ from NPoco defaults:** `FetchAllAsync()` (all rows, no-arg), `FetchAsync<T>(expr | sql,args)`, `ExecuteQueryAsync` (NOT `ExecuteAsync`), `ExecuteScalarAsync<T>`, `SingleOrDefaultByIdAsync` (`web/server/Magav.Common/Database/DbHelper.cs`). `DbHelper` appears vendored from another codebase ("Avidov.Common") — treat as a library, not first-party.
+- **Timezone is Israel / Asia-Jerusalem everywhere** (scheduling, dates, holidays).
+
+## Security (the project's "Security First" mandate)
+- Parameterized queries only (`@0,@1…` .NET; Room `@Query` params) — never concatenate SQL.
+- Every endpoint `.RequireAuthorization()` unless intentionally public. The ONLY public endpoints: `POST /api/auth/login`, `POST /api/auth/refresh`, `GET /api/health`, `POST /api/public/sms-approval/{accessKey}/*` (access-key + rate-limited 3/5min). Authorization audit is currently clean.
+- Use `Results.Json(ApiResponse<T>.Fail("<Hebrew>"))`, never `Results.Problem` (can leak detail in dev) — note current deviations [ISS-005]. Never expose exception detail; full details server-side only.
+- File uploads: CSRF `X-Requested-With` header + `.xlsx/.xls` ext + magic-byte check (`0x50 0x4B` / `0xD0 0xCF`) + in-memory, max 10MB.
+- Validate all inputs server-side even if validated client-side.
+
+## Where to look
+- Component detail → `.ai/docs/components/<name>.md`
+- Why decisions were made (15 ADRs + Knowledge Log) → `.ai/docs/decisions.md`
+- Domain language, the triplicated model, ownership → `.ai/docs/domain-model.md`
+- End-to-end workflows (SMS send, shift import, auth) → `.ai/docs/functional-workflows.md`
+- Dependencies, the three-way cascade, no cycles → `.ai/docs/technical-dependencies.md`
+- Schema-from-code + code-vs-code drift → `.ai/docs/data-layer.md`
+- **Known issues** (9: committed dev creds + hardcoded `PasswordKey`, dead public SMS-approval route, divergent password policy, …) → `.ai/docs/issues.md`
+<!-- DEEPINIT:END -->
+
+<!-- HUMAN-AUTHORED — carried forward; edit freely. DeepInit never regenerates or validates this region. The full pre-run CLAUDE.md is preserved verbatim in the dated CLAUDE.md.*.bak and its reference depth was relocated into .ai/docs/. -->
+
+## Build & run (quick reference)
+- **Web client** (`web/client/`): `npm install` · `npm run dev` (→ http://localhost:8080, proxies `/api/*` → :5015) · `npm run build` · `npm run lint`
+- **Web server** (`web/server/Magav.Api/`): `dotnet build` · `dotnet run` (→ http://localhost:5015). Both must run together for web dev.
+- **Android**: `build-apk.bat` (builds React → copies `dist/` to `android/app/src/main/assets/web/` → `gradlew assembleDebug`). Install: `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`. **Bump `versionCode` first** (see managed region).
+- **Publish (Linux)**: `dotnet publish -c Release -r linux-x64 --self-contained false`; deploy to `/opt/magav/` (systemd `magav.service`, Nginx). DB reset = delete `/opt/magav/db/magav.db` + restart.
+
+## Default dev credentials
+- Web/.NET: `admin` / `Admin123!` · Android (seeded): password `12345`. (Dev-only.)
+
+## Notes
+- No automated tests in this project.
+- The full original CLAUDE.md (architecture deep-dive, Excel format spec, deployment runbook, PRD pointers) is in `CLAUDE.md.<date>.bak` and relocated across `.ai/docs/`.
