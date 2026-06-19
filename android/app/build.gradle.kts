@@ -13,7 +13,7 @@ android {
         applicationId = "com.magav.app"
         minSdk = 29
         targetSdk = 35
-        versionCode = 62
+        versionCode = 63
         versionName = "1.4.13"
 
         buildConfigField("String", "LICENSE_PHONES",

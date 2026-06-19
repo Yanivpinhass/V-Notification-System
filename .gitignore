@@ -12,6 +12,8 @@ web/server/**/obj/
 web/server/**/.vs/
 web/server/**/*.user
 web/server/**/*.suo
+# Dev-only secret overrides (Jwt:SecretKey, Database:Password, PublicPages:SmsApprovalAccessKey) [ISS-007]
+web/server/**/appsettings.Development.json
 
 # Android
 android/.gradle/

@@ -4,6 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>magav-api-a3f1c2d4-5e6b-47a8-9c0d-1e2f3a4b5c6d</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

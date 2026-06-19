@@ -13,7 +13,7 @@ Generated: 2026-06-18 -->
 |----|--------|----------|-------------|-----------|----------|----------|
 | ISS-001 | IF-4 | Medium | Supporting | HIGH | ✓ | Documented public SMS-approval React route is unwired (dead UI) |
 | ISS-002 | IF-4 | Low | Peripheral | HIGH | ✓ | Orphan page calls a nonexistent `volunteersService` method |
-| ISS-003 | IF-3a | High | Core | MEDIUM | ✓ | `Volunteer` entity diverges (additive) across the two backends — .NET-only id-hash/name/role columns |
+| ISS-003 | IF-3a | High | Core | MEDIUM | ✓ | `Volunteer` entity diverges (additive) across the two backends — .NET-only id-hash/name/role columns → **accepted by design (ADR-016)** |
 | ISS-004 | IF-3a/IF-5 | High | Core | MEDIUM | ✓ | One REST + domain contract implemented three times with no shared source of truth |
 | ISS-005 | IF-4 | Medium | Supporting | HIGH | ✓ | Auth error responses break the mandated `ApiResponse.Fail`/Hebrew pattern (use `Results.Problem`) |
 | ISS-006 | IF-7 | Medium | Supporting | MEDIUM | ✓ | Scheduler dedup swallows ALL exceptions as "already ran" |
@@ -40,6 +40,7 @@ Generated: 2026-06-18 -->
 - **provenance:** `web/server/Magav.Common/Models/Volunteer.cs:10-16` + `android/app/src/main/java/com/magav/app/db/entity/VolunteerEntity.kt:8-31`; Android dedups by mapping name at `android/app/src/main/java/com/magav/app/api/routes/VolunteerRoutes.kt:82,130`.
 - **severity:** High · **criticality:** Core · **certainty:** MEDIUM (the divergence is HIGH-certain; whether it is a defect vs. an intentional per-target design is the MEDIUM part — flag-don't-assert) · **verified:** ✓
 - **R1.5:** CONFIRMED (a real structural divergence; framed as a coupling/consistency risk, not asserted a bug). · **note:** Android's extra `AppSettings` table (SIM selection) is an intentional, documented Android-only addition — NOT flagged. · **sarif:** deepinit/IF-3a
+- **Resolution (2026-06-19): ACCEPTED BY DESIGN** — see [decisions.md](decisions.md) ADR-016 and [data-layer.md](data-layer.md) §3.2 (D-1/D-3). The Android `VolunteerEntity` intentionally omits `InternalIdHash`/`FirstName`/`LastName`/`RoleId` and keys on the unique `MappingName`; Android has no SMS-approval flow and never reads those columns. **NOT migrated** — a Room `@Entity` change carries the ADR-004 data-wipe hazard for zero functional gain. Intentional per-target divergence, not a bug.
 
 ## ISS-004 — [IF-3a / IF-5 hidden-coupling] One contract, three independent implementations, no shared source of truth
 - **claim:** The REST API contract AND the domain model are implemented **three times with no shared code**: the .NET Minimal API (`web/server/Magav.Api/Program.cs`), the Android Ktor routes (`android/app/src/main/java/com/magav/app/api/routes/*`), and the React service layer that consumes them (`web/client/src/services/*`); the entity model is likewise triplicated (.NET `Magav.Common/Models`, Android Room `db/entity`, React TS types). A contract/rule change applied to one is silently uncoupled from the others, and there are **no tests** to catch drift. The git history shows these co-change (`Program.cs` churn 16, Android `ShiftRoutes.kt`/`RequestDtos.kt` 11, client `shiftsService.ts` 9) — temporal coupling with no structural edge between the components.

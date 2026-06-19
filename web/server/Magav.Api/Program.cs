@@ -22,6 +22,16 @@ var builder = WebApplication.CreateBuilder(args);
 var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>()
     ?? throw new InvalidOperationException("JWT settings not configured");
 
+// Fail loud at startup if any JWT secret/identity is missing — these are externalized
+// (env vars in prod, user-secrets in dev) and an empty SecretKey would otherwise only fail
+// at first token validation as a confusing runtime auth error. [ISS-007]
+if (string.IsNullOrEmpty(jwtSettings.SecretKey))
+    throw new InvalidOperationException("Jwt:SecretKey not configured");
+if (string.IsNullOrEmpty(jwtSettings.Issuer))
+    throw new InvalidOperationException("Jwt:Issuer not configured");
+if (string.IsNullOrEmpty(jwtSettings.Audience))
+    throw new InvalidOperationException("Jwt:Audience not configured");
+
 var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>()
     ?? new[] { "http://localhost:8080" };
 
@@ -183,7 +193,9 @@ app.MapPost("/api/auth/login", async (LoginRequest request, AuthService authServ
     catch (Exception ex)
     {
         Console.Error.WriteLine($"Login error: {ex}");
-        return Results.Problem("An error occurred during login");
+        return Results.Json(
+            ApiResponse<LoginResponse>.Fail("אירעה שגיאה בעת ההתחברות"),
+            statusCode: StatusCodes.Status500InternalServerError);
     }
 });
 
@@ -203,7 +215,9 @@ app.MapPost("/api/auth/refresh", async (RefreshTokenRequest request, AuthService
     catch (Exception ex)
     {
         Console.Error.WriteLine($"Refresh token error: {ex}");
-        return Results.Problem("An error occurred during token refresh");
+        return Results.Json(
+            ApiResponse<LoginResponse>.Fail("אירעה שגיאה בעת חידוש ההתחברות"),
+            statusCode: StatusCodes.Status500InternalServerError);
     }
 });
 
@@ -225,7 +239,9 @@ app.MapPost("/api/auth/logout", async (HttpContext context, AuthService authServ
     catch (Exception ex)
     {
         Console.Error.WriteLine($"Logout error: {ex}");
-        return Results.Problem("An error occurred during logout");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בעת ההתנתקות"),
+            statusCode: StatusCodes.Status500InternalServerError);
     }
 }).RequireAuthorization();
 
@@ -356,7 +372,9 @@ app.MapPost("/api/volunteers/import", async (HttpRequest request, MagavDbManager
     catch (Exception ex)
     {
         Console.Error.WriteLine($"Volunteers import error: {ex}");
-        return Results.Problem("אירעה שגיאה בעת ייבוא הקובץ");
+        return Results.Json(
+            ApiResponse<ImportResult>.Fail("אירעה שגיאה בעת ייבוא הקובץ"),
+            statusCode: StatusCodes.Status500InternalServerError);
     }
 })
 .RequireAuthorization("CanImportVolunteers")

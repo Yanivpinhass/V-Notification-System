@@ -185,8 +185,19 @@ class SmsReminderService(
                     error = runError
                 )
             )
-        } catch (_: Exception) {
-            // UNIQUE constraint violation = already ran
+        } catch (_: android.database.sqlite.SQLiteConstraintException) {
+            // UNIQUE constraint violation = already ran — silent dedup hit.
+        } catch (e: Exception) {
+            // Not a dedup hit: a transient/real DB error. Log distinctly so it is no longer
+            // masked as "already ran". Do NOT rethrow — doWork()'s catch maps any exception to
+            // Result.retry(), which would re-run the batch → duplicate SMS. [ISS-006]
+            // Keep STRUCTURALLY IDENTICAL to the .NET mirror in
+            // web/server/Magav.Server/Database/Repositories/SchedulerRunLogRepository.cs.
+            android.util.Log.e(
+                "SmsReminder",
+                "SchedulerRunLog insert failed (non-constraint) for configId=${config.id}, targetDate=$runLogDateStr, reminderType=$reminderType",
+                e
+            )
         }
 
         return SmsSummary(totalEligible, smsSent, smsFailed)

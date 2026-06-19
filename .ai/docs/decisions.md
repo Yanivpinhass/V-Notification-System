@@ -163,6 +163,16 @@ Evidence is cited as `file:line`, commit hash, or doc reference. Certainty refle
 - Consequences: (+) Everything-in-one-place for a solo maintainer. (−) A 2249-line god object with high change-collision risk and no route-group modularization; magic template IDs (1/2/3) and inline service `new`-ing (instead of DI) accumulate here.
 - Certainty: MEDIUM
 
+## ADR-016: Android `Volunteer` entity intentionally omits the .NET-only identity/name/role columns
+- Status: accepted
+- Date: 2026-06-19
+- Context: The same logical `Volunteers` table is modeled separately per target (no shared source of truth — ADR-001/012/015). The .NET `Volunteer` model carries `InternalIdHash` (SHA256 of the national/internal id), `FirstName`, `LastName`, and `RoleId`; the Android `VolunteerEntity` carries only `Id`, `MappingName` (unique), `MobilePhone`, `ApproveToReceiveSms`, `CreatedAt`, `UpdatedAt`. DeepInit flagged this as drift (ISS-003 / data-layer §3.2 D-1, D-3).
+- Decision: Keep the Android entity as-is — deliberately WITHOUT `InternalIdHash`/`FirstName`/`LastName`/`RoleId` — and key volunteers on the unique `MappingName`. The hashed-internal-id SMS-approval flow (`/sms-approval/:accessKey` → server `GetByInternalIdAsync`) stays **.NET + React only**; Android has no public approval flow and never queries those columns.
+- Why: The two databases are never shared (each target writes its own DB), so the import + de-dup logic is consistent WITHIN each platform (.NET upserts by `InternalIdHash`; Android matches by lowercased `MappingName`). Adding the four columns to Room buys zero functional gain for the Android target while incurring the ADR-004 data-wipe hazard — a Room `@Entity` change requires a `@Database` version bump + a migration registered in BOTH `addMigrations(...)` sites, and getting it wrong can silently wipe all user data.
+- Evidence: `web/server/Magav.Common/Models/Volunteer.cs:9-18`; `android/app/src/main/java/com/magav/app/db/entity/VolunteerEntity.kt:8-31`; data-layer.md §3.2 (D-1/D-3); issues.md ISS-003; ADR-004 (Room data-wipe hazard).
+- Consequences: (+) No migration, no data-wipe exposure; each platform stays internally consistent. (−) A volunteer record is not portable between the two backends; any future feature assuming the .NET volunteer shape (e.g. an Android hashed-id approval flow) must FIRST add the columns via a proper versioned Room migration. Revisit this ADR if Android ever adopts the SMS-approval flow.
+- Certainty: HIGH
+
 ---
 
 ## Section B — Knowledge Log
@@ -217,5 +227,5 @@ Format: `KL-{category}:NNN | insight/gotcha | evidence | certainty`
 ---
 
 ### Summary
-- **ADRs:** 15 (ADR-001 … ADR-015). **Knowledge Log entries:** 28 (12 mistake, 6 learning, 5 debug, 5 integration, 2 progress/preference).
+- **ADRs:** 16 (ADR-001 … ADR-016). **Knowledge Log entries:** 28 (12 mistake, 6 learning, 5 debug, 5 integration, 2 progress/preference).
 - **Highest-certainty / highest-impact ADR:** ADR-004 (defensive Room DB init — no destructive fallback) — grounded in an explicit documented data-loss incident (commit `e7fd42c`) and verified line-for-line in `MagavApplication.kt:112-137`.

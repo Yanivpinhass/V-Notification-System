@@ -1,5 +1,6 @@
 using Magav.Common.Database;
 using Magav.Common.Models;
+using Microsoft.Data.Sqlite;
 using NPoco;
 
 namespace Magav.Server.Database.Repositories;
@@ -21,9 +22,24 @@ public class SchedulerRunLogRepository : Repository<SchedulerRunLog>
             await Db.InsertAsync(log);
             return log;
         }
-        catch (Exception)
+        catch (SqliteException ex) when (
+            ex.SqliteErrorCode == 19 ||           // SQLITE_CONSTRAINT
+            ex.SqliteExtendedErrorCode == 2067 || // SQLITE_CONSTRAINT_UNIQUE
+            (ex.Message?.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) ?? false))
         {
-            // UNIQUE constraint violation means already ran — return null
+            // UNIQUE constraint violation = this run already happened — silent dedup hit.
+            return null;
+        }
+        catch (Exception ex)
+        {
+            // Not a dedup hit: a transient/real DB error. Log distinctly so it is no longer
+            // masked as "already ran". Return null WITHOUT rethrowing — a rethrow would bubble
+            // up to the scheduler and could trigger a re-send → duplicate SMS. [ISS-006]
+            // Keep STRUCTURALLY IDENTICAL to the Android mirror in
+            // android/.../service/SmsReminderService.kt (run-log insert catch).
+            Console.Error.WriteLine(
+                $"ERROR: SchedulerRunLog insert failed (non-UNIQUE) for ConfigId={log.ConfigId}, " +
+                $"TargetDate={log.TargetDate}, ReminderType={log.ReminderType}: {ex}");
             return null;
         }
     }
