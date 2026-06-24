@@ -1,5 +1,5 @@
 <!-- DeepInit Extract | Component: server
-Run ID: deepinit-2026-06-18
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-24 (incremental --update over commit 2989b01: run-log dedup narrowed [ISS-006], PasswordValidator.cs deleted [ISS-009]) — note: Helpers/PasswordValidator.cs in the input list below no longer exists
 Input files processed: Magav.Server.csproj, Services/AuthService.cs, Services/DbInitializer.cs, Services/ShiftsImportService.cs, Services/VolunteersImportService.cs, Services/ShiftCleanupService.cs, Services/Sms/ISmsProvider.cs, Services/Sms/InforUMobileSmsProvider.cs, Services/Sms/SmsSchedulerService.cs, Services/Sms/SmsReminderService.cs, Database/MagavDbManager.cs, Database/Repository.cs, Database/Repositories/UsersRepository.cs, Database/Repositories/VolunteersRepository.cs, Database/Repositories/ShiftsRepository.cs, Database/Repositories/SmsLogRepository.cs, Database/Repositories/SchedulerConfigRepository.cs, Database/Repositories/SchedulerRunLogRepository.cs, Database/Repositories/MessageTemplateRepository.cs, Database/Repositories/LocationsRepository.cs, Database/Repositories/JewishHolidaysRepository.cs, Helpers/PasswordValidator.cs, Helpers/ShiftScheduleParser.cs
 Generated: 2026-06-18 -->
 
@@ -20,7 +20,7 @@ Generated: 2026-06-18 -->
 - `DbInitializer` (singleton, run once at startup) (`Services/DbInitializer.cs:7`).
 - `ISmsProvider`/`InforUMobileSmsProvider` (HttpClient-injected) (`Services/Sms/ISmsProvider.cs:3`, `Services/Sms/InforUMobileSmsProvider.cs:12`).
 - `ShiftsImportService`, `VolunteersImportService` (`Services/ShiftsImportService.cs:7`, `Services/VolunteersImportService.cs:8`).
-- `PasswordValidator`, `ShiftScheduleParser` (static helpers).
+- `ShiftScheduleParser` (static helper). *(`PasswordValidator` was deleted in `2989b01` — it was dead code; the live password rule is inline in the api's `change-password`. ISS-009 resolved.)*
 
 **Complexity:** Moderate. Most files are small and single-responsibility; complexity concentrates in `DbInitializer.cs` (859 LOC, mostly the holiday seed table) and the scheduler window/day-group logic in `SmsSchedulerService.cs` + `SmsReminderService.cs`. [HIGH]
 
@@ -37,7 +37,7 @@ Generated: 2026-06-18 -->
 | Location-update SMS | Re-notifies a shift team when location changed after same-day SMS | `SmsReminderService.SendLocationUpdateAsync` (`Services/Sms/SmsReminderService.cs:252`) | `Services/Sms/SmsReminderService.cs` | HIGH |
 | InforUMobile SMS provider | XML HTTP POST to `SendMessageXml.ashx`, numeric/XML status parsing, phone masking in logs | `InforUMobileSmsProvider.SendSmsAsync` (`Services/Sms/InforUMobileSmsProvider.cs:36`) | `Services/Sms/InforUMobileSmsProvider.cs`, `Services/Sms/ISmsProvider.cs` | HIGH |
 | JWT auth | Login (BCrypt verify + lockout), refresh (rotate), logout (clear token); HMAC-SHA256 access token + SHA256-hashed refresh token | `AuthService.LoginAsync` / `RefreshTokenAsync` / `LogoutAsync` (`Services/AuthService.cs:27,84,123`) | `Services/AuthService.cs` | HIGH |
-| Password policy validation | 8+ chars, upper/lower/digit/special; English + Hebrew error messages | `PasswordValidator.Validate` / `ValidateHebrew` (`Helpers/PasswordValidator.cs:7,29`) | `Helpers/PasswordValidator.cs` | HIGH |
+| Password policy validation | ~~8+ chars, upper/lower/digit/special via `PasswordValidator`~~ — **`Helpers/PasswordValidator.cs` deleted in `2989b01`** (it was never called). The enforced policy is now inline in the api's `POST /api/auth/change-password` (≥6 + letter + digit). | (inline) `web/server/Magav.Api/Program.cs` change-password | — | HIGH |
 | Repository layer | Generic `Repository<T>` base + 9 domain repositories with specialized queries; lazy facade `MagavDbManager` | `MagavDbManager` (`Database/MagavDbManager.cs:13`) | `Database/*.cs`, `Database/Repositories/*.cs` | HIGH |
 | DB init + migrate + seed | Creates encrypted SQLite schema on fresh DB; idempotent column/table migrations on existing DB; seeds admin/templates/configs/holidays + sample data | `DbInitializer.InitializeAsync` (`Services/DbInitializer.cs:19`) | `Services/DbInitializer.cs` | HIGH |
 | Volunteers Excel import | Reads 3-column sheet, sanitizes phone, upsert-by-internal-id (max 10000 rows) | `VolunteersImportService.ImportFromExcelAsync` (`Services/VolunteersImportService.cs:12`) | `Services/VolunteersImportService.cs` | HIGH |
@@ -71,9 +71,9 @@ Generated: 2026-06-18 -->
   4. For each eligible shift: build message from template using the shift's OWN date (`BuildMessage(template.Content, shift, shift.ShiftDate)`, `:112`); if `ReminderType == SameDay` append `BuildLocationText(shift)` (`:113-114`); send via `_smsProvider.SendSmsAsync` (`:115`); insert `SmsLog` row with Success/Fail (`:118-126`); on success increment `smsSent` + `UPDATE Shifts SET SmsSentAt` (`:129-135`), else increment `smsFailed` (`:136-141`).
   5. Per-shift exception → increment `smsFailed`, log, attempt a Fail `SmsLog` with error `"שגיאה פנימית"` (nested try/catch) (`:143-165`).
   6. Compute run status: `Completed` (0 eligible or 0 failed) | `Failed` (sent 0) | `Partial` (`:169-172`); set `runError` if any failed (`:174-175`).
-  7. Insert `SchedulerRunLog` via repository's swallowing `InsertAsync`; `null` return = UNIQUE-constraint duplicate → log warning (`:178-197`).
+  7. Insert `SchedulerRunLog` via `InsertAsync`; `null` return = UNIQUE-constraint duplicate (the only swallowed case since `2989b01`) → log warning (`:178-197`).
 - State transitions: shift becomes "notified for ReminderType" once a `Success` `SmsLog` exists (suppresses future eligibility); `SmsSentAt` set as general same-day indicator.
-- Error handling: provider failures captured as `SmsResult.Error` (never throw out of provider, see WF-server:004); per-shift exceptions isolated; run-log duplicates swallowed.
+- Error handling: provider failures captured as `SmsResult.Error` (never throw out of provider, see WF-server:004); per-shift exceptions isolated; run-log UNIQUE duplicates swallowed (any other run-log DB error is now logged distinctly, not masked as a dedup hit — ISS-006 resolved).
 - Certainty: HIGH.
 
 **WF-server:003 — Auth: login / refresh / logout**
@@ -142,7 +142,7 @@ Generated: 2026-06-18 -->
 | ID | Rule | Criticality | Source |
 |---|---|---|---|
 | BR-server:001 | SMS dedup (per-shift): a shift is excluded from a reminder run if a `SmsLog` row exists with the same `ShiftId`, that run's `ReminderType`, and `Status = Success` (`NOT EXISTS` subquery) | Core | `Services/Sms/SmsReminderService.cs:61-67` |
-| BR-server:002 | SMS dedup (per-run): `SchedulerRunLog` has UNIQUE(ConfigId, TargetDate, ReminderType); a duplicate insert is swallowed (returns null) so a config fires at most once per target date | Core | `Services/DbInitializer.cs:203`, `Database/Repositories/SchedulerRunLogRepository.cs:17-29`, `Services/Sms/SmsReminderService.cs:191-197` |
+| BR-server:002 | SMS dedup (per-run): `SchedulerRunLog` has UNIQUE(ConfigId, TargetDate, ReminderType); a UNIQUE-violating insert is swallowed (returns null) so a config fires at most once per target date. Since `2989b01` ONLY the UNIQUE violation is swallowed — any other DB error is logged distinctly and returned-null without rethrow | Core | `Services/DbInitializer.cs:203`, `Database/Repositories/SchedulerRunLogRepository.cs:25-44`, `Services/Sms/SmsReminderService.cs:191-197` |
 | BR-server:003 | DayGroup = the day the SMS is SENT (the run/firing day), matched against the holiday-aware effective day group of "now"; it is NOT the shift's day. `DaysBeforeShift` (N) is the look-ahead offset added to today to find target shift dates | Core | `Services/Sms/SmsSchedulerService.cs:95,108-124,149-165` |
 | BR-server:004 | Same-day reminders APPEND the location text (city/name + Waze "navigate" link); Advance/Manual/WeekdayAdvance do NOT (only `ReminderType == SameDay` calls `BuildLocationText`) | Core | `Services/Sms/SmsReminderService.cs:113-114,222-250` |
 | BR-server:005 | Active-shift queries MUST filter `IsCanceled = 0` (soft-cancel); every shift list/eligibility query in scope does so | Core | `Services/Sms/SmsReminderService.cs:57,269`, `Database/Repositories/ShiftsRepository.cs:17,22,29,35,133`, `Database/Repositories/ShiftsRepository.cs:53` (canceled page filters `=1`) |
@@ -155,7 +155,7 @@ Generated: 2026-06-18 -->
 | BR-server:012 | Access token = HMAC-SHA256 JWT, default 15-min expiry; refresh token = 32 random bytes, default 7-day expiry, stored as SHA256(token) and ROTATED on every refresh | Core | `Services/AuthService.cs:59-66,98-105,136-171,225-226` |
 | BR-server:013 | Login NEVER reveals whether username or password was wrong (single generic message); locked/inactive states use distinct messages; no exception details leak | Core | `Services/AuthService.cs:33,46,50` |
 | BR-server:014 | Roles array returned to client is `[user.Role]` — server stores a single `Role` string, wrapped into a one-element array for the client's `roles[]` contract | Supporting | `Services/AuthService.cs:77,116` |
-| BR-server:015 | Password policy: min 8 chars + upper + lower + digit + special (`!@#$%^&*()_+-=[]{}|;:',.<>?/`) | Supporting | `Helpers/PasswordValidator.cs:5,11-25` |
+| BR-server:015 | ~~Password policy: 8+ chars + upper/lower/digit/special~~ — **`Helpers/PasswordValidator.cs` was deleted in `2989b01`** (dead code, never called). The actually-enforced policy is the inline rule in the api's `change-password` (≥6 + letter + digit). The cross-platform .NET vs Android (≥4) policy difference is an accepted divergence (`tools/parity.md` #2) | Supporting | (inline) `web/server/Magav.Api/Program.cs` change-password; ISS-009 resolved |
 | BR-server:016 | Volunteer SMS approval is one-way via public page: `UpdateSmsApprovalAsync` refuses if already approved (must contact admin); upsert-by-internal-id only updates MappingName+MobilePhone on existing rows | Supporting | `Database/Repositories/VolunteersRepository.cs:55-103` |
 | BR-server:017 | Shift import only imports today-and-future shifts and REPLACES all shifts in the imported `[minDate, maxDate]` range (delete-then-bulk-insert) | Supporting | `Services/ShiftsImportService.cs:34-35,104-114` |
 | BR-server:018 | Volunteer import capped at 10000 rows (DoS protection); phone sanitized to digits with leading `0` | Supporting | `Services/VolunteersImportService.cs:10,43-48,93-99` |
@@ -232,7 +232,7 @@ Consumed by `Magav.Api` via DI:
 - **`DbInitializer`** — `InitializeAsync()`, `GetConnectionString()` (`Services/DbInitializer.cs:19,275`).
 - **`ShiftsImportService`** / **`VolunteersImportService`** — `ImportFromExcelAsync(stream, db) → ImportResult` (`Services/ShiftsImportService.cs:9`, `Services/VolunteersImportService.cs:12`).
 - **`ShiftScheduleParser`** (static) — `Parse(filePath|stream) → List<ExcelShift>` (`Helpers/ShiftScheduleParser.cs:27,36`).
-- **`PasswordValidator`** (static) — `Validate`, `ValidateHebrew` (`Helpers/PasswordValidator.cs:7,29`).
+- ~~**`PasswordValidator`** (static)~~ — **deleted in `2989b01`** (was dead code; the live policy is inline in the api's `change-password`). ISS-009 resolved.
 - **`Repository<T>`** generic base — extendable CRUD (`Database/Repository.cs:13`).
 
 ---
@@ -264,7 +264,7 @@ Consumed by `Magav.Api` via DI:
 - **Sample data ships in initializer:** `SeedSampleDataAsync` (12 fake volunteers, 4 teams, 84 shifts, SMS logs) is called unconditionally on every FRESH DB (`DbInitializer.cs:258,763-858`); marked "remove before production" but still present. All sample volunteers share phone `050-4448246` and `ApproveToReceiveSms=1`. [HIGH]
 - **Scheduler-config seeding gotcha (matches MEMORY):** `SeedSchedulerConfigAsync` (the 6 default configs) runs ONLY on a fresh DB inside the `!dbExists` branch (`DbInitializer.cs:213,703-731`). New seed rows do NOT reach existing DBs — the WeekdayAdvance row had to be added via a separate idempotent `MigrateSchedulerConfigAsync` (INSERT OR IGNORE, unconditional) (`:269-272,740-761`). Any future default config must follow the same migration pattern, and the "6 configs" value is effectively hardcoded across `DbInitializer` (.NET) + Android per MEMORY. [HIGH]
 - **Migrations swallow errors:** all `Migrate*` methods catch-and-log-to-Console.Error then continue (`DbInitializer.cs:330,394,434,470,757`). A failed in-place migration does not stop startup and can leave a partially-upgraded schema. [HIGH]
-- **`SchedulerRunLogRepository.InsertAsync` swallows ALL exceptions** as "already ran" (`catch (Exception)` returns null), not just UNIQUE violations (`SchedulerRunLogRepository.cs:22-28`) — a transient DB error during run-log insert is indistinguishable from a dedup hit. [HIGH]
+- ~~**`SchedulerRunLogRepository.InsertAsync` swallows ALL exceptions**~~ **RESOLVED 2026-06-19 (`2989b01`):** the bare `catch (Exception)` was narrowed to `SqliteException` filtered on UNIQUE (code 19 / extended 2067 / message-contains-UNIQUE) → silent dedup hit; any other exception is logged distinctly (ConfigId/TargetDate/ReminderType) and returns null WITHOUT rethrow. Kept structurally identical to the Android mirror (`SmsReminderService.kt`). (`SchedulerRunLogRepository.cs:25-44`; ISS-006 resolved) [resolved]
 - **BcryptWorkFactor setting partially unused:** seed admin hardcodes work factor `12` (`DbInitializer.cs:233`) instead of reading `SecuritySettings.BcryptWorkFactor` (`AuthService.cs:233`). Drift risk if the setting is changed. [MEDIUM]
 - **Import without transaction:** `VolunteersImportService` deliberately processes rows one-by-one with no transaction (comment cites SQLite per-op connection model, `:50-51`) — a mid-import failure leaves partial data. `ShiftsImportService` delete-then-bulk-insert is also not wrapped in a single transaction (`ShiftsImportService.cs:104-114`), so a crash between DELETE and INSERT loses shifts. [MEDIUM]
 - **TODO/FIXME/HACK markers:** 0 found in scope (grep over the whole component). [HIGH]

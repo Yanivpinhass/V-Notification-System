@@ -1,5 +1,5 @@
 <!-- DeepInit Extract | Component: web-client
-Run ID: deepinit-2026-06-18
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-24 (incremental --update over commit 2989b01: SMS-approval route wired, RevokeSmsApprovalPage.tsx deleted — ISS-001/002 resolved)
 Input files processed: App.tsx, main.tsx, config/auth.ts, lib/utils.ts, lib/auth.ts, lib/hebrewDates.ts (glob only), pages/Index.tsx, components/layout/menuItems.ts, components/layout/types.ts, components/layout/Sidebar.tsx, components/layout/Header.tsx, components/AdminLayout.tsx, components/AuthScreen.tsx, components/ChangePasswordDialog.tsx, components/users/UserDialog.tsx, components/ui/switch.tsx, components/ui/dialog.tsx, services/api/BaseApiClient.ts, services/authService.ts, services/usersService.ts, services/volunteersService.ts, services/shiftsService.ts, services/smsLogService.ts, services/settingsService.ts, services/messageTemplateService.ts, services/locationsService.ts, services/jewishHolidaysService.ts, services/schedulerService.ts, services/volunteerSmsService.ts, pages/VolunteerSmsApprovalPage.tsx, pages/RevokeSmsApprovalPage.tsx, pages/SchedulerSettingsPage.tsx, pages/SmsSettingsPage.tsx, pages/AboutVersionPage.tsx, pages/VolunteersImportPage.tsx, pages/ShiftsManagementPage.tsx (partial), pages/scheduler/schedulerPreview.ts, pages/scheduler/ReminderRow.tsx, hooks/use-mobile.tsx
 Generated: 2026-06-18 -->
 
@@ -42,8 +42,8 @@ Generated: 2026-06-18 -->
 | SMS summary by team (סיכום שליחה לפי צוות) | `pages/SmsLogSummaryPage.tsx` (`sms-summary`) | `SmsLogSummaryPage.tsx`, `smsLogService.getSummary` | `[MEDIUM]` |
 | Users management (משתמשי מערכת) | `pages/SystemUsersPage.tsx` (`system-users`, Admin-only) | `SystemUsersPage.tsx`, `usersService.ts`, `components/users/UserDialog.tsx`, `DeleteUserDialog.tsx` | `[HIGH]` |
 | About / version (גרסה) | `pages/AboutVersionPage.tsx` (`about-version`) | `AboutVersionPage.tsx` (hits `/api/health`) | `[HIGH]` |
-| Public SMS approval (אישור קבלת הודעות SMS) | `pages/VolunteerSmsApprovalPage.tsx` | `VolunteerSmsApprovalPage.tsx`, `services/volunteerSmsService.ts` | `[HIGH]` component exists; **NOT wired to any route — see §10** |
-| Public revoke SMS approval (ביטול הרשמה) | `pages/RevokeSmsApprovalPage.tsx` | `RevokeSmsApprovalPage.tsx`, `volunteersService.revokeSmsApproval` | `[HIGH]` component exists; **NOT wired to any route, and `volunteersService.revokeSmsApproval` is referenced but NOT defined in `volunteersService.ts` — see §10** |
+| Public SMS approval (אישור קבלת הודעות SMS) | `pages/VolunteerSmsApprovalPage.tsx` | `VolunteerSmsApprovalPage.tsx`, `services/volunteerSmsService.ts` | `[HIGH]` **wired** at `App.tsx:25` → `/sms-approval/:accessKey` (`2989b01`; ISS-001 resolved) |
+| ~~Public revoke SMS approval~~ | — | — | **REMOVED in `2989b01`** — `RevokeSmsApprovalPage.tsx` deleted (it called a nonexistent `volunteersService.revokeSmsApproval`); opt-out is admin-mediated. (ISS-002 resolved) |
 
 ## 3. Workflows & Behaviors
 
@@ -68,8 +68,8 @@ Generated: 2026-06-18 -->
 - Trigger: Header dropdown "התנתק" `web/client/src/components/layout/Header.tsx:58`.
 - Steps: `authService.logout()` → best-effort `POST /api/auth/logout` `authService.ts:132-142` → `finally` removes `accessToken`/`refreshToken`/`user` + `window.NativeAuth.onLogout()` `authService.ts:147-154` → `Index.handleLogout` sets `user=null`, `isAuthenticated=false` `Index.tsx:54-58`. `[HIGH]`
 
-**WF-web-client:005 — Public SMS-approval (orphaned page)** (user-facing)
-- Trigger: `VolunteerSmsApprovalPage` reads `accessKey` from `useParams` `VolunteerSmsApprovalPage.tsx:42`.
+**WF-web-client:005 — Public SMS-approval (wired at `/sms-approval/:accessKey`)** (user-facing)
+- Trigger: route `App.tsx:25` mounts `VolunteerSmsApprovalPage`, which reads `accessKey` from `useParams` `VolunteerSmsApprovalPage.tsx:42` (route wired in `2989b01`; ISS-001 resolved).
 - Steps (state machine `PageState` `VolunteerSmsApprovalPage.tsx:15-23`): enter personal id → `volunteerSmsService.verifyVolunteer(accessKey,internalId)` `POST /public/sms-approval/{accessKey}/verify` `volunteerSmsService.ts:31-39` → `already_approved` shows notice, else show form → submit → `submitApproval` `POST /public/sms-approval/{accessKey}/submit` `volunteerSmsService.ts:65-73` → success.
 - Error handling: HTTP 429 → `rate_limited` state ("יותר מדי בקשות") `volunteerSmsService.ts:42-43`, `VolunteerSmsApprovalPage.tsx:82-86`; else `not_found`. `[HIGH]`
 - NOTE: this entire flow is currently unreachable in the built app — the component is not imported anywhere (§10). `[HIGH]`
@@ -184,8 +184,7 @@ Note: most service `baseUrl` values come from `authConfig.apiBaseUrl` directly (
 
 ## 10. Legacy Warnings
 
-- **Orphaned / dead public pages** `[HIGH]`: `pages/VolunteerSmsApprovalPage.tsx` and `pages/RevokeSmsApprovalPage.tsx` use `useParams`/services but are **imported nowhere** (grep for `import.*(VolunteerSmsApprovalPage|RevokeSmsApprovalPage)` → no matches) and `App.tsx:22-25` registers ONLY `/` and `*`. So the public `/sms-approval/:accessKey` route documented in CLAUDE.md is **NOT wired into this client build**. The verify/submit service code still exists (`volunteerSmsService.ts`) and the backend endpoints presumably remain. (`App.tsx:22-25`, `pages/VolunteerSmsApprovalPage.tsx:1-379`, `pages/RevokeSmsApprovalPage.tsx:1-106`)
-- **Missing service method referenced** `[HIGH]`: `RevokeSmsApprovalPage.tsx:33` calls `volunteersService.revokeSmsApproval(internalId)`, but `services/volunteersService.ts` defines no such method — would be a runtime error if the page were ever mounted. (Mitigated only because the page is unreachable.) (`pages/RevokeSmsApprovalPage.tsx:33` vs `services/volunteersService.ts:34-60`)
+- **✅ RESOLVED 2026-06-19 (`2989b01`) — public SMS-approval page wired:** `App.tsx:8,25` now imports `VolunteerSmsApprovalPage` and registers `/sms-approval/:accessKey`, so the documented public route is reachable from this client build (`volunteerSmsService.ts` verify/submit drive it; backend endpoints live). The orphan `RevokeSmsApprovalPage.tsx` — which called a nonexistent `volunteersService.revokeSmsApproval` — was **deleted** (no revoke flow; opt-out is admin-mediated). The earlier orphaned-page + missing-method warnings (ISS-001/002) are resolved. (`App.tsx:8,25`, `pages/VolunteerSmsApprovalPage.tsx`)
 - **God objects** `[HIGH]`: `pages/ShiftsManagementPage.tsx` (1135 lines, ~25 `useState` hooks for nested dialogs/group editing — `ShiftsManagementPage.tsx:37-104`). Vendored Shadcn primitives `components/ui/sidebar.tsx` (~761 lines) and `components/ui/chart.tsx` (~363 lines) are large but vendored (see below). `[HIGH]` count; `[MEDIUM]` line counts (from task brief / not re-counted).
 - **Vendored UI** `[HIGH]`: `components/ui/*` are vendored Shadcn/UI (Radix) primitives — treat as third-party. Two are intentionally RTL-modified and must NOT be reverted: `components/ui/switch.tsx` (adds `dir="ltr"`) and `components/ui/dialog.tsx` (left-positioned X + top-aligned scroll for Android WebView). `components/ui/chart.tsx`/`sidebar.tsx`/`carousel.tsx` etc. appear unused by app code.
 - **TanStack Query set up but unused** `[HIGH]`: `QueryClient`/`QueryClientProvider` mounted at `App.tsx:8,12` but grep for `useQuery|useMutation` finds only the `App.tsx` import — no actual query hooks. Data fetching is `useState`+`useEffect`+direct service calls everywhere (e.g. `SchedulerSettingsPage.tsx:36-55`).

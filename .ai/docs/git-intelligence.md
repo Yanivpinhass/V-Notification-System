@@ -1,5 +1,5 @@
 <!-- DeepInit Detect | Component: system-wide | git intelligence
-Run ID: deepinit-2026-06-18
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-24 (incremental --update; ISS-004 accepted + parity-lint guard)
 Generated: 2026-06-18 -->
 
 # Git Intelligence
@@ -26,4 +26,4 @@ Generated: 2026-06-18 -->
 Low. Recent commit messages are feature/fix-oriented and descriptive (e.g. `Redesign SMS scheduler settings…`, `Add WeekdayAdvance…`, `Add canceled-shifts soft-cancel…`, `Fix Waze link…`). One commit (`e7fd42c`) documents a data-loss incident — the origin of the defensive Room-init discipline (ADR-004). A historical relocation of `server/Magav.Api/` → `web/server/Magav.Api/` shows in the churn of the old path.
 
 ## Change-coupling (temporal, feeds IF-5)
-The .NET API (`Program.cs`), Android routes (`ShiftRoutes.kt`/`RequestDtos.kt`), and React services (`shiftsService.ts`) co-evolve — a feature touching the shift/SMS contract lands across all three with no shared definition and no test guard. Surfaced as ISS-004 (folded static + temporal view; non-double-emit).
+The .NET API (`Program.cs`), Android routes (`ShiftRoutes.kt`/`RequestDtos.kt`), and React services (`shiftsService.ts`) co-evolve — a feature touching the shift/SMS contract lands across all three with no shared definition and no test guard. Surfaced as ISS-004 (folded static + temporal view; non-double-emit). As of `2989b01` this triplication is **accepted by design** and the string value-sets are guarded by a 0-LLM lint (`tools/parity-lint.mjs`; ADR-018) — but endpoint/DTO shapes are still hand-mirrored, so the co-evolution coupling stands.

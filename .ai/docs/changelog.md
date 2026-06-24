@@ -1,5 +1,40 @@
 # DeepInit Changelog
 
+## 2026-06-24 — Run deepinit-2026-06-24 (incremental `--update`, source through commit `2989b01`)
+
+Change detection (Step 0 symmetric set-diff; git advisory): the only source-changing commit since the
+2026-06-18 baseline is `2989b01` ("Remediate 9 DeepInit issues", 2026-06-19). **Dirty:** `server`, `api`,
+`web-client`, `android`. **Unchanged (skipped, DP-1):** `common`. Horizontal docs re-run (the cheap safety net).
+
+### ADDED
+- `tools/parity.md` + `tools/parity-lint.mjs` — a 0-LLM cross-platform constant parity lint (ISS-004 mitigation) and the register of accepted divergences. Reflected in technical-dependencies / cross-references / decisions.
+- ADR-016 (Android `Volunteer` entity intentional divergence — already added by `2989b01`); ADR-017 (externalize secrets out of tracked config) and ADR-018 (constant parity lint) recorded this run.
+- `android/.../db/entity/VolunteerEntity.kt` (new Room entity, with an INTENTIONAL-DIVERGENCE header comment).
+
+### MODIFIED
+- Component deep docs: `server.md`, `api.md`, `web-client.md`, `android.md` re-verified against current code; resolved-issue references corrected.
+- Horizontal docs: `cross-references.md`, `functional-workflows.md`, `technical-dependencies.md`, `data-layer.md`, `domain-model.md` refreshed (tech-debt register, the SMS-approval flow now wired, the parity guardrail).
+- `decisions.md`: `versionCode` 62→63; KL-mistake 006/008/009/010 annotated RESOLVED; ADR-005/008/014 consequence notes updated; KL-mistake:005 (hardcoded `PasswordKey`) kept (persists).
+- Lean tier: root `CLAUDE.md` + nested `web/server/Magav.Api/CLAUDE.md`, `web/server/Magav.Server/CLAUDE.md`, `web/client/CLAUDE.md`, `android/CLAUDE.md` — stale issue references corrected. `web/server/Magav.Common/CLAUDE.md` kept (ISS-007 `PasswordKey` persists).
+- State: `manifest.json`, `.file_hashes.json` (new documented hash method), `.issue_baseline.json` (lifecycle).
+
+### BREAKING
+- (none — no public REST contract, DB schema, Room `@Entity`/`@Database`, timezone, or `IsCanceled` invariant changed; `2989b01` confirms this.)
+
+### ISSUES (lifecycle diff vs baseline deepinit-2026-06-18)
+- RESOLVED: ISS-001 (public SMS-approval route wired — `App.tsx:25`)
+- RESOLVED: ISS-002 (orphan `RevokeSmsApprovalPage.tsx` deleted)
+- RESOLVED: ISS-005 (4× `Results.Problem` → `Results.Json(ApiResponse.Fail, 500)`; zero remain)
+- RESOLVED: ISS-006 (run-log dedup catch narrowed to UNIQUE-only in .NET + Android; never rethrows)
+- RESOLVED: ISS-009 (dead `PasswordValidator.cs` deleted; single canonical inline policy)
+- ACCEPTED (by design): ISS-003 (ADR-016), ISS-004 (dual-target architecture; guarded by `tools/parity-lint.mjs`)
+- PERSISTING: ISS-007 — appsettings-credentials half resolved (secrets externalized + fail-loud JWT guard); the hardcoded `MagavConstants.PasswordKey` half (the baseline match-key construct) is **still present** + used by `EncryptedConnectionStringsProvider.cs:46`. Open, scope narrowed.
+- REGRESSED: (none) · NEW: (none — the remediation introduced no new IF-* findings)
+- **Open after this run: 1 (ISS-007) + 2 accepted-by-design.**
+
+### REVIEW
+- Incremental update: lifecycle re-verified by Pass-1 citation-existence against current code (route wiring, deleted files, narrowed catches, the persisting hardcoded key). No re-run of the full adversarial cycles (mode = `--update`).
+
 ## 2026-06-18 — Run deepinit-2026-06-18 (initial full run)
 
 ### ADDED

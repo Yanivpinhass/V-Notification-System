@@ -1,7 +1,7 @@
 <!-- DeepInit Horizontal | Component: system-wide
-Run ID: deepinit-2026-06-18
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-24 (incremental --update over commit 2989b01)
 Input files processed: the 5 component docs + discovery.md
-Generated: 2026-06-18 -->
+Generated: 2026-06-18 · Updated: 2026-06-24 (tech-debt register + SMS-approval gap reflect the remediation) -->
 
 # Cross-References — Magav V-Notification-System
 
@@ -69,19 +69,17 @@ Each row links a business rule (from the component docs) to the workflow(s) that
 
 **0 test files across all 5 components** (discovery.md §7; CLAUDE.md "There are no automated tests"; each component doc §10). Every business rule above is enforced only by hand-written production code with no regression guard. This is most acute for the rules that are **mirrored across three implementations** (file-upload defense, soft-cancel, scheduler day-group/window, dedup) — there is nothing to catch the .NET / Android / client implementations silently diverging. [HIGH]
 
-### 2.2 Documented-but-unwired public SMS-approval page (orphaned feature)
+### 2.2 Public SMS-approval page — now wired (RESOLVED 2026-06-19, commit `2989b01`)
 
-CLAUDE.md documents a public route `/sms-approval/:accessKey` → `VolunteerSmsApprovalPage`. **The React client does not wire it up:** `App.tsx:22-25` registers ONLY `/` and `*`, and `VolunteerSmsApprovalPage.tsx` / `RevokeSmsApprovalPage.tsx` are imported nowhere (web-client.md §10). So:
-- The **server endpoints exist and are fully enforced** (api.md WF-api:008, BR-api:003/004; Android `VolunteerRoutes` mirror) — verify/submit are reachable over HTTP.
-- The **client page that would call them is unreachable** in the built SPA — the volunteer-facing self-service consent flow has no UI entry point.
-- A latent bug compounds it: `RevokeSmsApprovalPage.tsx:33` calls `volunteersService.revokeSmsApproval(...)`, **a method that does not exist** in `volunteersService.ts` — a runtime error if the page were ever mounted (masked only because it is unreachable). [HIGH]
-
-This is a BR enforced by a backend workflow (BR-api:003/004, BR-server:016) with **no live client workflow consuming it** — a coverage gap in the opposite direction from the usual (rule has server enforcement but the intended UI is dead). [HIGH]
+CLAUDE.md documents a public route `/sms-approval/:accessKey` → `VolunteerSmsApprovalPage`. This was an orphaned feature at the 2026-06-18 run (the route was unregistered and the page imported nowhere). The remediation **closed the gap:**
+- `web/client/src/App.tsx:8,25` now imports `VolunteerSmsApprovalPage` and registers `<Route path="/sms-approval/:accessKey" …>` — the volunteer-facing self-service consent flow has a UI entry point again.
+- The orphan `RevokeSmsApprovalPage.tsx` (which called a nonexistent `volunteersService.revokeSmsApproval`) was **deleted** — the latent missing-method runtime error is gone (ISS-001/002 resolved).
+- The **server endpoints remain fully enforced** (api.md WF-api:008, BR-api:003/004; Android `VolunteerRoutes` mirror). NOTE: the access-key is now externalized out of tracked config (ADR-017) — supply `PublicPages:SmsApprovalAccessKey` via env/user-secrets or the public endpoints will reject. [HIGH]
 
 ### 2.3 BRs with weak or asymmetric enforcement
 
 - **`Manual` reminder type** is in the canonical constants (BR-common:001) and CLAUDE.md, but server.md notes no `Manual` send originates in the `server` component — it is driven from the API layer (api.md WF-api:009 maps templateId→Manual). Enforced, but only at the api edge. [MEDIUM]
-- **`WeekdayAdvance`** is actively scheduled (server.md WF-server:007; android.md WF-android:002) and in `MagavConstants`, but is **absent from CLAUDE.md's documented ReminderTypes list** — docs lag the code (common.md §8; server.md §10). [HIGH]
+- **`WeekdayAdvance`** is actively scheduled (server.md WF-server:007; android.md WF-android:002) and in `MagavConstants` — now also listed in the regenerated CLAUDE.md ReminderTypes (the earlier doc-lag is closed). [HIGH]
 - **Volunteer-identity rules don't cross platforms:** BR-server:016 (one-way approval keyed on `InternalIdHash`) has no Android column equivalent (see `data-layer.md` §3 D-1/D-3) — the rule is enforced on .NET but the underlying schema can't host it on Android. [HIGH]
 
 ---
@@ -92,19 +90,19 @@ Pulled from §10 of each component doc, ranked by blast radius / severity.
 
 | Rank | Deficiency | Component(s) | Severity | Source |
 |---|---|---|---|---|
-| 1 | **Committed secrets in `appsettings.json`** (git-tracked): real-looking `Jwt:SecretKey`, `Database:Password`, `PublicPages:SmsApprovalAccessKey` GUID. Leaked JWT key → token forgery. Rotate to env/secret store. | api | **CRITICAL** | api.md §10 (`appsettings.json:9-36`) |
+| 1 | **Hardcoded `MagavConstants.PasswordKey` encryption-key constant** (`common`, `MagavConstants.cs:7`), used by `EncryptedConnectionStringsProvider.cs:46` — a symmetric key in source defeats the at-rest encryption. *(The tracked-`appsettings.json` credentials half was RESOLVED in `2989b01` — secrets externalized + fail-loud JWT guard, ADR-017.)* | common (was api) | HIGH | common.md §10; issues.md ISS-007 (persisting) |
 | 2 | **Room schema change wipes data if done wrong** — any `@Entity` change needs version bump + migration + dual `addMigrations` registration, or the device DB is silently destroyed (mitigated by no destructive-fallback + selective recovery). | android | **CRITICAL (process)** | android.md BR-001/002; CLAUDE.md 🚨 |
 | 3 | **God object `Program.cs` — 2249 LOC**: all ~50 endpoints + DI + middleware + DTOs in one file; high change-collision, no route modularization. | api | HIGH | api.md §10 |
 | 4 | **God object `ShiftsManagementPage.tsx` — 1135 LOC**, ~25 `useState` hooks. | web-client | HIGH | web-client.md §10 |
 | 5 | **God object `DbHelper.cs` — 960 LOC** (multi-provider facade); + `DbHelperCore.cs` 523. | common | HIGH | common.md §10 |
 | 6 | **God object Android `ShiftRoutes.kt` — 907 lines**, 13 endpoints with duplicated inline SMS-send logic. | android | HIGH | android.md §10 |
 | 7 | **God object `DbInitializer.cs` — 859 LOC**, ~180-row hardcoded holiday table (2025–2035) — system stops being holiday-aware after 2035; must be kept in sync with Android's ~160-row table. | server | HIGH | server.md §10 |
-| 8 | **Swallowed-exception dedup:** `SchedulerRunLogRepository.InsertAsync` catches ALL exceptions as "already ran," not just UNIQUE violations — transient DB errors look like dedup hits. | server | HIGH | server.md §10 |
+| 8 | ~~Swallowed-exception dedup~~ **RESOLVED 2026-06-19 (`2989b01`):** `SchedulerRunLogRepository.InsertAsync` now swallows only the UNIQUE violation; other DB errors are logged distinctly and returned-null without rethrow (Android mirror matched). | server | resolved | server.md §10; ISS-006 |
 | 9 | **Migrations swallow errors** — every `Migrate*` catches-logs-continues; a failed in-place migration leaves a partially-upgraded schema without stopping startup. | server | HIGH | server.md §10 |
-| 10 | **Error-handling deviation (CLAUDE.md):** auth login/refresh + volunteers-import 500 path use `Results.Problem` (can leak in dev) instead of mandated `Results.Json(ApiResponse.Fail)`; login/refresh messages in English not Hebrew. | api | HIGH | api.md §10 |
+| 10 | ~~Error-handling deviation~~ **RESOLVED 2026-06-19 (`2989b01`):** the 4 `Results.Problem` auth/import responses were converted to `Results.Json(ApiResponse<T>.Fail("<Hebrew>"), 500)`; zero `Results.Problem` remain. | api | resolved | api.md §10; ISS-005 |
 | 11 | **Code-vs-code schema drift (Volunteers):** .NET has `InternalIdHash/FirstName/LastName/RoleId` + hash-keyed identity; Android has only unique `MappingName`. Volunteer records not portable; .NET approval flow has no Android column. | server / android | HIGH | data-layer.md §3 |
 | 12 | **Scheduler-config seeding only on fresh DB** — `SeedSchedulerConfigAsync` runs only in the `!dbExists` branch; new defaults need a separate idempotent `INSERT OR IGNORE` migration (the WeekdayAdvance pattern). The "6 configs" value is effectively hardcoded across .NET + Android. (MEMORY gotcha.) | server / android | MEDIUM | server.md §10; android.md BR-011 |
-| 13 | **Dead code:** `AiQueryDtos.kt` `AiShiftVolunteerDto` (unreferenced); React `VolunteerSmsApprovalPage`/`RevokeSmsApprovalPage` (orphaned) + missing `revokeSmsApproval` method; commented-out `BulkInsertWithIdsAsync` (~60 lines) in `DbHelper.cs`. | android / web-client / common | MEDIUM | android.md §10; web-client.md §10; common.md §10 |
+| 13 | **Dead code:** `AiQueryDtos.kt` `AiShiftVolunteerDto` (unreferenced); commented-out `BulkInsertWithIdsAsync` (~60 lines) in `DbHelper.cs`. *(`2989b01` cleared the React orphans — `VolunteerSmsApprovalPage` is now wired, `RevokeSmsApprovalPage` deleted; and deleted the dead `PasswordValidator.cs`.)* | android / common | LOW | android.md §10; common.md §10 |
 | 14 | **`DbHelper` appears vendored from "Avidov.Common"** — obj assembly names + stale "lessons/activities" batch-size comment; unused `AutoMapper` + full `RepoDb` family referenced; likely-bug sync-retry `Thread.Sleep(30000)`; `IndexedList.RemoveItem` always returns true. | common | MEDIUM | common.md §10 |
 | 15 | **Sample data ships in initializer** — `SeedSampleDataAsync` (12 fake volunteers/4 teams/84 shifts) runs on every fresh .NET DB; all share one phone; marked "remove before production" but present. | server | MEDIUM | server.md §10 |
 | 16 | **Magic template IDs hardcoded** (`1`/`2`/`3`) for same-day/advance/cancellation across api + android — brittle if seed ids change. | api / android | MEDIUM | api.md §10 |
@@ -147,7 +145,7 @@ Pulled from §10 of each component doc, ranked by blast radius / severity.
 |---|---|---|---|---|
 | Endpoint + JWT setup | api | WF-api:001-003 | BR-api:001,002 | `web/server/Magav.Api/Program.cs:45-71,170,190,210` |
 | Login/refresh/logout logic | server | WF-server:003 | BR-server:011,012,013,014 | `web/server/Magav.Server/Services/AuthService.cs:27,84,123,136-171` |
-| Password policy | server | (validator) | BR-server:015 | `web/server/Magav.Server/Helpers/PasswordValidator.cs:7,29` |
+| Password policy | api | (inline in `change-password`) | BR-server:015 (now inline) | `web/server/Magav.Api/Program.cs` change-password (≥6 + letter + digit; the unused `Helpers/PasswordValidator.cs` was deleted in `2989b01`) |
 | Auth model + hashes | common | — | BR-common (User fields) | `web/server/Magav.Common/Models/Auth/User.cs:12-19` |
 | Client login + token mgmt | web-client | WF-web-client:001,002,004 | BR-web-client:001,002,012 | `web/client/src/services/authService.ts:42-122`; `services/api/BaseApiClient.ts:44-68` |
 | Android equivalent | android | WF-android:004 | BR-android:013,014 | `android/.../service/AuthService.kt:24-103`; `api/auth/JwtConfig.kt` |
@@ -156,5 +154,5 @@ Pulled from §10 of each component doc, ranked by blast radius / severity.
 
 ### Summary
 - BR→WF maps cover SMS/scheduler, auth, and import/lifecycle across all five components; every core BR has an enforcing workflow.
-- Coverage gaps: **0 tests system-wide**, and the **public SMS-approval page is server-enforced but client-orphaned** (route unregistered + a missing `revokeSmsApproval` method).
-- Tech-debt is ranked with committed `appsettings.json` secrets and the Room data-loss discipline at the top, followed by five god objects (Program.cs 2249 / ShiftsManagementPage 1135 / DbHelper 960 / ShiftRoutes 907 / DbInitializer 859), swallowed-exception dedup, the Volunteers code-vs-code schema drift, and the vendored-DbHelper / fresh-DB-only-seeding gotchas.
+- Coverage gaps: **0 tests system-wide** remains the dominant gap. The public SMS-approval page is now wired (`2989b01`) — that orphan gap is closed.
+- **2026-06-24 `--update`:** rows 8 (swallowed-exception dedup) and 10 (`Results.Problem` deviation) are RESOLVED; row 13 (dead code) shrank; row 1 narrowed to the persisting hardcoded `PasswordKey` (the committed-`appsettings.json` secrets were externalized — ADR-017). The top standing concerns are now the Room data-loss discipline, the five god objects (Program.cs ~2250 / ShiftsManagementPage 1135 / DbHelper 960 / ShiftRoutes 907 / DbInitializer 859), the hardcoded `PasswordKey`, the Volunteers code-vs-code drift (accepted — ADR-016), and the vendored-DbHelper / fresh-DB-only-seeding gotchas.

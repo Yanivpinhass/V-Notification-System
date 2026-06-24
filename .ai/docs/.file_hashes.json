@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "generated": "2026-06-18",
-  "run_id": "deepinit-2026-06-18",
-  "note": "Graphify/ctags unavailable — interface_hash folded to content_hash (degrade-safe per generation.md: --update conservatively re-analyzes dependents on any change rather than risk a missed propagation). content_hash = sha256(sorted component file contents), truncated.",
+  "generated": "2026-06-24",
+  "run_id": "deepinit-2026-06-24",
+  "note": "Incremental --update over deepinit-2026-06-18 (source change = commit 2989b01). Graphify/ctags unavailable — interface_hash folded to content_hash (degrade-safe: --update conservatively re-analyzes dependents on any change). content_hash recomputed this run as sha256( for each git-tracked file under the component path, sorted by path: git blob hash )[:16] — a documented, reproducible method (it counts ALL tracked files incl. config/resources, so file counts differ from the 2026-06-18 source-only counts; this is a baseline-method change, not new churn). 'common' was NOT touched by 2989b01 (verified via git diff a91c173..HEAD) and is treated as unchanged for this run's dirty-set; its hash below is the new-method baseline for the NEXT run.",
   "components": {
-    "common":     { "content_hash": "sha256:7256da12eb8fc900", "interface_hash": "sha256:7256da12eb8fc900", "files": 33, "path": "web/server/Magav.Common", "last_analyzed": "2026-06-18" },
-    "server":     { "content_hash": "sha256:c8f8e752ee9aa0a1", "interface_hash": "sha256:c8f8e752ee9aa0a1", "files": 22, "path": "web/server/Magav.Server", "last_analyzed": "2026-06-18" },
-    "api":        { "content_hash": "sha256:4be8125e16201fd8", "interface_hash": "sha256:4be8125e16201fd8", "files": 4,  "path": "web/server/Magav.Api", "last_analyzed": "2026-06-18" },
-    "web-client": { "content_hash": "sha256:a0bf2ac021ad02f5", "interface_hash": "sha256:a0bf2ac021ad02f5", "files": 110, "path": "web/client/src", "last_analyzed": "2026-06-18" },
-    "android":    { "content_hash": "sha256:c936c1b590092480", "interface_hash": "sha256:c936c1b590092480", "files": 47, "path": "android/app/src/main", "last_analyzed": "2026-06-18" }
+    "common":     { "content_hash": "sha256:f7a40ce8393d4fa4", "interface_hash": "sha256:f7a40ce8393d4fa4", "files": 35,  "path": "web/server/Magav.Common", "last_analyzed": "2026-06-18", "dirty_this_run": false },
+    "server":     { "content_hash": "sha256:41d76108c9610a4d", "interface_hash": "sha256:41d76108c9610a4d", "files": 23,  "path": "web/server/Magav.Server", "last_analyzed": "2026-06-24", "dirty_this_run": true },
+    "api":        { "content_hash": "sha256:02821c526e382b40", "interface_hash": "sha256:02821c526e382b40", "files": 5,   "path": "web/server/Magav.Api", "last_analyzed": "2026-06-24", "dirty_this_run": true },
+    "web-client": { "content_hash": "sha256:06f5fc84674b89c5", "interface_hash": "sha256:06f5fc84674b89c5", "files": 110, "path": "web/client/src", "last_analyzed": "2026-06-24", "dirty_this_run": true },
+    "android":    { "content_hash": "sha256:70be3c876b3fe11c", "interface_hash": "sha256:70be3c876b3fe11c", "files": 65,  "path": "android/app/src/main", "last_analyzed": "2026-06-24", "dirty_this_run": true }
   }
 }

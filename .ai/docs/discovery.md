@@ -1,5 +1,5 @@
 <!-- DeepInit Detect | Component: system-wide
-Run ID: deepinit-2026-06-18
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-24 (incremental --update; versionCode 63, secrets externalized)
 Input files processed: git ls-files (252 source candidates), package.json, *.csproj, build.gradle.kts, appsettings*.json, git log
 Generated: 2026-06-18 -->
 
@@ -15,7 +15,7 @@ Two deployment targets share **one React frontend**:
 ## 2. Tech Stack
 - **Frontend:** React 18.3 + TypeScript + Vite; Tailwind + Shadcn/UI (Radix); React Hook Form + Zod; Sonner toasts; vite-plugin-pwa. 37 deps / 18 devDeps.
 - **Web backend:** ASP.NET 8 Minimal APIs (net8.0); NPoco ORM via custom `DbHelper`; SQLCipher (encrypted SQLite), WAL + 30s busy timeout; JWT auth.
-- **Android:** Kotlin 1.9.22 / Java 17; Ktor 2.3.12 (CIO); Room 2.6.1 + SQLCipher 4.5.4; Koin DI; Apache POI 5.2.5; AlarmManager + WorkManager; native SmsManager. versionCode 62 / 1.4.13. minSdk 29 / target 35.
+- **Android:** Kotlin 1.9.22 / Java 17; Ktor 2.3.12 (CIO); Room 2.6.1 + SQLCipher 4.5.4; Koin DI; Apache POI 5.2.5; AlarmManager + WorkManager; native SmsManager. versionCode 63 / 1.4.13. minSdk 29 / target 35.
 - **SMS provider (web):** InforUMobile XML API.
 - **Source size (find/wc fallback — `scc` unavailable):** ~28.2k source lines, 252 tracked source-candidate files. Breakdown: web-client 13.1k (88 .tsx, 24 .ts), .NET 8.8k (56 .cs), android 6.3k (47 .kt).
 
@@ -53,7 +53,7 @@ Two deployment targets share **one React frontend**:
 ## 8. Structural Analysis Status
 - **Graphify/ctags unavailable** → `structural-graph.json` built from **grep-inferred imports** (~80% approximation; cannot resolve a symbol to its defining file). Dependency edges below are from import-grep + the documented architecture.
 - **Exclusions counted:** `node_modules`/`dist`/`build`/`bin`/`obj`/`.gradle` dirs skipped; binaries/fonts/minified/lockfiles skipped; `db/` gitignored (DB + passphrase, **not analyzed**). `web/client/src/components/ui/` retained for tech-stack detection but treated as vendored for component logic.
-- **Redaction posture:** `appsettings.json` is tracked and carries `Jwt`/`Database`/`Security`/`InforUMobile` sections — **values never emitted**; only structure/intent documented (R5 gate over all output).
+- **Redaction posture:** `appsettings.json` is tracked and carries `Jwt` (Issuer/Audience/TTLs)/`Database` (Path)/`Security`/`InforUMobile` sections — **values never emitted**; only structure/intent documented (R5 gate over all output). As of `2989b01` the secret keys (`Jwt:SecretKey`, `Database:Password`, `PublicPages:SmsApprovalAccessKey`) were removed from the tracked file → env/user-secrets (ADR-017); `appsettings.Development.json` is now gitignored.
 
 ## 9. Cost Estimate & Profile
 - **Profile:** depth=deep, review=thorough (2 cycles + adaptive 3rd if the cycle-2 gate fails), issues=on (all shipped families), dashboard/SARIF on. Bare-run defaults.

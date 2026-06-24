@@ -1,17 +1,20 @@
 {
   "version": 1,
-  "generated": "2026-06-18",
-  "run_id": "deepinit-2026-06-18",
-  "note": "First run — no issues accepted yet (no auto-accept on first run, per issues.md lifecycle). All 8 location-bound issues are lifecycle=new/open. Run `deep-init --issues-baseline=accept` to baseline-accept the current open set (write-once-per-id); a reappearing accepted issue is then surfaced as 'persisting' and a fixed one as 'resolved' on the next --update.",
-  "accepted": [],
+  "generated": "2026-06-24",
+  "run_id": "deepinit-2026-06-24",
+  "note": "Incremental --update over baseline deepinit-2026-06-18. Commit 2989b01 (2026-06-19) remediated the 9 raised issues. Lifecycle diff: 5 resolved (re-verified gone), 2 accepted-by-design (ADR-016 / parity guardrail), 1 persisting (ISS-007 narrowed — appsettings half fixed, the hardcoded MagavConstants.PasswordKey half still present). ISS-008 is a ranking overlay (no match-key). Acceptance is write-once-per-id and backed by an ADR/decision record; --issues-baseline=reset clears it.",
+  "accepted": [
+    { "match_key": "IF-3a:android/app/src/main/java/com/magav/app/db/entity/VolunteerEntity.kt:VolunteerEntity#schema", "iss": "ISS-003", "first_seen_run": "deepinit-2026-06-18", "accepted_run": "deepinit-2026-06-24", "lifecycle": "accepted", "rationale": "ADR-016 — intentional per-target divergence; no Room migration (ADR-004 hazard)" },
+    { "match_key": "IF-3a:web/server/Magav.Api/Program.cs:contract#triplicated", "iss": "ISS-004", "first_seen_run": "deepinit-2026-06-18", "accepted_run": "deepinit-2026-06-24", "lifecycle": "accepted", "rationale": "Dual-target architecture (ADR-001/012/015); mitigated by tools/parity-lint.mjs + tools/parity.md (accepted divergences recorded)" }
+  ],
   "open": [
-    { "match_key": "IF-4:web/client/src/App.tsx:Routes#sms-approval", "iss": "ISS-001", "first_seen_run": "deepinit-2026-06-18", "lifecycle": "open", "baseline": "new" },
-    { "match_key": "IF-4:web/client/src/pages/RevokeSmsApprovalPage.tsx:revokeSmsApproval#call", "iss": "ISS-002", "first_seen_run": "deepinit-2026-06-18", "lifecycle": "open", "baseline": "new" },
-    { "match_key": "IF-3a:android/app/src/main/java/com/magav/app/db/entity/VolunteerEntity.kt:VolunteerEntity#schema", "iss": "ISS-003", "first_seen_run": "deepinit-2026-06-18", "lifecycle": "open", "baseline": "new" },
-    { "match_key": "IF-3a:web/server/Magav.Api/Program.cs:contract#triplicated", "iss": "ISS-004", "first_seen_run": "deepinit-2026-06-18", "lifecycle": "open", "baseline": "new" },
-    { "match_key": "IF-4:web/server/Magav.Api/Program.cs:login#ResultsProblem", "iss": "ISS-005", "first_seen_run": "deepinit-2026-06-18", "lifecycle": "open", "baseline": "new" },
-    { "match_key": "IF-7:web/server/Magav.Server/Database/Repositories/SchedulerRunLogRepository.cs:InsertAsync#catch", "iss": "ISS-006", "first_seen_run": "deepinit-2026-06-18", "lifecycle": "open", "baseline": "new" },
-    { "match_key": "IF-1:web/server/Magav.Common/MagavConstants.cs:PasswordKey#hardcoded", "iss": "ISS-007", "first_seen_run": "deepinit-2026-06-18", "lifecycle": "open", "baseline": "new" },
-    { "match_key": "IF-1:web/server/Magav.Api/Program.cs:change-password#passwordpolicy", "iss": "ISS-009", "first_seen_run": "deepinit-2026-06-18", "lifecycle": "open", "baseline": "new" }
+    { "match_key": "IF-1:web/server/Magav.Common/MagavConstants.cs:PasswordKey#hardcoded", "iss": "ISS-007", "first_seen_run": "deepinit-2026-06-18", "lifecycle": "open", "baseline": "persisting", "note": "Appsettings-credentials half resolved in 2989b01; the hardcoded PasswordKey constant + its use in EncryptedConnectionStringsProvider.cs:46 remain (common component untouched)." }
+  ],
+  "resolved": [
+    { "match_key": "IF-4:web/client/src/App.tsx:Routes#sms-approval", "iss": "ISS-001", "first_seen_run": "deepinit-2026-06-18", "resolved_run": "deepinit-2026-06-24", "lifecycle": "resolved", "evidence": "App.tsx:25 wires /sms-approval/:accessKey → VolunteerSmsApprovalPage" },
+    { "match_key": "IF-4:web/client/src/pages/RevokeSmsApprovalPage.tsx:revokeSmsApproval#call", "iss": "ISS-002", "first_seen_run": "deepinit-2026-06-18", "resolved_run": "deepinit-2026-06-24", "lifecycle": "resolved", "evidence": "RevokeSmsApprovalPage.tsx deleted" },
+    { "match_key": "IF-4:web/server/Magav.Api/Program.cs:login#ResultsProblem", "iss": "ISS-005", "first_seen_run": "deepinit-2026-06-18", "resolved_run": "deepinit-2026-06-24", "lifecycle": "resolved", "evidence": "all Results.Problem → Results.Json(ApiResponse.Fail, 500); zero Results.Problem remain" },
+    { "match_key": "IF-7:web/server/Magav.Server/Database/Repositories/SchedulerRunLogRepository.cs:InsertAsync#catch", "iss": "ISS-006", "first_seen_run": "deepinit-2026-06-18", "resolved_run": "deepinit-2026-06-24", "lifecycle": "resolved", "evidence": "catch narrowed to UNIQUE-only in .NET + Android; non-UNIQUE logged, never rethrown" },
+    { "match_key": "IF-1:web/server/Magav.Api/Program.cs:change-password#passwordpolicy", "iss": "ISS-009", "first_seen_run": "deepinit-2026-06-18", "resolved_run": "deepinit-2026-06-24", "lifecycle": "resolved", "evidence": "PasswordValidator.cs deleted; inline change-password rule is now the single canonical policy" }
   ]
 }

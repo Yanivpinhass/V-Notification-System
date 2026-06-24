@@ -7,7 +7,7 @@
         "driver": {
           "name": "DeepInit",
           "informationUri": "https://github.com/deepfusionlabs/deep-init-internal",
-          "version": "0.32.0",
+          "version": "0.5.0",
           "rules": [
             { "id": "deepinit/IF-1", "name": "BusinessRuleViolation", "shortDescription": { "text": "Business-rule violation / inconsistent enforcement" } },
             { "id": "deepinit/IF-3a", "name": "SilentCrossComponentCoupling", "shortDescription": { "text": "A resource/contract shared across components with no explicit interface" } },
@@ -16,54 +16,39 @@
           ]
         }
       },
+      "properties": {
+        "runId": "deepinit-2026-06-24",
+        "runKind": "incremental-update",
+        "basedOnRun": "deepinit-2026-06-18",
+        "sourceThroughCommit": "2989b01",
+        "lifecycle": {
+          "open": ["ISS-007"],
+          "accepted": ["ISS-003", "ISS-004"],
+          "resolved": ["ISS-001", "ISS-002", "ISS-005", "ISS-006", "ISS-009"],
+          "regressed": [],
+          "note": "5 resolved findings dropped from active results (fixed in 2989b01); ISS-003/ISS-004 retained as accepted-by-design (suppressed); ISS-007 retained — only its appsettings-credentials half was fixed, the hardcoded MagavConstants.PasswordKey remains."
+        }
+      },
       "results": [
         {
-          "ruleId": "deepinit/IF-4", "level": "warning",
-          "message": { "text": "Documented public SMS-approval route (/sms-approval/:accessKey) is unwired: App.tsx registers only '/' and '*'; the page components are imported nowhere. The server access-key endpoint is live, so the documented volunteer-facing flow is unreachable from the SPA. [ISS-001, possible]" },
-          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "web/client/src/App.tsx" }, "region": { "startLine": 22 } } } ],
-          "partialFingerprints": { "deepinitBaselineKey/v1": "IF-4:web/client/src/App.tsx:Routes#sms-approval" }
-        },
-        {
-          "ruleId": "deepinit/IF-4", "level": "note",
-          "message": { "text": "Orphan RevokeSmsApprovalPage calls volunteersService.revokeSmsApproval(), which does not exist on volunteersService.ts — would throw at runtime, masked only by the page being unreachable. [ISS-002, possible]" },
-          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "web/client/src/pages/RevokeSmsApprovalPage.tsx" }, "region": { "startLine": 33 } } } ],
-          "partialFingerprints": { "deepinitBaselineKey/v1": "IF-4:web/client/src/pages/RevokeSmsApprovalPage.tsx:revokeSmsApproval#call" }
-        },
-        {
-          "ruleId": "deepinit/IF-3a", "level": "warning",
-          "message": { "text": "Volunteer entity diverges (additively) across backends: .NET adds InternalIdHash (canonical SMS-approval id), FirstName, LastName, RoleId; Android VolunteerEntity has none of those (keys on MappingName only). The .NET hashed-id approval path has no Android landing column. [ISS-003, possible]" },
-          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "android/app/src/main/java/com/magav/app/db/entity/VolunteerEntity.kt" }, "region": { "startLine": 8 } } } ],
-          "partialFingerprints": { "deepinitBaselineKey/v1": "IF-3a:android/app/src/main/java/com/magav/app/db/entity/VolunteerEntity.kt:VolunteerEntity#schema" }
-        },
-        {
-          "ruleId": "deepinit/IF-3a", "level": "warning",
-          "message": { "text": "One REST + domain contract is implemented three times with no shared source of truth (.NET Program.cs, Android Ktor routes, React services; entity model triplicated) and no tests. A change to one is silently uncoupled from the others (refresh-token TTL already diverges 7d/3d). [ISS-004, possible]" },
-          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "web/server/Magav.Api/Program.cs" }, "region": { "startLine": 1 } } } ],
-          "partialFingerprints": { "deepinitBaselineKey/v1": "IF-3a:web/server/Magav.Api/Program.cs:contract#triplicated" }
-        },
-        {
-          "ruleId": "deepinit/IF-4", "level": "warning",
-          "message": { "text": "Auth error responses use Results.Problem with English text (login/refresh/logout), breaking the mandated Results.Json(ApiResponse.Fail('<Hebrew>')) pattern and risking dev-mode detail leakage that CLAUDE.md explicitly warns against. [ISS-005, possible]" },
-          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "web/server/Magav.Api/Program.cs" }, "region": { "startLine": 186 } } } ],
-          "partialFingerprints": { "deepinitBaselineKey/v1": "IF-4:web/server/Magav.Api/Program.cs:login#ResultsProblem" }
-        },
-        {
-          "ruleId": "deepinit/IF-7", "level": "warning",
-          "message": { "text": "SchedulerRunLogRepository.InsertAsync catches ALL exceptions and returns null, assuming a UNIQUE-constraint 'already ran' — so a transient DB error is indistinguishable from a dedup hit and can silently skip a legitimate SMS run. [ISS-006, possible]" },
-          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "web/server/Magav.Server/Database/Repositories/SchedulerRunLogRepository.cs" }, "region": { "startLine": 24 } } } ],
-          "partialFingerprints": { "deepinitBaselineKey/v1": "IF-7:web/server/Magav.Server/Database/Repositories/SchedulerRunLogRepository.cs:InsertAsync#catch" }
-        },
-        {
-          "ruleId": "deepinit/IF-1", "level": "warning",
-          "message": { "text": "Credentials committed in tracked appsettings.json (dev-placeholder values) and a hardcoded encryption-key constant in MagavConstants.cs (PasswordKey) used to decrypt the connection string — the tracked-config practice + hardcoded key are the standing risks. [ISS-007, possible]" },
+          "ruleId": "deepinit/IF-1", "level": "warning", "baselineState": "unchanged",
+          "message": { "text": "Hardcoded symmetric encryption-key constant: MagavConstants.PasswordKey is a source literal used by EncryptedConnectionStringsProvider.cs:46 to decrypt the DB connection string — anyone with the source can decrypt, defeating the at-rest encryption. PERSISTING: the related committed-appsettings-credentials half of ISS-007 was resolved in 2989b01 (secrets externalized to env/user-secrets + fail-loud JWT guard, ADR-017), but this hardcoded-key half was not touched. [ISS-007, persisting]" },
           "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "web/server/Magav.Common/MagavConstants.cs" }, "region": { "startLine": 7 } } } ],
           "partialFingerprints": { "deepinitBaselineKey/v1": "IF-1:web/server/Magav.Common/MagavConstants.cs:PasswordKey#hardcoded" }
         },
         {
-          "ruleId": "deepinit/IF-1", "level": "warning",
-          "message": { "text": "Two divergent password policies: change-password (Program.cs:249) inline-enforces >=6 chars+letter+digit and never calls PasswordValidator (8+ chars+complexity), which is referenced nowhere — dead validator, weaker-than-intended enforced policy. [ISS-009, possible]" },
-          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "web/server/Magav.Api/Program.cs" }, "region": { "startLine": 249 } } } ],
-          "partialFingerprints": { "deepinitBaselineKey/v1": "IF-1:web/server/Magav.Api/Program.cs:change-password#passwordpolicy" }
+          "ruleId": "deepinit/IF-3a", "level": "warning", "baselineState": "unchanged",
+          "message": { "text": "Volunteer entity diverges (additively) across backends: .NET adds InternalIdHash/FirstName/LastName/RoleId; Android VolunteerEntity keys on MappingName only. ACCEPTED BY DESIGN (ADR-016) — Android has no SMS-approval flow and never reads those columns; not migrated (Room @Entity change carries the ADR-004 data-wipe hazard). Codified in a VolunteerEntity.kt header comment + tools/parity.md #3. [ISS-003, accepted]" },
+          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "android/app/src/main/java/com/magav/app/db/entity/VolunteerEntity.kt" }, "region": { "startLine": 1 } } } ],
+          "partialFingerprints": { "deepinitBaselineKey/v1": "IF-3a:android/app/src/main/java/com/magav/app/db/entity/VolunteerEntity.kt:VolunteerEntity#schema" },
+          "suppressions": [ { "kind": "external", "justification": "Accepted by design — ADR-016; intentional per-target divergence, no Room migration (ADR-004 hazard)." } ]
+        },
+        {
+          "ruleId": "deepinit/IF-3a", "level": "warning", "baselineState": "unchanged",
+          "message": { "text": "One REST + domain contract is implemented three times with no shared source of truth (.NET Program.cs, Android Ktor routes, React services; entity model triplicated) and no tests. ACCEPTED BY DESIGN (dual-target architecture, ADR-001/012/015) and now GUARDED by a 0-LLM constant parity lint (tools/parity-lint.mjs, ADR-018) for ReminderTypes/SmsStatuses/DayGroups; the refresh-token TTL 7d/3d and password-policy differences are recorded accepted divergences. Endpoint/DTO shapes are still hand-mirrored. [ISS-004, accepted]" },
+          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "web/server/Magav.Api/Program.cs" }, "region": { "startLine": 1 } } } ],
+          "partialFingerprints": { "deepinitBaselineKey/v1": "IF-3a:web/server/Magav.Api/Program.cs:contract#triplicated" },
+          "suppressions": [ { "kind": "external", "justification": "Accepted by design — ADR-001/012/015; mitigated by tools/parity-lint.mjs (ADR-018)." } ]
         }
       ]
     }

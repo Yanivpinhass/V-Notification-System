@@ -1,5 +1,5 @@
 <!-- DeepInit Horizontal | Component: system-wide
-Run ID: deepinit-2026-06-18
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-24 (incremental --update; run-log dedup note + Volunteer divergence accepted by ADR-016)
 Input files processed: the 5 component docs + discovery.md
 Generated: 2026-06-18 -->
 
@@ -30,7 +30,7 @@ Both physical databases are **separate** (one per .NET deployment, one per Andro
 - **SmsLog per-shift dedup:** a reminder run skips a shift if a `SmsLog` row exists with the same `(ShiftId, ReminderType)` and `Status='Success'` (`NOT EXISTS` subquery on .NET; DAO check on Android). Backed by `IX_SmsLog_ShiftId` (.NET) / `index_SmsLog_ShiftId` (Android). [HIGH] (server.md BR-server:001; android.md BR-android:004)
 - **SchedulerRunLog per-run dedup:** `UNIQUE(ConfigId, TargetDate, ReminderType)` — a duplicate insert is silently swallowed = "this config already ran for this target date." Present in BOTH schemas. [HIGH] (server.md BR-server:002, `DbInitializer.cs:203`; android.md BR-android:005, `SchedulerRunLogEntity.kt:14`)
 
-> Caveat carried from component docs: .NET `SchedulerRunLogRepository.InsertAsync` swallows **ALL** exceptions as "already ran," not just UNIQUE violations (server.md §10) — a transient DB error during run-log insert is indistinguishable from a legitimate dedup hit.
+> Note (updated 2026-06-19, `2989b01`): `SchedulerRunLogRepository.InsertAsync` now swallows **only** the SQLite UNIQUE violation as "already ran"; any other DB error is logged distinctly and returns null without rethrowing (the Android mirror in `SmsReminderService.kt` matches). The earlier swallow-ALL caveat is resolved (ISS-006).
 
 ---
 
