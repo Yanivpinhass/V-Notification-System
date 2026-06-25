@@ -1,5 +1,5 @@
 <!-- DeepInit ADR/KL | Component: system-wide
-Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-24 (incremental --update over commit 2989b01)
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-25b (commit 5124870 — ADR-020 Android device-allowlist gate; commit 778a2dd — Duty Log editable-hours under ADR-019) · prior: deepinit-2026-06-25 (commit 970cdcc — ADR-019 Duty Log) · prior: deepinit-2026-06-24 (incremental --update over commit 2989b01)
 Input files processed: 5 component docs + git log + comments + CLAUDE.md
 Generated: 2026-06-18 · Updated: 2026-06-24 (ADR-016/017/018; KL-mistake 006/008/009/010 resolved) -->
 
@@ -205,13 +205,25 @@ Evidence is cited as `file:line`, commit hash, or doc reference. Certainty refle
 
 ---
 
+## ADR-020: Android-only device allowlist gate (fail-CLOSED) at WebView launch
+- Status: accepted
+- Date: 2026-06-25 (commit `5124870`)
+- Context: The distributed Android APK should run only on explicitly-approved devices, without a server round-trip or per-user account (the app is self-contained, embedding its own Ktor server). A `LicenseValidator` phone/expiry gate already exists but **fails OPEN** (acceptable for a soft license check, wrong for an access gate).
+- Decision: Add a SEPARATE Android-only `DeviceAllowlist` checked at WebView launch **after** the license gate (`MainActivity.kt:191-194`): a hardcoded set of `Settings.Secure.ANDROID_ID`s; admit ONLY on membership. **Fail-CLOSED** — an unreadable/blank id OR an empty set blocks ALL devices. A non-listed device gets a Hebrew block page showing its ANDROID_ID + a `window.NativeClip.copyDeviceId()` button so the user can send it for approval (a THIRD WebView JS bridge, `license/DeviceClipboardBridge.kt`). Kept Android-only — explicitly NOT in `util/Constants.kt` (parity-mirrored with .NET) — because it gates the native launch, not the shared REST contract.
+- Why: Fail-closed is the safe default for an allowlist (the inverse of `LicenseValidator`'s fail-open). ANDROID_ID needs no runtime permission on minSdk 29 and is stable per app+signing-key. A separate object (not folded into `LicenseValidator`) keeps the two gates' OPPOSITE fail directions explicit and hard to confuse.
+- Evidence: commit `5124870`; android.md BR-android:021, IP-android:018/019, WF-android:001, §8/§10/§11; functional-workflows.md UC-010 + WA-009; `license/DeviceAllowlist.kt`, `license/DeviceClipboardBridge.kt`, `MainActivity.kt:191-194,299`.
+- Consequences: (+) Distribution restricted to approved devices with no backend, account, or shared-contract change. (−) **Keystore-coupled footgun:** ANDROID_ID is scoped to the APK signing key, so regenerating the debug keystore / building on another machine / switching to release signing invalidates the whole list and — because fail-closed — **locks out every device** (mitigation: build the distributed APK on ONE machine + back up the keystore; WA-009). (−) Approving a device is a manual code edit + rebuild (ids are hardcoded, not server-managed). Intentional + self-documented (`DeviceAllowlist.kt` header) → tracked as a caveat, not a formal issue (AF-1).
+- Certainty: HIGH
+
+---
+
 ## Section B — Knowledge Log
 
 Format: `KL-{category}:NNN | insight/gotcha | evidence | certainty`
 
 ### Mistakes / Hazards
 
-- **KL-mistake:001** | Android WebView caches the SPA via the service worker; you MUST bump `versionCode` in `android/app/build.gradle.kts` before every APK build, or `MainActivity.clearCacheOnVersionChange()` won't fire and users stay on the stale React UI. Multiple commits exist solely to bump it / fix cache (`62b4da2`, `072ce1a`, `43bc6f4`). | `MainActivity.kt:295`, `build.gradle.kts:16` (current `versionCode=63`); CLAUDE.md; android.md §10 | HIGH
+- **KL-mistake:001** | Android WebView caches the SPA via the service worker; you MUST bump `versionCode` in `android/app/build.gradle.kts` before every APK build, or `MainActivity.clearCacheOnVersionChange()` won't fire and users stay on the stale React UI. Multiple commits exist solely to bump it / fix cache (`62b4da2`, `072ce1a`, `43bc6f4`). | `MainActivity.kt:295`, `build.gradle.kts:16` (current `versionCode=75` / `1.4.25`); CLAUDE.md; android.md §10 | HIGH
 - **KL-mistake:002** | Room schema discipline: ANY `@Entity`/`@Database` change (columns, indices, FKs, `defaultValue`, even declaring an existing index) requires bumping `@Database(version=N)`, adding a `MIGRATION_(N-1)_N`, AND registering it in BOTH `addMigrations(...)` call sites in `MagavApplication.kt` (initial build + recovery rebuild). The migration SQL must produce a schema whose hash matches the entity annotations exactly (including every index), or post-migration validation fails. | `MagavApplication.kt:109,135` (verified — two call sites); `MagavDatabase.kt`; CLAUDE.md; android.md BR-android:001/003 | HIGH
 - **KL-mistake:003** | Vendored-DbHelper bug: the SYNC retry paths `Thread.Sleep(30000)` (30s) instead of the `DelayBetweenFails=1000ms` constant the async path uses — a failing sync query blocks the thread 30s before its single retry. | `DbHelperCore.cs:430,485` vs `:457`; common.md §10 | HIGH
 - **KL-mistake:004** | Vendored-DbHelper bug: `IndexedList.RemoveItem` returns `_removeActions.Select(...).All(result => true)` which is ALWAYS true regardless of whether the item was actually removed (per-index removal result discarded). | `DataStructures/IndexedList.cs:78`; common.md §10 | HIGH
@@ -260,7 +272,8 @@ Format: `KL-{category}:NNN | insight/gotcha | evidence | certainty`
 ---
 
 ### Summary
-- **ADRs:** 19 (ADR-001 … ADR-019; ADR-019 = Duty Log client-only PNG report + native media bridge, added 2026-06-25; ADR-016 Android Volunteer divergence, ADR-017 externalized secrets, ADR-018 constant parity lint added in the 2026-06-19 remediation). **Knowledge Log entries:** 31 (13 mistake, 7 learning, 5 debug, 6 integration, 2 progress/preference) — KL-mistake 006/008/009/010 RESOLVED (annotated inline); KL-mistake:005 (hardcoded `PasswordKey`) persists; KL-mistake:013 + KL-learning:007 + KL-integration:006 added for the Duty Log feature.
+- **ADRs:** 20 (ADR-001 … ADR-020; ADR-020 = Android device-allowlist fail-closed launch gate, added 2026-06-25 / `5124870`; ADR-019 = Duty Log client-only PNG report + native media bridge, added 2026-06-25; ADR-016 Android Volunteer divergence, ADR-017 externalized secrets, ADR-018 constant parity lint added in the 2026-06-19 remediation). **Knowledge Log entries:** 31 (13 mistake, 7 learning, 5 debug, 6 integration, 2 progress/preference) — KL-mistake 006/008/009/010 RESOLVED (annotated inline); KL-mistake:005 (hardcoded `PasswordKey`) persists; KL-mistake:013 + KL-learning:007 + KL-integration:006 added for the Duty Log feature.
+- **2026-06-25b `--update` (consolidating through `778a2dd`):** commit `5124870` added the Android device-allowlist fail-closed launch gate (ADR-020 + WA-009 + UC-010); commit `778a2dd` added the Duty Log editable-hours preview (BR-web-client:018, under ADR-019). Dirty: `web-client`, `android`; no contract/DB/Room change; **no new IF-* issue** (the allowlist keystore-coupling is a documented caveat, not a finding — AF-1). Also reconciled the prior partial refresh (state files were stuck at `2989b01`). See `changelog.md`.
 - **2026-06-25 `--update`:** commit `970cdcc` added the Duty Log (יומן הפעלה) client-only PNG report — dirty: `web-client`, `android`; no contract/DB/Room change; ADR-019 + 3 KL entries; **no new IF-* issue** (issue baseline unchanged: ISS-007 open, ISS-003/004 accepted). See `changelog.md`.
 - **2026-06-24 `--update`:** commit `2989b01` remediated the 9 DeepInit issues — 5 resolved, 2 accepted-by-design (ADR-016, ADR-018-guarded ISS-004), 1 persisting (ISS-007, the hardcoded `PasswordKey` half). See `issues.md` + `changelog.md`.
 - **Highest-certainty / highest-impact ADR:** ADR-004 (defensive Room DB init — no destructive fallback) — grounded in an explicit documented data-loss incident (commit `e7fd42c`) and verified line-for-line in `MagavApplication.kt:112-137`.

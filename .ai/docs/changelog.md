@@ -1,5 +1,38 @@
 # DeepInit Changelog
 
+## 2026-06-25 — Run deepinit-2026-06-25b (consolidating incremental `--update`, source through commit `778a2dd`)
+
+Reconciles a multi-refresh **partial** prior state: `6ef6183` ("Refresh for Duty Log") advanced the component
+docs + `.issue_baseline.json` (run `deepinit-2026-06-25`) but left `manifest.json`/`.file_hashes.json` at
+`deepinit-2026-06-24` / commit `2989b01`, and the horizontal docs/lean tier never picked up the device-allowlist
+gate. This run brings ALL state, component docs, lean tier, and horizontal docs consistent through HEAD.
+Change detection (Step-0 symmetric set-diff vs the stored 2026-06-24 hashes; git advisory): **Dirty:** `web-client`,
+`android`. **Unchanged:** `common` (byte-identical), `server` + `api` (content_hash advanced via their nested
+`CLAUDE.md` only — zero source change since `2989b01`, git-verified → no re-analysis). Horizontal docs re-run.
+
+### ADDED
+- **Android device-allowlist gate (fail-CLOSED)** — `license/DeviceAllowlist.kt` (hardcoded set of `Settings.Secure.ANDROID_ID`s; EMPTY set blocks ALL) + `license/DeviceClipboardBridge.kt` (`NativeClip.copyDeviceId()`) + a Hebrew block page (`MainActivity.buildDeviceBlockHtml`), gated at WebView launch after the license check (`MainActivity.kt:191-194`). Commit `5124870`. Documented in `android.md` (BR-android:021, IP-android:018, WF-android:001 step 6, Legacy Warnings, Design Rationale) and promoted to the lean root `CLAUDE.md`.
+- **Duty Log editable-hours preview** — a `שנה שעות` toggle in the preview overlay overrides the report hours live; `effectiveData = {...data,startTime,endTime}` feeds BOTH the on-screen report AND the PNG export. Commit `778a2dd`. Documented in `web-client.md` (BR-web-client:018, WF-web-client:008).
+
+### MODIFIED
+- Component deep docs: `web-client.md` (editable-hours preview; report column trim `d09b23a`), `android.md` (device-allowlist gate + `NativeClip` bridge; THREE JS bridges now; `versionCode` 69→75 / `1.4.19`→`1.4.25`).
+- Horizontal docs: `functional-workflows.md` (device-allowlist launch gate in the startup workflow; Duty Log editable-hours note) re-run; `technical-dependencies.md`, `data-layer.md`, `domain-model.md`, `cross-references.md` re-verified (no material cross-component change — client-only report + Android-only launch gate; data-layer unchanged).
+- Lean tier: root `CLAUDE.md` — added the Android device-allowlist gotcha; corrected the stale `versionCode` (**63/1.4.13 → 75/1.4.25**); refreshed the issues "as of" note.
+- State: `manifest.json`, `.file_hashes.json` (advanced to `778a2dd`; documented hash method re-validated against `common`), `.issue_baseline.json` (run id + coverage note; lifecycle unchanged).
+
+### BREAKING
+- (none — no public REST contract, DB schema, Room `@Entity`/`@Database`, timezone, or `IsCanceled` invariant changed; both features are additive — a client-only PNG report and an Android-only launch gate.)
+
+### ISSUES (lifecycle diff vs baseline deepinit-2026-06-25)
+- NEW: (none) · RESOLVED: (none) · REGRESSED: (none)
+- PERSISTING: ISS-007 (hardcoded `MagavConstants.PasswordKey` — `common` untouched this run)
+- ACCEPTED (by design): ISS-003 (ADR-016), ISS-004 (dual-target contract; `tools/parity-lint.mjs`)
+- NOTE (KL/tech-debt, not a formal ISS- per AF-1): the device-allowlist is fail-CLOSED and ANDROID_ID is keystore-scoped → an empty set or a regenerated/release keystore locks out every device. Intentional + self-documented (`DeviceAllowlist.kt` header); surfaced as a lean-tier gotcha and a Legacy Warning, not raised as an issue.
+- **Open after this run: 1 (ISS-007) + 2 accepted-by-design.**
+
+### REVIEW
+- Incremental update: dirty-set changes (editable-hours preview, device-allowlist gate) verified by Pass-1 citation-existence against current code (`MainActivity.kt:119,191-194,299`, `DeviceAllowlist.kt`, `DutyLogPreviewDialog.tsx`). No full adversarial re-run (mode = `--update`).
+
 ## 2026-06-24 — Run deepinit-2026-06-24 (incremental `--update`, source through commit `2989b01`)
 
 Change detection (Step 0 symmetric set-diff; git advisory): the only source-changing commit since the

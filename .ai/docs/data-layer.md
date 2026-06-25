@@ -1,5 +1,5 @@
 <!-- DeepInit Horizontal | Component: system-wide
-Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-25 (commit 970cdcc — NO schema change: the Duty Log (יומן הפעלה) feature persists NOTHING; no CREATE TABLE / Room @Entity / @Database(version) change on either target → no new code-vs-code schema drift. ADR-019.) · prior: deepinit-2026-06-24 (run-log dedup note + Volunteer divergence accepted by ADR-016)
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-25b (re-verified through 778a2dd: STILL no schema change — the Duty Log editable-hours preview + the Android device-allowlist gate persist NOTHING; no CREATE TABLE / Room @Entity / @Database(version) change) · prior: deepinit-2026-06-25 (commit 970cdcc — NO schema change: the Duty Log (יומן הפעלה) feature persists NOTHING; no CREATE TABLE / Room @Entity / @Database(version) change on either target → no new code-vs-code schema drift. ADR-019.) · prior: deepinit-2026-06-24 (run-log dedup note + Volunteer divergence accepted by ADR-016)
 Input files processed: the 5 component docs + discovery.md
 Generated: 2026-06-18 -->
 

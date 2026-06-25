@@ -1,5 +1,5 @@
 <!-- DeepInit Horizontal | Component: system-wide
-Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-25 (commit 970cdcc — NO domain change: the Duty Log (יומן הפעלה) report is a TRANSIENT client-side view artifact (`DutyLogData` in web-client only), not a persisted domain entity; it adds nothing to the triplicated model and is not part of the REST contract. ADR-019.)
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-25b (re-verified through 778a2dd: no new domain concept — the Duty Log editable-hours preview is a view refinement, and the Android device-allowlist is launch/infrastructure gating, not a domain entity; neither touches the triplicated model or REST contract. ADR-020.) · prior: deepinit-2026-06-25 (commit 970cdcc — NO domain change: the Duty Log (יומן הפעלה) report is a TRANSIENT client-side view artifact (`DutyLogData` in web-client only), not a persisted domain entity; it adds nothing to the triplicated model and is not part of the REST contract. ADR-019.)
 Input files processed: the 5 component docs + discovery.md
 Generated: 2026-06-18 -->
 

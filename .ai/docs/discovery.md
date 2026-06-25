@@ -1,5 +1,5 @@
 <!-- DeepInit Detect | Component: system-wide
-Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-24 (incremental --update; versionCode 63, secrets externalized)
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-25b (re-verified through 778a2dd — + Duty Log feature (features/duty-log/* + editable-hours preview), + Android device-allowlist gate (license/DeviceAllowlist.kt, DeviceClipboardBridge.kt); detect-stage provenance — a full `deep-init` run recomputes the structural graph + scc sizing) · prior: deepinit-2026-06-24 (incremental --update; versionCode 63, secrets externalized)
 Input files processed: git ls-files (252 source candidates), package.json, *.csproj, build.gradle.kts, appsettings*.json, git log
 Generated: 2026-06-18 -->
 
@@ -15,7 +15,7 @@ Two deployment targets share **one React frontend**:
 ## 2. Tech Stack
 - **Frontend:** React 18.3 + TypeScript + Vite; Tailwind + Shadcn/UI (Radix); React Hook Form + Zod; Sonner toasts; vite-plugin-pwa. 37 deps / 18 devDeps.
 - **Web backend:** ASP.NET 8 Minimal APIs (net8.0); NPoco ORM via custom `DbHelper`; SQLCipher (encrypted SQLite), WAL + 30s busy timeout; JWT auth.
-- **Android:** Kotlin 1.9.22 / Java 17; Ktor 2.3.12 (CIO); Room 2.6.1 + SQLCipher 4.5.4; Koin DI; Apache POI 5.2.5; AlarmManager + WorkManager; native SmsManager. versionCode 63 / 1.4.13. minSdk 29 / target 35.
+- **Android:** Kotlin 1.9.22 / Java 17; Ktor 2.3.12 (CIO); Room 2.6.1 + SQLCipher 4.5.4; Koin DI; Apache POI 5.2.5; AlarmManager + WorkManager; native SmsManager. versionCode 75 / 1.4.25. minSdk 29 / target 35.
 - **SMS provider (web):** InforUMobile XML API.
 - **Source size (find/wc fallback — `scc` unavailable):** ~28.2k source lines, 252 tracked source-candidate files. Breakdown: web-client 13.1k (88 .tsx, 24 .ts), .NET 8.8k (56 .cs), android 6.3k (47 .kt).
 

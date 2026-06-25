@@ -1,5 +1,5 @@
 <!-- DeepInit Detect | Component: system-wide | git intelligence
-Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-24 (incremental --update; ISS-004 accepted + parity-lint guard)
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-25b (re-verified through 778a2dd; web-client + android remained the high-churn hotspots — Duty Log + device-allowlist commits; detect-stage — a full `deep-init` run recomputes the 6-month churn/bus-factor/hotspot signals) · prior: deepinit-2026-06-24 (incremental --update; ISS-004 accepted + parity-lint guard)
 Generated: 2026-06-18 -->
 
 # Git Intelligence

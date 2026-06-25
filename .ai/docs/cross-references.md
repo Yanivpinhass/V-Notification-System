@@ -1,5 +1,5 @@
 <!-- DeepInit Horizontal | Component: system-wide
-Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-25 (commit 970cdcc — Duty Log: tech-debt rows 21 (release-R8 unvalidated) + 22 (cmdk unused); the window.NativeMedia bridge in technical-dependencies §4.6) · prior: deepinit-2026-06-24 (commit 2989b01)
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-25b (through 778a2dd — + WA-009 Android device-allowlist keystore-coupling caveat; + window.NativeClip, the THIRD WebView JS bridge, in technical-dependencies §4.6; ADR-020) · prior: deepinit-2026-06-25 (commit 970cdcc — Duty Log: tech-debt rows 21 (release-R8 unvalidated) + 22 (cmdk unused); the window.NativeMedia bridge in technical-dependencies §4.6) · prior: deepinit-2026-06-24 (commit 2989b01)
 Input files processed: the 5 component docs + discovery.md
 Generated: 2026-06-18 · Updated: 2026-06-25 -->
 
