@@ -47,6 +47,13 @@ Hybrid, layered. Web backend = .NET project chain `Magav.Common → Magav.Server
 
 <!-- HUMAN-AUTHORED — carried forward; edit freely. DeepInit never regenerates or validates this region. The full pre-run CLAUDE.md is preserved verbatim in the dated CLAUDE.md.*.bak and its reference depth was relocated into .ai/docs/. -->
 
+## Git workflow
+- **Never commit or push on your own — only when I explicitly ask.** After making changes, stop and leave them uncommitted in the working tree; do not commit or push proactively, and do not nudge to commit.
+- **Default commit/push target is `main`.** When asked to "commit", "push", or "commit and push" without naming a branch, work directly on `main` and push to `origin/main` — do NOT create or switch to a feature branch first. This deliberately overrides the usual "branch first when on the default branch" default. Use a different branch ONLY when explicitly asked.
+
+## After implementing changes
+- **When an implementation is finished, ALWAYS build the Android APK and report its path.** Bump `versionCode` in `android/app/build.gradle.kts` first (managed region — forgetting it strands users on the cached old UI), run `build-apk.bat`, then state the full path to the built APK (`android/app/build/outputs/apk/debug/app-debug.apk`). Applies to any code change that affects the app (the Android APK embeds the shared React build).
+
 ## Build & run (quick reference)
 - **Web client** (`web/client/`): `npm install` · `npm run dev` (→ http://localhost:8080, proxies `/api/*` → :5015) · `npm run build` · `npm run lint`
 - **Web server** (`web/server/Magav.Api/`): `dotnet build` · `dotnet run` (→ http://localhost:5015). Both must run together for web dev.
