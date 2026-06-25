@@ -3,6 +3,9 @@
 ## ⚠️ How to run this prompt (read first)
 **Do NOT write or change any code yet.** First produce a detailed implementation **plan** and then **STOP and wait for my explicit approval.** Only implement after I approve.
 The plan must include: every file to add/change; the shared-module decomposition (§7); the chosen image library and how it's loaded; and an explicit resolution **with your recommendation** for **each** of the open decisions in the "Open decisions" section (#1–#6) — none may be silently skipped.
+
+**Keep the implementation as simple as possible.** Favor the simplest approach that meets the requirements: choose the recommended/simpler option in every open decision (Radix `Select` over cmdk; Android option **A**, web-only; reuse existing components/utilities rather than building new ones), add **no** library, layer, or abstraction beyond what is strictly needed, and keep the §7 shared module **minimal** — just enough to stop the two entry points duplicating render/export logic, not a framework. When two approaches both work, pick the one with less code and fewer moving parts. If any choice adds complexity, call it out in the plan and justify why it's unavoidable.
+
 This is a production system with **no automated tests**. After approval, implement in small reviewable steps and **verify the exported image on a real Android device after a cold app launch**, not just desktop Chrome.
 
 ## Goal
@@ -43,7 +46,9 @@ Stack: react-hook-form + zod + Shadcn/ui (all present). RTL: containers `dir="rt
 - Final list = chosen `VolunteerDto`s ∪ free-text → normalize each to `{ name: string; phone?: string }`. One table row per person (support N; sample has 2).
 
 ## 4. The exported image — replicate the reference doc
-Render an **offscreen A4-portrait RTL HTML template** that visually matches `docs/duty log exmaple.docx`, then rasterize to PNG. (Token map verified against the actual `word/document.xml`.)
+Render an **offscreen A4-landscape RTL HTML template** that visually matches `docs/duty log exmaple.docx`, then rasterize to PNG. (Token map + layout verified against the actual `word/document.xml`.)
+
+> **⚠️ Orientation (corrected — load-bearing):** the reference docx is **A4 _landscape_**, not portrait. `word/document.xml` declares `<w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/>` (= 297 mm × 210 mm ≈ **1123 px wide × 794 px tall** @96 dpi). Build the report **landscape: width ≈ `1123px`, height grows with content** — *not* portrait/794-px-wide (which would distort every multi-column table). The exact section/column structure is pinned in the **Layout appendix** at the end of this file.
 
 **Token → source map (everything dynamic in the doc):**
 
@@ -69,8 +74,8 @@ Render an **offscreen A4-portrait RTL HTML template** that visually matches `doc
 ### Image library & rasterization (none installed — add one)
 - `package.json` has **no** html2canvas / html-to-image / dom-to-image / jsPDF (verified). **Use `html2canvas`** — `html-to-image` rasterizes via SVG `<foreignObject>`, which often renders blank in the Android WebView.
 - **Lazy-load** via dynamic import, using the **default export**: `const html2canvas = (await import('html2canvas')).default;` (a bare `(await import('html2canvas'))(node)` fails — the namespace object isn't callable). Keeps the heavy lib out of the main bundle.
-- **Off-screen render technique** (html2canvas can't capture `display:none`): mount the report **laid out but off-screen** — `position:absolute; left:-10000px; top:0` — with an **explicit pixel width** (A4 ≈ `794px` @96dpi) so the absolutely-positioned block doesn't shrink to content and break the table layout. Do **not** use `display:none` or `visibility:hidden`. Ensure no `overflow:hidden`/`contain:paint` ancestor clips it.
-- **Canvas size cap:** a 2× A4 portrait is ~3308×4678px (~62MB RGBA) and can return a **blank/null** canvas on older WebViews. Use `scale = Math.min(2, window.devicePixelRatio)` and/or clamp the longest edge to ~2400px; **guard `canvas.toBlob()` for null**.
+- **Off-screen render technique** (html2canvas can't capture `display:none`): mount the report **laid out but off-screen** — `position:absolute; left:-10000px; top:0` — with an **explicit pixel width** (A4 **landscape** long edge ≈ `1123px` @96dpi) so the absolutely-positioned block doesn't shrink to content and break the table layout. Do **not** use `display:none` or `visibility:hidden`. Ensure no `overflow:hidden`/`contain:paint` ancestor clips it.
+- **Canvas size cap:** a 2× A4 **landscape** page is ~`2246×1588px` (~14MB RGBA) and can return a **blank/null** canvas on older WebViews. Use `scale = Math.min(2, window.devicePixelRatio)` and/or clamp the **longest edge (the ~1123px width)** to ~2400px; **guard `canvas.toBlob()` for null**.
 - Output PNG, filename e.g. `יומן-הפעלה-{shiftName}-{date}.png`.
 
 ## 5. ⚠️ Saving/sharing the PNG — biggest risk — **DECIDE**
@@ -101,7 +106,7 @@ Choose the Android behavior (and update the acceptance criteria to match):
 ## 7. Shared architecture — one implementation, two callers (no duplication)
 Both entry points funnel through the SAME code. Suggested module set under `web/client/src/features/duty-log/`:
 1. **`DutyLogData`** — single normalized model: `{ shiftName; date: Date; startTime; endTime; vehicleNumber?; people: {name; phone?}[] }`.
-2. **`DutyLogReport`** — one presentational RTL A4 component taking `DutyLogData`. **Static text, the team→car map, and the `deriveEndDate` helper are defined ONCE** (never duplicated).
+2. **`DutyLogReport`** — one presentational RTL **A4-landscape** component (width ≈ `1123px`) taking `DutyLogData`. **Static text, the team→car map, and the `deriveEndDate` helper are defined ONCE** (never duplicated).
 3. **`exportDutyLogPng(data)`** — one export util/hook. Required readiness sequence before rasterizing (the cold-WebView font bug is the worst case):
    1. mount `<DutyLogReport>` off-screen with **real Hebrew text in the DOM** (not display:none);
    2. `await Promise.all([...])` of `document.fonts.load("400 16px 'Noto Sans Hebrew'", <Hebrew sample>)`, same for `500` and `700` — this **forces** the unicode-range subset request (the `@fontsource/noto-sans-hebrew` faces are `font-display:swap`, split by unicode-range, so `document.fonts.ready` alone can resolve prematurely and html2canvas would capture the fallback font);
@@ -142,3 +147,63 @@ Flow: `form state ─┐` and `ShiftGroup ─(mapper)─┐` → same `DutyLogDa
 - Render + export logic exists **once** (shared module); the Shifts button only maps + calls; `deriveEndDate` and validation are not duplicated.
 - Desktop download works; **Android behaves exactly per the chosen §5 option** (A: button hidden/disabled with a message; B: native save/share + `versionCode` bumped).
 - No DB/endpoint changes; export lib lazy-loaded (main bundle not bloated); `command.tsx`/`cmdk` is imported only if option 2B was chosen.
+
+---
+
+## Layout appendix — exact report structure (source of truth: `word/document.xml`)
+
+The reference document is a **single A4 _landscape_ page** (~`1123px` wide × `794px` tall @96dpi; height may grow with extra manpower rows), **RTL** throughout. Reproduce it top→bottom as below. **DYNAMIC** = substitute from `DutyLogData`; **STATIC** = hardcode verbatim; **blank** = render an empty `<td>`. Every `{startTime}-{endTime}` run, every phone, the vehicle number, and the `dd/MM/yyyy  HH:mm` date lines must be wrapped in `<span dir="ltr">`. Use font weights **400/700 only**.
+
+**1. Emblem / wordmark** (top) — `/police-emblem.png` (430×128, opaque; the "משטרת ישראל" wordmark is baked into the image). **STATIC**.
+
+**2. Title** (centered) — `יומן הפעלה לצוות {shiftName}`. **DYNAMIC** (`{shiftName}`).
+
+**3. "פרטי יומן"** block (section label **STATIC**):
+- `מתאריך: {date dd/MM/yyyy}  {startTime}` — **DYNAMIC**. *(Note the DOUBLE space before the time — replicate.)*
+- `עד תאריך: {endDate dd/MM/yyyy}  {endTime}` — **DYNAMIC** (`endDate` via the shared `deriveEndDate`).
+- `יחידה: בסיס הפעלה מרחבים, מתנדבי סיור (מתמ"ד)` — **STATIC**. *(This is the 5th "מרחבים" in the doc — do NOT substitute it.)*
+- `משמרת: ג'` — **STATIC**.
+- `צוותים` label (**STATIC**) → value `{shiftName}` (**DYNAMIC**).
+
+**4. "כח אדם" (manpower)** — section label **STATIC**; an **8-column table**. Header row, in RTL visual order (right→left), all **STATIC**:
+
+`שם` · `מ.א.` · `ת.ז.` · `טלפון` · `סוג כ"א` · `קשר` · `שעות מתוכננות` · `הערות`
+
+One data row **per person** (support N; sample has 2 — `גרשון אליהו`/`0503334455`, `זכריה מזרחי`/`0524466889`):
+| Column | Value |
+|---|---|
+| `שם` | `{name}` — **DYNAMIC** |
+| `מ.א.` | blank |
+| `ת.ז.` | blank |
+| `טלפון` | `{phone}` (blank if none) — **DYNAMIC** |
+| `סוג כ"א` | `מתנדב` — **STATIC literal** |
+| `קשר` | blank |
+| `שעות מתוכננות` | `{startTime}-{endTime}` — **DYNAMIC** |
+| `הערות` | blank |
+
+*(0 people is allowed — empty table body. The form path enforces ≥1; the Shifts mapper does not.)*
+
+**5. "רכבים" (vehicles)** — section label **STATIC**; a **2-column table**. Header (RTL): `מס' רכב` · `שעות מתוכננות` (**STATIC**). One data row:
+- `מס' רכב` = `{vehicleNumber}` (blank if cleared) — **DYNAMIC**.
+- `שעות מתוכננות` = `{startTime}-{endTime}` — **DYNAMIC**.
+
+**6. "משימות לביצוע" (tasks)** — section label **STATIC**; an **8-column table**. Header row, RTL visual order, all **STATIC**:
+
+`צוות` · `מס' משימה` · `סוג` · `מקום` · `מועד מתוכנן` · `תאור` · `שעות ביצוע` · `הערות`
+
+**Exactly two STATIC task rows** — the **only** dynamic cell in each is `צוות`:
+| Cell | Row 1 | Row 2 |
+|---|---|---|
+| `צוות` | `{shiftName}` — **DYNAMIC** | `{shiftName}` — **DYNAMIC** |
+| `מס' משימה` | blank | blank |
+| `סוג` | `הנחיה מבצעית` — **STATIC** | `פעילות למניעת עברות פע"ר` — **STATIC** |
+| `מקום` | blank | blank |
+| `מועד מתוכנן` | blank | blank |
+| `תאור` | `תדרוך ותרגולת לפני יציאה למשימה` — **STATIC** | `פעילות יזומה ברחבי הגזרה- דגש על ישובים מוכי פשיעה ופאתי הגזרה. נוכחות ובולטות לצד פעילות חכמה, חסימות לבידוק אנשים/רכבים חשודים, רישום בדוקאים למניעת עבירות פע"ר וחיזוק תחושת בטחון התושבים` — **STATIC** |
+| `שעות ביצוע` | `{startTime}-{endTime}` — **DYNAMIC** | `{startTime}-{endTime}` — **DYNAMIC** |
+| `הערות` | blank | blank |
+
+**Cross-checks (from `word/document.xml`):**
+- `{startTime}-{endTime}` (sample `19:00-02:00`) appears in **exactly 5** hour-cells: the 2 manpower rows + the vehicles row + the 2 task rows.
+- `מרחבים` appears **5×**: title, the static `בסיס הפעלה מרחבים` unit line, the `צוותים` value, and the 2 task `צוות` cells → substitute `{shiftName}` in **4** of them (title, `צוותים`, both task `צוות`); the unit line stays **STATIC**.
+- The doc is internally inconsistent (title `מרחבים 211` but the vehicle cell shows `21851`, which is the **212** car). Follow the **seed prefill** `211→21-174` (with dash) on the form path; ignore the doc's `21851`.

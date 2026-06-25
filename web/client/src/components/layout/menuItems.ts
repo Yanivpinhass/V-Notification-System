@@ -1,4 +1,4 @@
-import { Users, Settings, Search, Calendar, Info, MapPin } from 'lucide-react';
+import { Users, Settings, Search, Calendar, Info, MapPin, FileText } from 'lucide-react';
 import { MenuItem } from './types';
 
 export const mainMenuItems: MenuItem[] = [
@@ -41,6 +41,15 @@ export const mainMenuItems: MenuItem[] = [
       { id: 'sms-logs', title: 'יומן שליחת הודעות', path: '/message-tracking/sms-logs' },
       { id: 'sms-summary', title: 'סיכום שליחה לפי צוות', path: '/message-tracking/sms-summary' },
       { id: 'scheduler-run-log', title: 'היסטוריית הרצות', path: '/message-tracking/scheduler-run-log' },
+    ]
+  },
+  {
+    id: 'reports',
+    title: 'דו"חות',
+    icon: FileText,
+    requiredRoles: ['Admin', 'SystemManager'],
+    subItems: [
+      { id: 'duty-log', title: 'יומן הפעלה', path: '/reports/duty-log' },
     ]
   },
   {

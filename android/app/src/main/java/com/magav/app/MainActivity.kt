@@ -21,6 +21,7 @@ import com.magav.app.auth.BiometricAuthHelper
 import com.magav.app.auth.NativeAuthBridge
 import com.magav.app.auth.SessionManager
 import com.magav.app.license.LicenseValidator
+import com.magav.app.media.MediaBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -112,6 +113,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         webView.addJavascriptInterface(NativeAuthBridge(sessionManager), "NativeAuth")
+        webView.addJavascriptInterface(MediaBridge(applicationContext), "NativeMedia")
     }
 
     private fun startServerService() {

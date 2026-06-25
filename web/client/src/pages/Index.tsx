@@ -18,6 +18,8 @@ import { MessageTemplatesPage } from '@/pages/MessageTemplatesPage';
 import { AboutVersionPage } from '@/pages/AboutVersionPage';
 import { LocationsManagementPage } from '@/pages/LocationsManagementPage';
 import { JewishHolidaysPage } from '@/pages/JewishHolidaysPage';
+import { DutyLogPage } from '@/pages/DutyLogPage';
+import { DutyLogPreviewProvider } from '@/features/duty-log/DutyLogPreviewProvider';
 import { authService } from '@/services/authService';
 
 interface User {
@@ -90,6 +92,8 @@ const Index = () => {
         return <MessageTemplatesPage />;
       case 'jewish-holidays':
         return <JewishHolidaysPage />;
+      case 'duty-log':
+        return <DutyLogPage />;
       case 'about-version':
         return <AboutVersionPage />;
       default:
@@ -103,14 +107,18 @@ const Index = () => {
 
   return (
     <>
-      <AdminLayout
-        currentUser={user}
-        activeSubItem={activeSubItem}
-        onSubItemChange={setActiveSubItem}
-        onLogout={handleLogout}
-      >
-        {renderContent()}
-      </AdminLayout>
+      {/* Provider lives ABOVE AdminLayout so the duty-log preview survives the
+          mobile↔desktop tree swap that AdminLayout does on rotation (768px breakpoint). */}
+      <DutyLogPreviewProvider>
+        <AdminLayout
+          currentUser={user}
+          activeSubItem={activeSubItem}
+          onSubItemChange={setActiveSubItem}
+          onLogout={handleLogout}
+        >
+          {renderContent()}
+        </AdminLayout>
+      </DutyLogPreviewProvider>
 
       {/* Force password change dialog */}
       <ChangePasswordDialog

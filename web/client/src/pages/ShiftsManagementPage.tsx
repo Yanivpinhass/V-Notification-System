@@ -18,10 +18,12 @@ import { shiftsService, ShiftWithVolunteerDto, UpdateShiftGroupRequest } from '@
 import { volunteersService, VolunteerDto } from '@/services/volunteersService';
 import { locationsService, LocationDto } from '@/services/locationsService';
 import { jewishHolidaysService, JewishHolidayDto } from '@/services/jewishHolidaysService';
-import { Loader2, Trash2, Plus, Search, Calendar as CalendarIcon, MessageSquare, Phone, Pencil, MapPin, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, Trash2, Plus, Search, Calendar as CalendarIcon, MessageSquare, Phone, Pencil, MapPin, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, addDays } from 'date-fns';
 import { he } from 'date-fns/locale';
+import { shiftGroupToDutyLogData } from '@/features/duty-log/shiftGroupToDutyLogData';
+import { useDutyLogPreview } from '@/features/duty-log/DutyLogPreviewProvider';
 
 interface ShiftGroup {
   shiftName: string;
@@ -72,6 +74,10 @@ export const ShiftsManagementPage: React.FC = () => {
   const [volunteerSearch, setVolunteerSearch] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [addedVolunteerIds, setAddedVolunteerIds] = useState<Set<number>>(new Set());
+
+  // Duty Log (יומן הפעלה) preview — opened via the shared provider (above AdminLayout,
+  // so it survives the mobile↔desktop remount on rotation).
+  const { openPreview } = useDutyLogPreview();
 
   // Locations for dropdown
   const [locations, setLocations] = useState<LocationDto[]>([]);
@@ -704,8 +710,21 @@ export const ShiftsManagementPage: React.FC = () => {
                   </span>
                 )}
               </div>
-              {!group.isLocal && !isSelectedDatePast && (
-                <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center gap-1 shrink-0">
+                {group.shifts.some(s => !s.isUnresolved && s.volunteerName?.trim()) && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    title="צור יומן הפעלה"
+                    aria-label="צור יומן הפעלה"
+                    onClick={() => openPreview(shiftGroupToDutyLogData(group, selectedDate))}
+                  >
+                    <FileText className="h-4 w-4" />
+                  </Button>
+                )}
+                {!group.isLocal && !isSelectedDatePast && (
+                  <>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -740,8 +759,9 @@ export const ShiftsManagementPage: React.FC = () => {
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
-                </div>
-              )}
+                  </>
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-2">

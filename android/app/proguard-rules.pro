@@ -22,6 +22,18 @@
 -dontwarn org.openxmlformats.**
 -dontwarn com.microsoft.**
 
+# POI pulls in optional desktop/OSGi/logging integrations that are never exercised
+# on Android. R8 (release only) treats their absent classes as hard errors unless
+# suppressed — these -dontwarn lines do NOT change runtime behavior. (Surfaced the
+# first time assembleRelease ran; POI classes themselves are kept above.)
+-dontwarn aQute.bnd.annotation.**
+-dontwarn com.google.j2objc.annotations.**
+-dontwarn org.osgi.framework.**
+-dontwarn org.slf4j.**
+-dontwarn org.apache.logging.log4j.**
+-dontwarn java.awt.**
+-dontwarn com.graphbuilder.**
+
 # Keep JWT
 -keep class com.auth0.jwt.** { *; }
 
@@ -35,6 +47,12 @@
 # Keep JavaScript interface for WebView bridge
 -keepclassmembers class com.magav.app.auth.NativeAuthBridge {
     @android.webkit.JavascriptInterface *;
+}
+
+# Keep ALL @JavascriptInterface methods (e.g. MediaBridge) — R8 in release would
+# otherwise strip them and the WebView bridge would silently no-op.
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
 }
 
 # Keep license validation
