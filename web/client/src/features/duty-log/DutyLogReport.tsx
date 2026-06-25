@@ -94,24 +94,18 @@ const Ltr: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{children}</span>
 );
 
-// Blank cell (non-breaking space keeps an even row height).
-const Blank: React.FC = () => <td style={tdStyle}>{' '}</td>;
-
 interface ColDef {
   header: string;
   width: string;
 }
 
 // Columns in RTL visual order (right→left): the first entry renders rightmost.
+// Empty-by-design columns (מ.א./ת.ז./קשר/הערות …) and the סוג כ"א column were
+// dropped — only data-bearing columns remain.
 const MANPOWER_COLS: ColDef[] = [
-  { header: 'שם', width: '13%' },
-  { header: 'מ.א.', width: '12%' },
-  { header: 'ת.ז.', width: '9%' },
-  { header: 'טלפון', width: '16%' },
-  { header: 'סוג כ"א', width: '11%' },
-  { header: 'קשר', width: '9%' },
-  { header: 'שעות מתוכננות', width: '17%' },
-  { header: 'הערות', width: '13%' },
+  { header: 'שם', width: '40%' },
+  { header: 'טלפון', width: '30%' },
+  { header: 'שעות מתוכננות', width: '30%' },
 ];
 
 const VEHICLE_COLS: ColDef[] = [
@@ -120,14 +114,10 @@ const VEHICLE_COLS: ColDef[] = [
 ];
 
 const TASK_COLS: ColDef[] = [
-  { header: 'צוות', width: '16%' },
-  { header: "מס' משימה", width: '9%' },
-  { header: 'סוג', width: '13%' },
-  { header: 'מקום', width: '8%' },
-  { header: 'מועד מתוכנן', width: '9%' },
-  { header: 'תאור', width: '29%' },
-  { header: 'שעות ביצוע', width: '8%' },
-  { header: 'הערות', width: '8%' },
+  { header: 'צוות', width: '18%' },
+  { header: 'סוג', width: '22%' },
+  { header: 'תאור', width: '48%' },
+  { header: 'שעות ביצוע', width: '12%' },
 ];
 
 const HeaderRow: React.FC<{ cols: ColDef[] }> = ({ cols }) => (
@@ -191,13 +181,8 @@ export const DutyLogReport: React.FC<{ data: DutyLogData }> = ({ data }) => {
           {people.map((p, i) => (
             <tr key={i}>
               <td style={tdStyle}>{p.name}</td>
-              <Blank />
-              <Blank />
               <td style={tdStyle}>{p.phone ? <Ltr>{p.phone}</Ltr> : ' '}</td>
-              <td style={tdStyle}>מתנדב</td>
-              <Blank />
               <td style={tdStyle}><Ltr>{hours}</Ltr></td>
-              <Blank />
             </tr>
           ))}
         </tbody>
@@ -222,23 +207,15 @@ export const DutyLogReport: React.FC<{ data: DutyLogData }> = ({ data }) => {
         <tbody>
           <tr>
             <td style={tdStyle}>{shiftName}</td>
-            <Blank />
             <td style={tdStyle}>{TASK1_TYPE}</td>
-            <Blank />
-            <Blank />
             <td style={{ ...tdStyle, textAlign: 'right' }}>{TASK1_DESC}</td>
             <td style={tdStyle}><Ltr>{hours}</Ltr></td>
-            <Blank />
           </tr>
           <tr>
             <td style={tdStyle}>{shiftName}</td>
-            <Blank />
             <td style={tdStyle}>{TASK2_TYPE}</td>
-            <Blank />
-            <Blank />
             <td style={{ ...tdStyle, textAlign: 'right' }}>{TASK2_DESC}</td>
             <td style={tdStyle}><Ltr>{hours}</Ltr></td>
-            <Blank />
           </tr>
         </tbody>
       </table>
