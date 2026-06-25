@@ -1,7 +1,7 @@
 <!-- DeepInit Horizontal | Component: system-wide
-Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-24 (incremental --update over commit 2989b01)
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-25 (commit 970cdcc — Duty Log: tech-debt rows 21 (release-R8 unvalidated) + 22 (cmdk unused); the window.NativeMedia bridge in technical-dependencies §4.6) · prior: deepinit-2026-06-24 (commit 2989b01)
 Input files processed: the 5 component docs + discovery.md
-Generated: 2026-06-18 · Updated: 2026-06-24 (tech-debt register + SMS-approval gap reflect the remediation) -->
+Generated: 2026-06-18 · Updated: 2026-06-25 -->
 
 # Cross-References — Magav V-Notification-System
 
@@ -110,6 +110,8 @@ Pulled from §10 of each component doc, ranked by blast radius / severity.
 | 18 | **Stale `launchSettings.json`** — scaffold ports `5228/7207/2811` + `weatherforecast` launchUrl don't match real `5015` binding. | api | LOW | api.md §10 |
 | 19 | **TanStack Query mounted but unused**; relaxed TS (`strictNullChecks:false`); inline `new`-ed services in api handlers despite scoped DI registration; permissive Android CORS `anyHost()` (mitigated by localhost-only bind). | web-client / api / android | LOW | web-client.md §10; api.md §10; android.md §10 |
 | 20 | **Crypto smells (common):** `Rfc2898DeriveBytes` default iteration count + legacy `Rijndael`; hardcoded `PasswordKey` literal used to decrypt connection-string passwords. | common | MEDIUM | common.md §10 |
+| 21 | **`assembleRelease` (R8) never validated at runtime** — release builds were never run before `970cdcc`; the first one needed POI `-dontwarn` rules and there is no release `signingConfig` (release APK unsigned). R8 build now passes + keeps `@JavascriptInterface` names, but POI/SQLCipher/Ktor under full minify is untested on a device. The team ships debug APKs. | android | MEDIUM | android.md §10; decisions.md KL-mistake:013 |
+| 22 | **`cmdk` + `components/ui/command.tsx` installed but unused** — added (`f432dce`) for a Duty Log combobox that ended up using Radix `Select`; dead dependency. | web-client | LOW | web-client.md §10 |
 
 ---
 

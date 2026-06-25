@@ -1,5 +1,5 @@
 <!-- DeepInit Horizontal | Component: system-wide
-Run ID: deepinit-2026-06-18
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-25 (commit 970cdcc — NO domain change: the Duty Log (יומן הפעלה) report is a TRANSIENT client-side view artifact (`DutyLogData` in web-client only), not a persisted domain entity; it adds nothing to the triplicated model and is not part of the REST contract. ADR-019.)
 Input files processed: the 5 component docs + discovery.md
 Generated: 2026-06-18 -->
 

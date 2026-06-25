@@ -1,7 +1,7 @@
 <!-- DeepInit Issues (C-ISSUE ledger) | Component: system-wide
-Run ID: deepinit-2026-06-24 (incremental --update over deepinit-2026-06-18)
-Input files processed: changed components (server, api, web-client, android) + horizontal docs + decisions.md + targeted code re-reads
-Generated: 2026-06-24 -->
+Run ID: deepinit-2026-06-25 (incremental --update over deepinit-2026-06-24) · prior: deepinit-2026-06-24
+Input files processed: changed components (web-client, android) + horizontal docs + decisions.md + targeted code re-reads (Duty Log feature, commit 970cdcc)
+Generated: 2026-06-25 -->
 
 # Issue Ledger — Magav V-Notification-System
 
@@ -13,6 +13,8 @@ Generated: 2026-06-24 -->
 - **Persisting (1):** ISS-007 — the committed-credentials half is fixed (secrets externalized + a fail-loud JWT guard), but the **hardcoded `MagavConstants.PasswordKey`** (the construct the baseline keys on) is **still present and still used**, so the issue remains OPEN with its scope narrowed.
 
 **Open after this run: 1 (ISS-007, narrowed) + 2 accepted-by-design (ISS-003, ISS-004).**
+
+**Lifecycle update (2026-06-25 `--update`, commit `970cdcc` — Duty Log).** Dirty: `web-client`, `android`. The Duty Log is **client-only** (no DB write, no new/changed endpoint, no secret, no Room `@Entity`/`@Database` change), so it introduced **NO new IF-* finding** and changed no baseline match-key. ISS-007 re-verified still OPEN (`MagavConstants.cs:7` PasswordKey present, used at `EncryptedConnectionStringsProvider.cs:46` — `common` untouched). ISS-003/004 still accepted; ISS-001/002/005/006/009 still resolved. **NEW: 0 · REGRESSED: 0.** Two operational caveats from this feature are recorded as Knowledge-Log / tech-debt entries, **not** as formal IF-* issues (below the bar; AF-1 omit-when-uncertain): the unvalidated `assembleRelease`/R8 path (KL-mistake:013; cross-references tech-debt #21) and the unused `cmdk` dependency (#22).
 
 | ID | Family | Severity | Criticality | Certainty | Verified | Lifecycle | One-line |
 |----|--------|----------|-------------|-----------|----------|-----------|----------|

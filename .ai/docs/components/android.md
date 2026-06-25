@@ -1,5 +1,5 @@
 <!-- DeepInit Extract | Component: android
-Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-24 (incremental --update over commit 2989b01: versionCode 63, run-log dedup tightened, VolunteerEntity divergence accepted/ADR-016)
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-25 (incremental --update over commit 970cdcc: Duty Log media bridge — new media/MediaBridge.kt exposed as window.NativeMedia (save-to-gallery + FileProvider share), res/xml/file_paths.xml, manifest FileProvider, proguard JS-interface keep + POI -dontwarn, versionCode 63→69 / 1.4.19; NO Room/@Entity/@Database change) · prior: deepinit-2026-06-24 (commit 2989b01: versionCode 63, run-log dedup tightened, VolunteerEntity divergence accepted/ADR-016)
 Input files processed: android/app/build.gradle.kts, android/app/src/main/AndroidManifest.xml, android/app/src/main/java/com/magav/app/MagavApplication.kt, MainActivity.kt, MagavServerService.kt, db/MagavDatabase.kt, db/DatabaseInitializer.kt, db/entity/{UserEntity,VolunteerEntity,ShiftEntity,SmsLogEntity,SchedulerConfigEntity,SchedulerRunLogEntity,AppSettingEntity,MessageTemplateEntity,LocationEntity,JewishHolidayEntity}.kt, db/dao/{UserDao,VolunteerDao,ShiftDao,SmsLogDao,SchedulerConfigDao,SchedulerRunLogDao,AppSettingDao,MessageTemplateDao,LocationDao,JewishHolidayDao,SmsLogDetailDto,AiQueryDtos}.kt, api/KtorServer.kt, api/auth/JwtConfig.kt, api/models/{ApiResponse,RequestDtos}.kt, api/routes/{Auth,User,Volunteer,Shift,Location,JewishHoliday,SmsLog,Scheduler,MessageTemplate,Settings,Health}Routes.kt, scheduler/{AlarmScheduler,SmsSchedulerWorker,SmsAlarmReceiver,BootReceiver,ShiftCleanupWorker}.kt, service/{AuthService,SmsReminderService,ShiftsImportService,ShiftScheduleParser,VolunteersImportService}.kt, sms/{SmsProvider,AndroidSmsProvider}.kt, auth/{SessionManager,BiometricAuthHelper,NativeAuthBridge}.kt, license/LicenseValidator.kt, util/{Constants,DateExtensions}.kt
 Generated: 2026-06-18 -->
 
@@ -9,7 +9,7 @@ Generated: 2026-06-18 -->
 
 **Purpose.** The Android target of Magav, a Hebrew RTL volunteer-shift management + SMS-reminder system. It is a **hybrid mobile-server app**: a foreground `Service` embeds a Ktor HTTP server bound to `127.0.0.1:5015`, which serves both the bundled React SPA (from `assets/web/`) and a REST API that mirrors the .NET backend. A WebView in `MainActivity` loads `http://localhost:5015`. SMS reminders are sent natively via Android `SmsManager`. [HIGH] (`android/app/src/main/java/com/magav/app/api/KtorServer.kt:27`, `MainActivity.kt:196`, `MagavServerService.kt:39`)
 
-**Tech stack.** Kotlin 1.9.22 / Java 17, `compileSdk=35`, `minSdk=29`, `targetSdk=35`, `versionCode=63`, `versionName="1.4.13"`. Ktor 2.3.12 (CIO engine), Room 2.6.1 + SQLCipher 4.5.4 (`net.zetetic:android-database-sqlcipher`), Koin 3.5.6 DI, Apache POI 5.2.5 (Excel), AlarmManager + WorkManager 2.9.1, `com.auth0:java-jwt:4.4.0`, `at.favre.lib:bcrypt:0.10.2`, `androidx.security:security-crypto:1.1.0-alpha06`, `androidx.biometric:biometric:1.1.0`. [HIGH] (`android/app/build.gradle.kts:8-121`)
+**Tech stack.** Kotlin 1.9.22 / Java 17, `compileSdk=35`, `minSdk=29`, `targetSdk=35`, `versionCode=69`, `versionName="1.4.19"` (bumped 63→69 across the Duty Log iterations — each APK install needs a fresh code so `clearCacheOnVersionChange()` clears the cached PWA, BR/KL-mistake:001). Ktor 2.3.12 (CIO engine), Room 2.6.1 + SQLCipher 4.5.4 (`net.zetetic:android-database-sqlcipher`), Koin 3.5.6 DI, Apache POI 5.2.5 (Excel), AlarmManager + WorkManager 2.9.1, `com.auth0:java-jwt:4.4.0`, `at.favre.lib:bcrypt:0.10.2`, `androidx.security:security-crypto:1.1.0-alpha06`, `androidx.biometric:biometric:1.1.0`. [HIGH] (`android/app/build.gradle.kts:8-121`)
 
 **Entry points.**
 - `MagavApplication.onCreate()` — app process init: notification channels → SQLCipher DB → Koin. [HIGH] (`MagavApplication.kt:33`)
@@ -24,7 +24,8 @@ Generated: 2026-06-18 -->
 | Feature | Entry point | Source files | Certainty |
 |---|---|---|---|
 | Embedded Ktor REST server (localhost:5015) | `createKtorServer()` | `api/KtorServer.kt`, all `api/routes/*` | HIGH |
-| WebView host + native bridge | `MainActivity.setupWebView()` | `MainActivity.kt:71`, `auth/NativeAuthBridge.kt` | HIGH |
+| WebView host + native bridges | `MainActivity.setupWebView()` | `MainActivity.kt:71`, `auth/NativeAuthBridge.kt` (`NativeAuth`), `media/MediaBridge.kt` (`NativeMedia`, new) | HIGH |
+| Duty Log media bridge — save-to-gallery + share PNG | `MediaBridge.saveImageToGallery` / `shareImage` | `media/MediaBridge.kt` (new in `970cdcc`), `res/xml/file_paths.xml`, manifest FileProvider | HIGH |
 | Static SPA serving from assets | catch-all `get("{...}")` | `api/KtorServer.kt:89` | HIGH |
 | Encrypted Room DB (SQLCipher) | `MagavApplication.initializeDatabase()` | `MagavApplication.kt:102`, `db/MagavDatabase.kt`, `db/entity/*`, `db/dao/*` | HIGH |
 | SMS scheduler (exact alarms, Israel tz) | `AlarmScheduler.scheduleAllAlarms()` | `scheduler/AlarmScheduler.kt`, `SmsAlarmReceiver.kt`, `SmsSchedulerWorker.kt`, `service/SmsReminderService.kt` | HIGH |
@@ -165,8 +166,11 @@ PK `Id`. Cols: `Date` (NOT NULL, **unique index**), `Name`. Seeded 2025–2035.
 | IP-android:010 | Excel file import | file I/O | inbound | Apache POI (xlsx/xls in memory) | `ShiftScheduleParser.kt:29`, `VolunteersImportService.kt:19` |
 | IP-android:011 | Encrypted secrets store | platform API | bidirectional | EncryptedSharedPreferences (`magav_secure_prefs`) | `MagavApplication.kt:140`, `MagavServerService.kt:99`, `SessionManager.kt:17` |
 | IP-android:012 | Biometric prompt | platform API | inbound | `BiometricPrompt` (BIOMETRIC_STRONG) | `auth/BiometricAuthHelper.kt:48` |
-| IP-android:013 | JS↔native bridge | WebView interface | bidirectional | `NativeAuth` JS interface | `MainActivity.kt:114`, `auth/NativeAuthBridge.kt` |
+| IP-android:013 | JS↔native bridge (auth) | WebView interface | bidirectional | `NativeAuth` JS interface | `MainActivity.kt:115`, `auth/NativeAuthBridge.kt` |
 | IP-android:014 | tel: dialer | intent | outbound | `ACTION_DIAL` | `MainActivity.kt:85` |
+| IP-android:015 | JS↔native bridge (media) — Duty Log save/share | WebView interface | inbound (JS→native) | `NativeMedia` JS interface: `saveImageToGallery(base64,name):Boolean`, `shareImage(base64,name)` | `MainActivity.kt:116`, `media/MediaBridge.kt` |
+| IP-android:016 | Gallery write (scoped storage) | platform API | outbound | `MediaStore.Images` → `Pictures/Magav` (IS_PENDING flow, no runtime permission on minSdk 29) | `media/MediaBridge.kt` (`saveImageToGallery`) |
+| IP-android:017 | Share-sheet intent (FileProvider) | intent | outbound | `ACTION_SEND image/png` via `FileProvider` authority `com.magav.app.fileprovider` (cacheDir/shared) | `media/MediaBridge.kt` (`shareImage`), `AndroidManifest.xml` (`<provider>`), `res/xml/file_paths.xml` |
 
 ## 7. User Roles & Access
 
@@ -200,7 +204,7 @@ PK `Id`. Cols: `Date` (NOT NULL, **unique index**), `Name`. Seeded 2025–2035.
 
 **SMS provider interface:** `interface SmsProvider { suspend fun sendSms(phone, message): SmsResult }` — sole impl `AndroidSmsProvider`. [HIGH] (`sms/SmsProvider.kt:3`)
 
-**JS bridge:** `NativeAuth` exposes `onLoginSuccess`, `onLogout`, `onTokenRefresh` to the WebView. [HIGH] (`auth/NativeAuthBridge.kt`)
+**JS bridges (TWO):** `NativeAuth` exposes `onLoginSuccess`/`onLogout`/`onTokenRefresh` (`auth/NativeAuthBridge.kt`); `NativeMedia` exposes `saveImageToGallery(base64,filename):Boolean` (MediaStore → `Pictures/Magav`, PNG-magic-verified, IS_PENDING flow, deletes the pending row on failure) + `shareImage(base64,filename)` (writes `cacheDir/shared/`, `FileProvider` → `ACTION_SEND` chooser with `FLAG_GRANT_READ_URI_PERMISSION` + `FLAG_ACTIVITY_NEW_TASK`). Both run on a WebView binder thread, return synchronously, touch no UI, and persist NOTHING in Room. [HIGH] (`media/MediaBridge.kt`, `MainActivity.kt:115-116`)
 
 ## 9. Interfaces Consumed
 
@@ -224,7 +228,8 @@ PK `Id`. Cols: `Date` (NOT NULL, **unique index**), `Name`. Seeded 2025–2035.
 
 - **God objects:** `api/routes/ShiftRoutes.kt` (907 lines, 13 endpoints incl. inline SMS-send logic duplicated across cancel/delete/send-sms/location-update); `db/DatabaseInitializer.kt` (389 lines, ~160-row hardcoded holiday table 2025–2035). [HIGH]
 - **No automated tests** in the component (consistent with project-wide "no tests"). [HIGH]
-- **`versionCode` bump-per-build requirement:** `MainActivity.clearCacheOnVersionChange()` clears the WebView cache only when `versionCode` differs from the stored value. Forgetting to bump `versionCode` in `build.gradle.kts` leaves users on a stale cached React UI. Current `versionCode=63`, `versionName="1.4.13"` (bumped 62→63 in `2989b01` for the catch-only change). [HIGH] (`MainActivity.kt:295`, `build.gradle.kts:16`)
+- **`versionCode` bump-per-build requirement:** `MainActivity.clearCacheOnVersionChange()` clears the WebView cache only when `versionCode` differs from the stored value. Forgetting to bump `versionCode` in `build.gradle.kts` leaves users on a stale cached React UI. Current `versionCode=69`, `versionName="1.4.19"` (bumped 63→69 across the Duty Log iterations — each re-install needs a fresh code or the cached PWA serves the old UI). [HIGH] (`MainActivity.kt:295`, `build.gradle.kts:16`)
+- **`assembleRelease` (R8) was never exercised before `970cdcc`; release runtime is UNVALIDATED.** [HIGH] The team ships **debug** APKs (`build-apk.bat` runs `assembleDebug`). The first `assembleRelease` failed on Apache POI's optional transitive deps; fixed by adding `-dontwarn` for `aQute.bnd.annotation`, `com.google.j2objc.annotations`, `org.osgi.framework`, `org.slf4j`, `org.apache.logging.log4j`, `java.awt`, `com.graphbuilder` to `proguard-rules.pro` (runtime-safe). R8 now completes and keeps the `@JavascriptInterface` methods un-renamed (verified in the mapping). BUT: there is **no release `signingConfig`** (release APK is unsigned), and the release-config runtime (POI/SQLCipher/Ktor under full minify + `shrinkResources`) has not been device-tested. (`android/app/proguard-rules.pro`, `build.gradle.kts:25-33`)
 - **Dead code:** `AiQueryDtos.kt` `AiShiftVolunteerDto` is defined but unreferenced (the `getShiftsWithVolunteers()` JOIN it documents does not exist in any DAO). [HIGH] (`db/dao/AiQueryDtos.kt`)
 - **TODO/FIXME:** none found in Kotlin source; only `@Deprecated("Deprecated in Java")` on `MainActivity.onBackPressed()` (framework deprecation, intentional). [HIGH] (grep over `android/app/src/main`)
 - **Cleartext + permissive CORS:** `usesCleartextTraffic="true"` (needed for localhost http) and Ktor CORS `anyHost()`. Acceptable because the server binds `127.0.0.1` only, but worth noting. [MEDIUM] (`AndroidManifest.xml:25`, `KtorServer.kt:36`)
@@ -244,3 +249,4 @@ PK `Id`. Cols: `Date` (NOT NULL, **unique index**), `Name`. Seeded 2025–2035.
 | Dual-SIM via subscription id | `AndroidSmsProvider.kt:43`, `SettingsRoutes.kt`, AppSettings `sms_sim_subscription_id` | Volunteers' org may require a specific SIM; setting selects `getSmsManagerForSubscriptionId`, `-1` = system default | subscription branch + settings route | HIGH |
 | Call-aware deferral (foreground upgrade, 20-min poll) | `SmsSchedulerWorker.kt:165` | Sending SMS mid-call can fail or interrupt; worker upgrades to foreground and waits for `CALL_STATE_IDLE` (max 20 min) then proceeds | `TelephonyManager.callState`, `setForeground` | HIGH |
 | Persisted session + biometric re-auth | `SessionManager.kt`, `BiometricAuthHelper.kt`, `MainActivity.handleSessionAwareStartup()` | Avoid re-login on every launch while protecting after 15-min inactivity; native silent refresh injects tokens into the WebView localStorage | 15-min `BIOMETRIC_THRESHOLD_MS`, `injectTokensAndLoad` | HIGH |
+| Duty Log save/share via a native media bridge (Option B), constructed with `applicationContext`, NO Room change | `media/MediaBridge.kt`, `MainActivity.kt:116` | The WebView can't save a `blob:`/`data:` PNG itself (no DownloadListener, no storage perms); a JS bridge writes via MediaStore (scoped storage, permission-free on minSdk 29) + FileProvider share. Built with applicationContext + a generic `@JavascriptInterface` proguard keep so R8 doesn't strip it. Persists nothing → Room schema hash unchanged → existing data safe on update (ADR-019) | `MediaStore.IS_PENDING` flow, `FileProvider.getUriForFile`, `-keepclassmembers ... @JavascriptInterface` | HIGH |

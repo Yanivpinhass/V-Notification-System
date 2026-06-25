@@ -1,5 +1,5 @@
 <!-- DeepInit Horizontal | Component: system-wide
-Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-24 (incremental --update over commit 2989b01; UC-006 route wired, WA-008 dedup tightened)
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-25 (commit 970cdcc — UC-009 Duty Log client-only PNG report added) · prior: deepinit-2026-06-24 (commit 2989b01; UC-006 route wired, WA-008 dedup tightened)
 Input files processed: the 5 component docs + discovery.md
 Generated: 2026-06-18 -->
 
@@ -65,6 +65,13 @@ System-wide use cases, the feature→component map, end-to-end cross-component t
 - **Actor:** Admin to write (`AdminOnly`), Admin/SystemManager to read (`CanManageMessages`). [HIGH]
 - **Goal:** Tune when/what reminders are sent without breaking send logic.
 - **Main flow:** Read `GET /api/scheduler/config` → per-row toggle/edit in the redesigned per-row UI → save via `PUT /api/scheduler/config/{id}` (single) or bulk `PUT /api/scheduler/config` → server ignores client-supplied `ReminderType`/`DayGroup` (server-owned), validates Time `HH:mm`, IsEnabled∈{0,1}, DaysBeforeShift 0–7 (SameDay⇒0, Advance/WeekdayAdvance⇒≥1), template exists; bulk save requires the submitted id-set to EXACTLY equal the stored set. [HIGH] (`Program.cs:1884-2021,2197-2219`; `web/client/src/pages/SchedulerSettingsPage.tsx:40-122`; Android `api/routes/SchedulerRoutes.kt:64-117`)
+
+### UC-009 — Admin generates a Duty Log (יומן הפעלה) PNG report — CLIENT-ONLY
+- **Actor:** Admin/SystemManager (the `reports → יומן הפעלה` page is role-gated; the per-team Shifts button shows for the same roles). [HIGH]
+- **Goal:** Produce a printable A4-landscape "יומן הפעלה" image (replicating `docs/duty log exmaple.docx`) and download it (web) or save-to-gallery + share (Android).
+- **Preconditions:** Authenticated. Form path only: volunteer list loaded via the existing `GET /volunteers`.
+- **Main flow:** EITHER fill `DutyLogPage` (date / start+end time / shift-name preset-or-free-text / vehicle / volunteer multi-select ∪ free-text people; ≥1-person validation) OR click `צור יומן הפעלה` on a Shifts team card (maps the in-memory group → fixed 19:00–02:00, `carId` verbatim, unresolved rows dropped) → both call `openPreview(DutyLogData)` (provider rendered above `AdminLayout`) → fit-to-screen / pinch-zoom preview → `exportDutyLogPng` lazy-loads html2canvas, renders the 1123px RTL `DutyLogReport` off-screen in its own React root, awaits fonts+emblem, rasterizes to PNG → **desktop:** `<a download>`; **Android WebView:** `window.NativeMedia.saveImageToGallery` (MediaStore `Pictures/Magav`) + `shareImage` (FileProvider `ACTION_SEND`). [HIGH] (`web/client/src/features/duty-log/*`, `pages/DutyLogPage.tsx`, `pages/ShiftsManagementPage.tsx:707-719`; Android `media/MediaBridge.kt`) — **no DB writes, no new endpoints, no contract change** (ADR-019).
+- **Alternates:** `endTime ≤ startTime` ⇒ end date +1 day (shared `deriveEndDate`); 0 resolved people ⇒ the Shifts button is hidden (form path requires ≥1); `toBlob` null ⇒ Hebrew error toast; Android save failure ⇒ error toast, share still attempted. [HIGH]
 
 ---
 

@@ -1,5 +1,5 @@
 <!-- DeepInit Horizontal | Component: system-wide
-Run ID: deepinit-2026-06-18
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-25 (commit 970cdcc — Duty Log: html2canvas added to web-client (lazy); a SECOND web↔android runtime JS bridge window.NativeMedia, §4.6)
 Input files processed: the 5 component docs + discovery.md
 Generated: 2026-06-18 -->
 
@@ -135,6 +135,10 @@ The DB schema is defined **independently twice**: .NET `DbInitializer.cs` CREATE
 ### 4.4 Background-service / scheduler change → behavioral mirror
 
 The SMS-scheduler semantics (DayGroup = send-day, holiday-aware effective group, WeekdayAdvance pull-back window) are implemented in `server` (`SmsSchedulerService`/`SmsReminderService`, server.md WF-server:001-002,009, BR-server:003,007,008) AND in Android (`SmsSchedulerWorker`/`SmsReminderService`, android.md WF-android:002, BR-android:009,010), AND previewed in the client (`schedulerPreview.ts`, web-client.md BR-web-client:010,011). A change to the eligibility window or day-group ladder obligates all three to stay aligned, or the two platforms send different reminders from the same config. (MEMORY: "WeekdayAdvance window coupling" and "DayGroup semantics" call out exactly these coupling traps.) [HIGH]
+
+### 4.6 WebView JS-bridge couplings (`NativeAuth` + `NativeMedia`) — runtime, not in the import graph
+
+There are now **two** `window.*` JS↔native bridges the shared React build consumes only when running inside the Android WebView: `NativeAuth` (session persistence — `authService` ↔ `auth/NativeAuthBridge.kt`) and, new in `970cdcc`, **`NativeMedia`** (Duty Log save/share — `exportDutyLogPng` ↔ `media/MediaBridge.kt`, registered together at `MainActivity.kt:115-116`). Each is a **runtime coupling with no code edge** in the structural graph, so the compiler catches nothing: changing a JS method name on the React side OR a Kotlin `@JavascriptInterface` signature on the Android side silently breaks the other. The React side always feature-detects (`if (window.NativeMedia)`) so the plain-web deployment (bridge absent) degrades to `<a download>`. Additional Android-only guard: R8 strips un-kept `@JavascriptInterface` methods, so `proguard-rules.pro` carries a generic keep — forgetting it would no-op the bridge in a release build only. [HIGH] (web-client.md IP-023/024; android.md IP-013/015; decisions.md KL-integration:003/006)
 
 ### 4.5 Cascade summary
 

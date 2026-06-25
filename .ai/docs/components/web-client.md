@@ -1,5 +1,5 @@
 <!-- DeepInit Extract | Component: web-client
-Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-24 (incremental --update over commit 2989b01: SMS-approval route wired, RevokeSmsApprovalPage.tsx deleted — ISS-001/002 resolved)
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-25 (incremental --update over commit 970cdcc: Duty Log (יומן הפעלה) client-only PNG report added — new features/duty-log/ shared module + DutyLogPage; html2canvas dep; window.NativeMedia consumer; cmdk installed but unused) · prior: deepinit-2026-06-24 (commit 2989b01: SMS-approval route wired, RevokeSmsApprovalPage.tsx deleted — ISS-001/002 resolved)
 Input files processed: App.tsx, main.tsx, config/auth.ts, lib/utils.ts, lib/auth.ts, lib/hebrewDates.ts (glob only), pages/Index.tsx, components/layout/menuItems.ts, components/layout/types.ts, components/layout/Sidebar.tsx, components/layout/Header.tsx, components/AdminLayout.tsx, components/AuthScreen.tsx, components/ChangePasswordDialog.tsx, components/users/UserDialog.tsx, components/ui/switch.tsx, components/ui/dialog.tsx, services/api/BaseApiClient.ts, services/authService.ts, services/usersService.ts, services/volunteersService.ts, services/shiftsService.ts, services/smsLogService.ts, services/settingsService.ts, services/messageTemplateService.ts, services/locationsService.ts, services/jewishHolidaysService.ts, services/schedulerService.ts, services/volunteerSmsService.ts, pages/VolunteerSmsApprovalPage.tsx, pages/RevokeSmsApprovalPage.tsx, pages/SchedulerSettingsPage.tsx, pages/SmsSettingsPage.tsx, pages/AboutVersionPage.tsx, pages/VolunteersImportPage.tsx, pages/ShiftsManagementPage.tsx (partial), pages/scheduler/schedulerPreview.ts, pages/scheduler/ReminderRow.tsx, hooks/use-mobile.tsx
 Generated: 2026-06-18 -->
 
@@ -43,6 +43,7 @@ Generated: 2026-06-18 -->
 | Users management (משתמשי מערכת) | `pages/SystemUsersPage.tsx` (`system-users`, Admin-only) | `SystemUsersPage.tsx`, `usersService.ts`, `components/users/UserDialog.tsx`, `DeleteUserDialog.tsx` | `[HIGH]` |
 | About / version (גרסה) | `pages/AboutVersionPage.tsx` (`about-version`) | `AboutVersionPage.tsx` (hits `/api/health`) | `[HIGH]` |
 | Public SMS approval (אישור קבלת הודעות SMS) | `pages/VolunteerSmsApprovalPage.tsx` | `VolunteerSmsApprovalPage.tsx`, `services/volunteerSmsService.ts` | `[HIGH]` **wired** at `App.tsx:25` → `/sms-approval/:accessKey` (`2989b01`; ISS-001 resolved) |
+| **Duty Log (יומן הפעלה) — client-only PNG report** | `pages/DutyLogPage.tsx` (`duty-log`, role `['Admin','SystemManager']`) **AND** a per-team button on `ShiftsManagementPage` | `features/duty-log/*` (shared module), `pages/DutyLogPage.tsx`, `components/layout/menuItems.ts` (`reports`→`duty-log`), `Index.tsx` (case + provider) | `[HIGH]` new in `970cdcc` — replicates `docs/duty log exmaple.docx` as a landscape A4 PNG; **no DB writes, no new endpoints** (only existing `GET /volunteers`) |
 | ~~Public revoke SMS approval~~ | — | — | **REMOVED in `2989b01`** — `RevokeSmsApprovalPage.tsx` deleted (it called a nonexistent `volunteersService.revokeSmsApproval`); opt-out is admin-mediated. (ISS-002 resolved) |
 
 ## 3. Workflows & Behaviors
@@ -84,6 +85,12 @@ Generated: 2026-06-18 -->
 - Steps: load `getConfig()` + templates in parallel `SchedulerSettingsPage.tsx:40-43` → group configs by `dayGroup` requiring at least SameDay+Advance (WeekdayAdvance optional, SunThu only) `SchedulerSettingsPage.tsx:116-122` → toggle/save calls `schedulerService.updateOne` `PUT /scheduler/config/{id}` `schedulerService.ts:44-46` → optimistic-ish `mergeConfig` patches the single row `SchedulerSettingsPage.tsx:57-60` → toast.
 - State: `savingIds: Set<number>` tracks in-flight per row `SchedulerSettingsPage.tsx:30,62-73`. Read-only when not Admin (`isReadOnly = !isUserAdmin()` `SchedulerSettingsPage.tsx:34`). `[HIGH]`
 
+**WF-web-client:008 — Duty Log (יומן הפעלה) PNG generation & export** (user-facing)
+- Two entry points funnel through ONE shared `DutyLogData` model → ONE `DutyLogReport` → ONE `exportDutyLogPng`: (a) `DutyLogPage` form (RHF+zod; preset-or-`__other__` Select for shift name; volunteer multi-select `Set<number>` ∪ free-text people; ≥1-person validation lives ONLY here) `pages/DutyLogPage.tsx:111-167`; (b) a per-team `צור יומן הפעלה` button on `ShiftsManagementPage` mapped via `shiftGroupToDutyLogData(group, selectedDate)` — fixed hours 19:00–02:00, `carId` verbatim, unresolved rows filtered, hidden when 0 resolved people `ShiftsManagementPage.tsx:707-719`. `[HIGH]`
+- Both call `openPreview(data)` from `features/duty-log/DutyLogPreviewProvider.tsx` (rendered in `Index.tsx` ABOVE `AdminLayout`) → the shared fit-to-screen / pinch-zoom preview overlay → `exportDutyLogPng(data)` `features/duty-log/exportDutyLogPng.tsx:36`. `[HIGH]`
+- Export: lazy `(await import('html2canvas')).default`, mount `<DutyLogReport>` off-screen in its OWN `createRoot`+`flushSync`, await fonts (400/500/700 + `document.fonts.ready`) + `emblemImg.decode()` + double rAF, `html2canvas(node,{backgroundColor:'#fff',scale:Math.min(2,dpr)})` clamped to ~2400px edge, guard `toBlob` null → desktop `<a download>` OR Android `window.NativeMedia.{saveImageToGallery,shareImage}` (base64), `try/finally` unmount+remove, `isExporting` re-entrancy lock. `exportDutyLogPng.tsx:43-130`. `[HIGH]`
+- End date via shared `deriveEndDate(date,startTime,endTime)` (local-field `new Date(y,m,d+1)` when `endTime ≤ startTime`) `features/duty-log/deriveEndDate.ts:12`. `[HIGH]`
+
 ## 4. Business Rules
 
 | ID | Rule | Criticality | Source |
@@ -100,7 +107,11 @@ Generated: 2026-06-18 -->
 | BR-web-client:010 | Scheduler "DayGroup" = the day the SMS is SENT (run day), not the shift's day; `daysBeforeShift` is the look-ahead (0 = same day). The Friday job reminds Sunday shifts. | HIGH | `pages/scheduler/schedulerPreview.ts:2-5,24-35,65-75` |
 | BR-web-client:011 | Same-day reminders append a location; Advance/WeekdayAdvance do NOT (`hasLocation`). | HIGH | `pages/scheduler/schedulerPreview.ts:39-43` |
 | BR-web-client:012 | Token-refresh on 401 is single-flight: a static `BaseApiClient.refreshPromise` deduplicates concurrent refreshes across all service instances. | MEDIUM | `services/api/BaseApiClient.ts:13,50-57` |
-| BR-web-client:013 | Mobile breakpoint is 768px (`useIsMobile`); AdminLayout renders a distinct mobile (Sheet sidebar) vs desktop (resizable panels) tree. | LOW | `hooks/use-mobile.tsx:3`, `components/AdminLayout.tsx:83,132` |
+| BR-web-client:013 | Mobile breakpoint is 768px (`useIsMobile`); AdminLayout renders a distinct mobile (Sheet sidebar) vs desktop (resizable panels) tree. **Load-bearing for the Duty Log preview**: rotating a phone to landscape (>768px) flips `isMobile`, so AdminLayout swaps trees and React UNMOUNTS/REMOUNTS the page — destroying any page-local state. (BR-web-client:014.) | MEDIUM | `hooks/use-mobile.tsx:3`, `components/AdminLayout.tsx:83,132` |
+| BR-web-client:014 | **Duty Log preview state lives in `DutyLogPreviewProvider` rendered ABOVE `AdminLayout` (in `Index.tsx`), not in the page** — so it survives the BR-013 mobile↔desktop remount on rotation. Both entry points open it via `useDutyLogPreview().openPreview(data)`. | HIGH | `features/duty-log/DutyLogPreviewProvider.tsx:21-37`, `pages/Index.tsx` (provider wraps AdminLayout) |
+| BR-web-client:015 | **RTL report scaling:** the 1123px landscape `DutyLogReport` is scaled to fit; the scaled inner MUST be `position:absolute; top:0; right:0` + `transform-origin:'top right'`. With `top left` the RTL report right-aligns and its top-left lands off-screen (≈ x −661) → blank preview. | HIGH | `features/duty-log/DutyLogPreviewDialog.tsx` (scaled wrapper) |
+| BR-web-client:016 | **Emblem centering:** Tailwind preflight forces `img{display:block}`, so in an RTL container `text-align:center` does NOT center the emblem (a block element sits at the start = right edge). Centered via `display:block; margin:0 auto`. | MEDIUM | `features/duty-log/DutyLogReport.tsx` (emblem `<img>`) |
+| BR-web-client:017 | **Duty Log bidi correctness:** every numeric/LTR run in the report (times `HH:mm-HH:mm`, phones, vehicle no., the `dd/MM/yyyy  HH:mm` lines) MUST be wrapped `<span dir="ltr">` or `19:00-02:00` rasterizes reversed. Shift-name presets + team→car map (`211→21-174`…) are hardcoded sample data, not repo constants. | HIGH | `features/duty-log/DutyLogReport.tsx`, `features/duty-log/types.ts:24-33` |
 
 ## 5. Data Models (as the client types them)
 
@@ -120,6 +131,7 @@ Generated: 2026-06-18 -->
 - `SmsSimSettings` `{ subscriptionId, availableSims: SimInfo[] }`, `SimInfo` `{ subscriptionId, displayName, slotIndex }`, `TestSmsResult` `{ success, error }` — `services/settingsService.ts:3-17` `[HIGH]`
 - `ImportResult` `{ totalRows, inserted, updated, errors, errorMessages[], unresolvedVolunteers, unresolvedVolunteerNames[] }` — `services/volunteersService.ts:24-32` `[HIGH]`
 - Reminder-type constants `SAME_DAY='SameDay'`, `ADVANCE='Advance'`, `WEEKDAY_ADVANCE='WeekdayAdvance'`; `DAY_GROUP_ORDER=['SunThu','Fri','Sat']` (mirror `MagavConstants`) — `pages/scheduler/schedulerPreview.ts:18-22` `[HIGH]`
+- `DutyLogData` `{ shiftName: string; date: Date; startTime: string; endTime: string; vehicleNumber?: string; people: { name: string; phone? }[] }` — the single normalized model both Duty Log entry points produce; `SHIFT_NAME_PRESETS` (4 strings), `TEAM_CAR_MAP` (`211→21-174`,`212→21-851`,`221→21-850`,`222→21-176`), `OTHER_OPTION='__other__'` sentinel — `features/duty-log/types.ts:8-33` `[HIGH]`
 
 ## 6. Integration Points
 
@@ -148,6 +160,7 @@ Generated: 2026-06-18 -->
 | IP-web-client:021 | public SMS-approval verify/submit | API POST (no auth, rate-limited) | out | `/public/sms-approval/{accessKey}/verify`, `/submit` | `services/volunteerSmsService.ts:31-73` |
 | IP-web-client:022 | health/version | API GET (no auth) | out | `/api/health` | `pages/AboutVersionPage.tsx:9` |
 | IP-web-client:023 | native Android session bridge | JS interop | out | `window.NativeAuth.{onLoginSuccess,onTokenRefresh,onLogout}` | `services/authService.ts:74-79,120-122,152-154` |
+| IP-web-client:024 | native Android media bridge (Duty Log save/share) | JS interop | out | `window.NativeMedia.{saveImageToGallery,shareImage}` (base64 PNG); absent on desktop → `<a download>` fallback | `features/duty-log/exportDutyLogPng.tsx:13-19,99-113` |
 
 Note: most service `baseUrl` values come from `authConfig.apiBaseUrl` directly (e.g. `/volunteers`), while `authService` appends `/api` if missing (`authService.ts:31-33`). The `X-Requested-With` CSRF header is set ONLY on `postFormData` uploads (`BaseApiClient.ts:226`). `[HIGH]`
 
@@ -179,6 +192,8 @@ Note: most service `baseUrl` values come from `authConfig.apiBaseUrl` directly (
 | lucide-react | icons | widespread |
 | date-fns + date-fns/locale `he` | date formatting (Hebrew) | `pages/ShiftsManagementPage.tsx:23-24` |
 | @fontsource/noto-sans-hebrew | Hebrew webfont | `main.tsx:4-6` |
+| html2canvas (`^1.4.1`, new in `970cdcc`) | rasterize the Duty Log DOM → PNG; **lazy dynamic-import**, default export only (kept out of the main bundle — its own ~201 KB chunk) | `features/duty-log/exportDutyLogPng.tsx:42` |
+| cmdk (`^1.1.1`, added `f432dce`) | command-palette primitive backing `components/ui/command.tsx` — **installed but UNUSED by app code** (Duty Log chose Radix `Select`, not the combobox) | `components/ui/command.tsx` (no app import) |
 | clsx + tailwind-merge | `cn()` | `lib/utils.ts:1-5` |
 | HTTP `/api/*` surface | .NET / Android Ktor backend (mirrored endpoints) | all of `services/*` (see §6) |
 
@@ -191,6 +206,8 @@ Note: most service `baseUrl` values come from `authConfig.apiBaseUrl` directly (
 - **Relaxed TypeScript** `[MEDIUM]`: project documented to run with `strictNullChecks: false` and `noImplicitAny: false` (CLAUDE.md; tsconfig lives at `web/client/tsconfig.json`, outside this component's `src/` scope so not read here). Evidence of looseness in code: heavy `as any` casts (e.g. `UserDialog.tsx:269-272`, `(window as any).NativeAuth` `authService.ts:74`).
 - **TODO/FIXME** `[HIGH]`: grep for `TODO|FIXME|XXX|HACK` across `src/` → 2 hits total, both incidental string matches (`pages/SmsSettingsPage.tsx:1`, `pages/VolunteerSmsApprovalPage.tsx:1` — likely the `XXXXXXX` phone placeholders / `05X`), i.e. effectively **no real TODO/FIXME markers**.
 - **No automated tests** `[HIGH]`: no test files under `web/client/src/` (project-wide: "There are no automated tests").
+- **`cmdk` + `components/ui/command.tsx` installed but unused** `[HIGH]`: added in `f432dce` to enable a combobox option for the Duty Log shift-name picker, but the implementation chose Radix `Select` + an `__other__` free-text sentinel, so no app code imports `Command`. Dead dependency unless a future combobox adopts it.
+- **`features/duty-log/` is the FIRST feature-folder** `[HIGH]`: the repo is otherwise organized by `pages/` + `services/` + `components/`. Duty Log introduced `src/features/<feature>/` as the home for self-contained feature modules (model + report + export + preview + mapper). New cohesive features should follow this, not scatter into `pages/`.
 
 ## 11. Design Rationale
 
@@ -205,3 +222,5 @@ Note: most service `baseUrl` values come from `authConfig.apiBaseUrl` directly (
 | Single-flight token refresh via static promise | `services/api/BaseApiClient.ts:13,50-57` | Prevent a burst of parallel 401s from triggering multiple refreshes/rotations | `private static refreshPromise` dedup | `[HIGH]` |
 | Native session bridge (`window.NativeAuth`) | `services/authService.ts:74-79,120-122,152-154` | Lets the embedding Android app persist/clear the JWT session in sync with the web layer | guarded `if ((window as any).NativeAuth)` calls | `[HIGH]` |
 | Scheduler preview framed by SEND day | `pages/scheduler/schedulerPreview.ts:2-5,90-112` | DayGroup semantics are easy to invert; the preview engine explicitly documents run-day → notified-shift-day mapping incl. WeekdayAdvance pull-back window | extensive module comment + `notifiedShiftLabel` | `[HIGH]` |
+| Client-only PNG report (html2canvas, lazy) — one shared module, two entry points | `features/duty-log/*`, `pages/DutyLogPage.tsx`, `ShiftsManagementPage.tsx` | Replicate a printable A4 artifact without a server endpoint or DB write; the SAME build runs on web + Android WebView, so the report rasterizes the same DOM both places (Android adds a native save/share bridge — ADR-019) | shared `DutyLogData`/`DutyLogReport`/`exportDutyLogPng`; lazy `import('html2canvas')` | `[HIGH]` |
+| Duty Log preview overlay is a PLAIN portal, NOT a Radix Dialog | `features/duty-log/DutyLogPreviewDialog.tsx` | Radix dismisses on focus/interaction-outside, which the Android WebView fires on rotation → closes the preview; a plain overlay closes only via buttons/backdrop and survives rotation (paired with the provider-above-AdminLayout fix, BR-014) | `createPortal` + manual close, no Radix Dialog | `[HIGH]` |
