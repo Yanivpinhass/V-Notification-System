@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
-import { Loader2, Share2, X } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Clock, Loader2, Share2, X } from 'lucide-react';
 import { DutyLogData } from './types';
 import { DutyLogReport } from './DutyLogReport';
 import { exportDutyLogPng } from './exportDutyLogPng';
@@ -9,6 +10,7 @@ import { exportDutyLogPng } from './exportDutyLogPng';
 const REPORT_WIDTH = 1123;
 const AREA_PADDING = 16; // p-2 (8px) each side
 const MAX_ZOOM = 5;
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 interface Props {
   data: DutyLogData | null;
@@ -37,9 +39,25 @@ export const DutyLogPreviewDialog: React.FC<Props> = ({ data, open, onOpenChange
   const [naturalHeight, setNaturalHeight] = useState(0);
   const [exporting, setExporting] = useState(false);
 
+  // Editable hours — seeded from data, override the report + export live.
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
+  const [editorOpen, setEditorOpen] = useState(false);
+
   // User pinch-zoom / pan (layered on top of the fit `scale`).
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState<Vec>({ x: 0, y: 0 });
+
+  // Seed the editable hours from each new preview's data (and collapse the editor).
+  // Relies on openPreview receiving a FRESH DutyLogData per call, so [data] changes
+  // each open and a prior edit never leaks. useLayoutEffect runs pre-paint → no flash.
+  useLayoutEffect(() => {
+    if (data) {
+      setStartTime(data.startTime);
+      setEndTime(data.endTime);
+      setEditorOpen(false);
+    }
+  }, [data]);
 
   // ── Fit-to-screen measurement ──
   useLayoutEffect(() => {
@@ -212,14 +230,30 @@ export const DutyLogPreviewDialog: React.FC<Props> = ({ data, open, onOpenChange
     }
   };
 
+  const timesValid = TIME_RE.test(startTime) && TIME_RE.test(endTime);
+  const effectiveData = useMemo(
+    () => (data ? { ...data, startTime, endTime } : null),
+    [data, startTime, endTime],
+  );
+  // Show last-valid times while a field is mid-edit/cleared (keeps the preview stable).
+  const reportData = timesValid ? effectiveData : data;
+
   const handleExport = async () => {
-    if (!data) return;
+    if (!data || !timesValid) return;
     setExporting(true);
     try {
-      await exportDutyLogPng(data);
+      await exportDutyLogPng(effectiveData);
     } finally {
       setExporting(false);
     }
+  };
+
+  // Toggling the editor resizes the preview area (band in/out) → reset zoom/pan so the
+  // report cleanly re-fits and isn't left panned against stale clamp bounds.
+  const toggleEditor = () => {
+    setEditorOpen((o) => !o);
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
   };
 
   if (!open || !data) return null;
@@ -284,25 +318,58 @@ export const DutyLogPreviewDialog: React.FC<Props> = ({ data, open, onOpenChange
                   transformOrigin: 'top right',
                 }}
               >
-                <DutyLogReport data={data} />
+                <DutyLogReport data={reportData} />
               </div>
             </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-2 p-3 sm:p-4 border-t shrink-0">
-          <span className="text-xs text-muted-foreground hidden sm:inline">
-            צביטה (2 אצבעות) להגדלה/הקטנה
-          </span>
-          <div className="flex gap-2 w-full sm:w-auto">
-            <Button variant="outline" className="min-h-[44px] flex-1 sm:flex-none" onClick={() => onOpenChange(false)}>
-              סגור
+        <div className="flex flex-col gap-2 p-3 sm:p-4 border-t shrink-0">
+          {editorOpen && (
+            <div className="flex items-end gap-3">
+              <div className="flex-1 space-y-1">
+                <label htmlFor="dutyLogStartTime" className="text-xs text-muted-foreground">
+                  שעת התחלה
+                </label>
+                <Input
+                  id="dutyLogStartTime"
+                  type="time"
+                  dir="ltr"
+                  className="text-left"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                />
+              </div>
+              <div className="flex-1 space-y-1">
+                <label htmlFor="dutyLogEndTime" className="text-xs text-muted-foreground">
+                  שעת סיום
+                </label>
+                <Input
+                  id="dutyLogEndTime"
+                  type="time"
+                  dir="ltr"
+                  className="text-left"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-2">
+            <Button type="button" variant="outline" onClick={toggleEditor} className="min-h-[44px] gap-2">
+              <Clock className="h-4 w-4" />
+              שנה שעות
             </Button>
-            <Button onClick={handleExport} disabled={exporting} className="min-h-[44px] flex-1 sm:flex-none gap-2">
-              {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
-              שתף יומן הפעלה
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" className="min-h-[44px] flex-1 sm:flex-none" onClick={() => onOpenChange(false)}>
+                סגור
+              </Button>
+              <Button onClick={handleExport} disabled={exporting || !timesValid} className="min-h-[44px] flex-1 sm:flex-none gap-2">
+                {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
+                שתף יומן הפעלה
+              </Button>
+            </div>
           </div>
         </div>
       </div>
