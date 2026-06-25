@@ -338,7 +338,7 @@ export const DutyLogPage: React.FC = () => {
                 </Button>
               </div>
               {freeTextPeople.length > 0 && (
-                <div className="border rounded-md divide-y">
+                <div className="border rounded-md divide-y max-h-40 overflow-y-auto">
                   {freeTextPeople.map((p, idx) => (
                     <div key={idx} className="flex items-center gap-3 p-2 px-3">
                       <span className="text-sm font-medium flex-1">{p.name}</span>

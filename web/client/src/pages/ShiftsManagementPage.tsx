@@ -1021,6 +1021,11 @@ export const ShiftsManagementPage: React.FC = () => {
             <DialogTitle>
               הוסף מתנדב ל{addTarget?.shiftName}
               {addTarget?.carId ? ` / רכב ${addTarget.carId}` : ''}
+              {assignedVolunteerNames.length > 0 && (
+                <span className="text-sm font-normal text-muted-foreground mr-2">
+                  ({assignedVolunteerNames.length} משובצים)
+                </span>
+              )}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -1045,7 +1050,7 @@ export const ShiftsManagementPage: React.FC = () => {
                 className="pr-10"
               />
             </div>
-            <div className="space-y-2 rounded-lg border bg-muted/30 p-2">
+            <div className="space-y-2 rounded-lg border bg-muted/30 p-2 max-h-64 overflow-y-auto">
               {!volunteersLoaded && (
                 <div className="flex justify-center py-4">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
