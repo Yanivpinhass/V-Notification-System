@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>אפיון: משמרות מבצעיות ומנהליות</title>
+<style>
+  :root {
+    --bg: #f5f7fa;
+    --card: #ffffff;
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --brand: #1d4ed8;
+    --brand-soft: #eff4ff;
+    --green: #047857;
+    --green-soft: #ecfdf5;
+    --amber: #b45309;
+    --amber-soft: #fffbeb;
+    --line: #e5e7eb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", "Noto Sans Hebrew", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    margin: 0;
+    padding: 0 16px 64px;
+    line-height: 1.7;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  header.page {
+    background: linear-gradient(135deg, #1d4ed8, #2563eb);
+    color: #fff;
+    border-radius: 0 0 20px 20px;
+    padding: 32px 28px;
+    margin: 0 -16px 28px;
+    box-shadow: 0 6px 24px rgba(29,78,216,.25);
+  }
+  header.page h1 { margin: 0 0 8px; font-size: 28px; }
+  header.page p { margin: 0; opacity: .92; font-size: 16px; }
+  section.card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px 24px;
+    margin: 0 0 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  }
+  h2 {
+    font-size: 21px;
+    margin: 0 0 14px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--brand-soft);
+    color: var(--brand);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2 .num {
+    background: var(--brand);
+    color: #fff;
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    font-size: 16px;
+    flex: none;
+  }
+  h3 { font-size: 17px; margin: 18px 0 6px; color: #111827; }
+  ul { margin: 8px 0; padding-inline-start: 22px; }
+  li { margin: 6px 0; }
+  p { margin: 8px 0; }
+  .lead { font-size: 16px; color: #374151; }
+  .tag {
+    display: inline-block;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 2px 10px;
+    border-radius: 999px;
+    margin-inline-start: 6px;
+  }
+  .tag.new { background: var(--green-soft); color: var(--green); }
+  .tag.exist { background: #f3f4f6; color: var(--muted); }
+  .tag.opt { background: var(--amber-soft); color: var(--amber); }
+  .callout {
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin: 14px 0;
+    border: 1px solid;
+  }
+  .callout.decided { background: var(--green-soft); border-color: #a7f3d0; }
+  .callout.open { background: var(--amber-soft); border-color: #fde68a; }
+  .callout.info { background: var(--brand-soft); border-color: #bfdbfe; }
+  .callout .h {
+    font-weight: 800;
+    display: block;
+    margin-bottom: 6px;
+  }
+  .callout.decided .h { color: var(--green); }
+  .callout.open .h { color: var(--amber); }
+  .callout.info .h { color: var(--brand); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+  .mini {
+    background: var(--brand-soft);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .mini h4 { margin: 0 0 6px; color: var(--brand); font-size: 16px; }
+  .sms {
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 12px;
+    padding: 16px 18px;
+    font-size: 15px;
+    line-height: 1.9;
+    white-space: pre-line;
+    direction: rtl;
+  }
+  .placeholders code {
+    background: #eef2ff;
+    color: #3730a3;
+    border-radius: 6px;
+    padding: 1px 8px;
+    font-size: 14px;
+    margin: 2px;
+    display: inline-block;
+    font-family: inherit;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+  th, td { text-align: right; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th { background: #f9fafb; font-size: 14px; color: var(--muted); }
+  .req { color: var(--green); font-weight: 700; }
+  .optional { color: var(--amber); font-weight: 700; }
+  .note { font-size: 14px; color: var(--muted); }
+  footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 24px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="page">
+  <h1>אפיון פיצ'ר: שני סוגי משמרות</h1>
+  <p>משמרות מבצעיות (קיים) ומשמרות מנהליות (חדש) — מסמך הסבר למה שהפרומפט מבקש לתכנן</p>
+</header>
+
+<section class="card">
+  <h2><span class="num">★</span> מה המטרה?</h2>
+  <p class="lead">
+    כיום כל המשמרות במערכת הן <strong>מבצעיות</strong> — כולל המשמרות שמיובאות מקובץ האקסל וכל התזמונים ששולחים להן SMS.
+    אנחנו רוצים להוסיף סוג משמרת שני: <strong>משמרת מנהלית</strong>.
+  </p>
+  <div class="grid2">
+    <div class="mini">
+      <h4>משמרת מבצעית <span class="tag exist">קיים</span></h4>
+      <p style="margin:0">כל מה שיש היום — יבוא מאקסל או הזנה ידנית, והתזמונים הקיימים. ההתנהגות נשארת בדיוק כפי שהיא.</p>
+    </div>
+    <div class="mini">
+      <h4>משמרת מנהלית <span class="tag new">חדש</span></h4>
+      <p style="margin:0">נוצרת תמיד <strong>ידנית</strong> (אין יבוא אקסל), עם דף משלה, שדות משלה, תבניות הודעה משלה, ותזמון תזכורת נפרד.</p>
+    </div>
+  </div>
+  <div class="callout decided">
+    <span class="h">עיקרון מנחה</span>
+    שני הסוגים חייבים להיות מבודדים זה מזה לחלוטין: משמרת מנהלית לעולם לא תיכנס לשאילתות או ל-SMS של המבצעיות, ולהפך. התנהגות המבצעיות לא משתנה.
+  </div>
+</section>
+
+<section class="card">
+  <h2><span class="num">1</span> שינויים בממשק המשתמש</h2>
+  <ul>
+    <li>שינוי שם הדף הקיים של המשמרות ל־<strong>"משמרות מבצעיות"</strong>.</li>
+    <li>הוספת דף חדש <strong>"משמרות מנהליות"</strong>.</li>
+    <li>הדף החדש ייראה כמו דף המבצעיות (כולל הצגת תיאור המשמרת), אבל יוצג <strong>לפי שבוע — מיום ראשון עד שבת</strong>, עם מעבר בין שבוע לשבוע (קדימה/אחורה).</li>
+    <li>דף הגדרות חדש: <strong>"הגדרות תזמון למשמרות מנהליות"</strong>, במבנה דומה להגדרות התזמון המבצעיות.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2><span class="num">2</span> שדות של משמרת מנהלית</h2>
+  <table>
+    <tr><th>שדה</th><th>חובה?</th></tr>
+    <tr><td>תיאור המשימה</td><td class="req">חובה</td></tr>
+    <tr><td>תאריך</td><td class="req">חובה</td></tr>
+    <tr><td>שעה</td><td class="req">חובה</td></tr>
+    <tr><td>כתובת</td><td class="optional">אופציונלי</td></tr>
+    <tr><td>שם מיקום</td><td class="optional">אופציונלי</td></tr>
+    <tr><td>רכב</td><td class="optional">אופציונלי</td></tr>
+    <tr><td>מיקום רכב</td><td class="optional">אופציונלי</td></tr>
+    <tr><td>מתנדבים</td><td>ניתן לשייך כמה מתנדבים</td></tr>
+  </table>
+  <div class="callout decided">
+    <span class="h">✓ הוחלט — רכב ומיקום רכב אופציונליים</span>
+    הרכב ומיקום הרכב אינם חובה, כי לא תמיד יודעים מראש איזה רכב יהיה זמין למשמרת.
+  </div>
+  <div class="callout decided">
+    <span class="h">✓ הוחלט — ריבוי מתנדבים</span>
+    משמרת מנהלית תומכת ב<strong>כמה מתנדבים</strong>, בדיוק כמו משמרת מבצעית (כל מתנדב = שורה משלו, ללא טבלת קישור נפרדת).
+  </div>
+</section>
+
+<section class="card">
+  <h2><span class="num">3</span> שליחת SMS למתנדבים</h2>
+
+  <h3>א. שמירה ושליחה בעת יצירת המשמרת</h3>
+  <p>בעת יצירת המשמרת, למשתמש יהיו שתי אפשרויות:</p>
+  <ul>
+    <li><strong>שמירה</strong> בלבד.</li>
+    <li><strong>שמירה ושליחת SMS</strong> — מיד נשלחת הודעת שיבוץ לכל המתנדבים המשובצים.</li>
+  </ul>
+  <div class="sms">שלום {שם},
+שובצת למשימה {תיאור},
+בתאריך {תאריך} שעה {שעה}
+בהצלחה</div>
+  <div class="callout decided">
+    <span class="h">✓ הוחלט — בוחרים את התבנית פעם אחת</span>
+    הודעת השיבוץ נבחרת <strong>פעם אחת</strong> מתוך תבניות ההודעה שהמשתמש יצר (הגדרה אחת במערכת), ולא נכתבת מחדש בכל משמרת. נשאר לקבוע <strong>היכן בדיוק</strong> ההגדרה הזו תופיע (ראו סעיף 6).
+  </div>
+
+  <h3>ב. אייקון שליחה ליד כל מתנדב</h3>
+  <p>ליד כל מתנדב במשמרת יופיע <strong>אייקון שליחת SMS</strong> שאפשר ללחוץ עליו כדי לשלוח הודעה למתנדב הספציפי.</p>
+  <ul>
+    <li>כש<strong>היום הוא יום המשמרת</strong> — האייקון שולח הודעה ייעודית ש<strong>מודיעה למתנדב שהמשמרת היום</strong> (תבנית חדשה).</li>
+  </ul>
+  <div class="callout info">
+    <span class="h">ℹ כבר קיים דבר דומה</span>
+    בדף המשמרות המבצעיות כבר קיים אייקון שליחת SMS ליד כל מתנדב — נשתמש באותו רעיון גם כאן.
+  </div>
+</section>
+
+<section class="card">
+  <h2><span class="num">4</span> תזמון התזכורות למשמרות מנהליות</h2>
+  <p>תזמון <strong>נפרד</strong> מהמבצעי, ששולח בזמנים אחרים.</p>
+  <div class="callout decided">
+    <span class="h">✓ הוחלט — תזכורת אוטומטית אחת בלבד</span>
+    <ul style="margin:6px 0 0">
+      <li><strong>תזכורת מקדימה:</strong> נשלחת <strong>יום אחד לפני המשמרת</strong>, בשעה שהמשתמש בוחר.</li>
+      <li><strong>אין</strong> תזכורת אוטומטית ביום המשמרת — בדרך כלל מדובר בשעות הבוקר המוקדמות, ולכן ההודעה של "המשמרת היום" נשלחת ידנית דרך האייקון (סעיף 3ב).</li>
+    </ul>
+  </div>
+  <div class="callout decided">
+    <span class="h">✓ הוחלט — מודעות לשבת ולחגים</span>
+    אם "יום לפני" נופל על <strong>שבת או על חג יהודי</strong> — מתייחסים אליו כיום שאינו עבודה, והשליחה <strong>נדחית אחורה ליום העבודה הקודם</strong>.
+    כך משמרת ב<strong>יום ראשון</strong> → התזכורת נשלחת ב<strong>יום שישי</strong>, ומשמרת ש"יום לפניה" הוא חג → נדחית בהתאם.
+  </div>
+  <p class="note">
+    הערה למתכנן: כל הלוגיקה הזו <strong>כבר קיימת</strong> במערכת — סוג התזכורת <strong>WeekdayAdvance</strong> כבר דוחה שליחה אחורה מימי שבת/חג, וטבלת החגים (JewishHolidays) כבר מסומנת כ"שבת". יש לעשות שימוש חוזר ולא להמציא מחדש.
+  </p>
+</section>
+
+<section class="card">
+  <h2><span class="num">5</span> שינויים בבסיס הנתונים</h2>
+  <ul>
+    <li>צריך דרך להבחין בין משמרת מבצעית למנהלית — ככל הנראה <strong>עמודה חדשה</strong> בטבלת המשמרות (ברירת מחדל: מבצעית), כך שכל המשמרות הקיימות יסומנו אוטומטית כמבצעיות.</li>
+    <li>כל שאילתה שמציגה/שולחת משמרות "פעילות" חייבת לסנן לפי סוג, כדי שלא תהיה דליפה בין הסוגים.</li>
+    <li>השינוי חייב להתבצע <strong>בשני הצדדים</strong> — שרת ה־.NET (web) וגם אפליקציית האנדרואיד — בצורה זהה.</li>
+  </ul>
+  <div class="callout info">
+    <span class="h">המפתח לקיבוץ שורות משמרת מנהלית: תאריך + שעה + תיאור</span>
+    כיוון שכל מתנדב הוא שורה נפרדת, צריך "מפתח" שמקבץ את כל השורות של אותה משמרת. ההחלטה: <strong>תאריך + שעה + תיאור</strong> (רכב הוצא מהמפתח כי הוא אופציונלי).
+    <br><br>
+    <strong>דעתי — זה תקין וסביר</strong>, ועקבי עם הדרך שבה המבצעיות כבר מקובצות (תאריך + שם משמרת + רכב). שתי הסתייגויות קטנות לשים לב אליהן:
+    <ul style="margin:8px 0 0">
+      <li>עריכת התיאור של משמרת קיימת "מזיזה" אותה לקבוצה אחרת — לכן עדכון משמרת חייב לעדכן את כל השורות יחד.</li>
+      <li>שתי משמרות שונות עם בדיוק אותו תאריך+שעה+תיאור "יתמזגו" לאותה קבוצה (נדיר, כי התיאור חופשי). כדאי לנרמל את פורמט השעה.</li>
+    </ul>
+    אם זה מטריד — חלופה עמידה יותר היא עמודת מזהה-קבוצה ייעודי, אבל לדעתי המפתח שבחרת מספיק טוב.
+  </div>
+</section>
+
+<section class="card">
+  <h2><span class="num">6</span> איפה מגדירים את תבניות ההודעה?</h2>
+  <p>למשמרות מנהליות יש <strong>שלוש תבניות</strong> שכל אחת נבחרת <strong>פעם אחת</strong> (לא נכתבת בכל משמרת):</p>
+  <table>
+    <tr><th>התבנית</th><th>מתי נשלחת</th></tr>
+    <tr><td>תזכורת מקדימה</td><td>אוטומטית, יום לפני המשמרת</td></tr>
+    <tr><td>הודעת שיבוץ</td><td>ידנית, ב"שמירה ושליחה" בעת היצירה</td></tr>
+    <tr><td>"המשמרת היום"</td><td>ידנית, באייקון שליד המתנדב ביום המשמרת</td></tr>
+  </table>
+  <div class="callout open">
+    <span class="h">⚠ דורש החלטה</span>
+    היכן יוגדרו שלוש הבחירות האלו? ההצעה: לרכז את כולן בדף <strong>"הגדרות תזמון למשמרות מנהליות"</strong> (אולי בשם רחב יותר). התבניות עצמן נכתבות בדף תבניות ההודעה הקיים — ובדף ההגדרות רק <strong>בוחרים</strong> איזו תבנית משמשת לכל תפקיד.
+  </div>
+</section>
+
+<section class="card">
+  <h2><span class="num">7</span> נקודות שעדיין פתוחות להחלטה</h2>
+  <ul>
+    <li>מה ישלח האייקון שליד המתנדב כש<strong>היום אינו</strong> יום המשמרת? (הודעת שיבוץ / כלום / משהו אחר)</li>
+    <li>היכן בדיוק יופיעו שלוש הגדרות התבניות (ראו סעיף 6).</li>
+    <li>אופן מימוש סוג המשמרת בבסיס הנתונים (עמודה בטבלה הקיימת מול טבלה נפרדת).</li>
+    <li>אם להסתפק במפתח תאריך+שעה+תיאור או להוסיף מזהה-קבוצה ייעודי (ראו סעיף 5).</li>
+    <li>האם הודעת "המשמרת היום" תכלול גם את מיקום הרכב כשהוא קיים.</li>
+  </ul>
+  <div class="callout decided">
+    <span class="h">✓ כבר הוחלט — לא לפתוח מחדש</span>
+    ריבוי מתנדבים; תצוגה שבועית ראשון→שבת עם ניווט; תזכורת אוטומטית אחת בלבד (מקדימה, יום לפני, מודעת שבת/חג); רכב ומיקום רכב אופציונליים; בחירת תבניות פעם אחת; מפתח קיבוץ = תאריך+שעה+תיאור.
+  </div>
+</section>
+
+<section class="card">
+  <h2><span class="num">!</span> אילוצים קריטיים</h2>
+  <ul>
+    <li><strong>סנכרון בין שתי הפלטפורמות</strong> — כל שינוי חייב להתבצע גם ב־.NET וגם באנדרואיד.</li>
+    <li><strong>זהירות במיגרציות של אנדרואיד (Room)</strong> — כל שינוי סכימה מחייב העלאת גרסת DB + מיגרציה תקינה, אחרת נתוני המשתמשים עלולים להימחק בשקט.</li>
+    <li><strong>זריעת נתונים (Seeding)</strong> — תבניות ותזמונים חדשים חייבים להגיע גם לבסיסי נתונים קיימים, לא רק לחדשים.</li>
+    <li><strong>אבטחה</strong> — שאילתות מפורמטות בלבד, הרשאות לכל endpoint, הודעות שגיאה גנריות בעברית.</li>
+    <li><strong>RTL/עברית</strong> — שמירה על כל מוסכמות הממשק הקיימות.</li>
+  </ul>
+</section>
+
+<footer>
+  מסמך זה מתאר מה הפרומפט מבקש לתכנן — אין כאן מימוש קוד. המסמך הטכני המלא: Plans/admin-shifts-planning-prompt.md
+</footer>
+
+</div>
+</body>
+</html>
