@@ -20,6 +20,8 @@ import androidx.lifecycle.lifecycleScope
 import com.magav.app.auth.BiometricAuthHelper
 import com.magav.app.auth.NativeAuthBridge
 import com.magav.app.auth.SessionManager
+import com.magav.app.license.DeviceAllowlist
+import com.magav.app.license.DeviceClipboardBridge
 import com.magav.app.license.LicenseValidator
 import com.magav.app.media.MediaBridge
 import kotlinx.coroutines.Dispatchers
@@ -114,6 +116,7 @@ class MainActivity : AppCompatActivity() {
         }
         webView.addJavascriptInterface(NativeAuthBridge(sessionManager), "NativeAuth")
         webView.addJavascriptInterface(MediaBridge(applicationContext), "NativeMedia")
+        webView.addJavascriptInterface(DeviceClipboardBridge(applicationContext), "NativeClip")
     }
 
     private fun startServerService() {
@@ -185,6 +188,10 @@ class MainActivity : AppCompatActivity() {
                     "<html dir='rtl'><body style='text-align:center;padding:40px;font-family:sans-serif'>" +
                     "<h2>שגיאה בהפעלת המערכת</h2><p>יש לסגור ולהפעיל מחדש את האפליקציה</p></body></html>",
                     "text/html", "UTF-8", null)
+            } else if (!DeviceAllowlist.isAllowed(this@MainActivity)) {
+                showWebView()
+                val id = DeviceAllowlist.deviceId(this@MainActivity)
+                webView.loadDataWithBaseURL(null, buildDeviceBlockHtml(id), "text/html", "UTF-8", null)
             } else {
                 handleSessionAwareStartup()
             }
@@ -288,6 +295,54 @@ class MainActivity : AppCompatActivity() {
         """.trimIndent()
         webView.loadDataWithBaseURL("http://localhost:5015", html, "text/html", "UTF-8", null)
     }
+
+    private fun buildDeviceBlockHtml(deviceId: String?): String {
+        val hasId = !deviceId.isNullOrBlank()
+        val safeId = escapeHtml(deviceId ?: "")
+        val body = if (hasId) {
+            """
+            <p>יש לשלוח את הקוד הבא למנהל המערכת לצורך אישור המכשיר:</p>
+            <div class="id" id="devid">$safeId</div>
+            <button onclick="copyId()">העתק</button>
+            <div class="ok" id="ok"></div>
+            <script>
+            function copyId(){
+              try{
+                if(typeof window.NativeClip==='undefined'){ throw 'no-bridge'; }
+                window.NativeClip.copyDeviceId();
+                document.getElementById('ok').innerText='הקוד הועתק';
+              }catch(e){
+                document.getElementById('ok').innerText='לא ניתן להעתיק אוטומטית — יש להעתיק את הקוד ידנית';
+              }
+            }
+            </script>
+            """
+        } else {
+            """<p>לא ניתן לקרוא את מזהה המכשיר. יש לפנות למנהל המערכת.</p>"""
+        }
+        return """
+            <html dir="rtl" lang="he"><head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+              body{font-family:sans-serif;text-align:center;padding:32px;background:#f8fafc;color:#0f172a}
+              h2{color:#b91c1c}
+              .id{font-size:26px;font-weight:700;letter-spacing:2px;background:#fff;border:2px solid #e2e8f0;border-radius:12px;padding:16px;margin:20px auto;max-width:90%;word-break:break-all;direction:ltr;font-family:monospace}
+              button{font-size:18px;padding:12px 28px;border:none;border-radius:10px;background:#2563eb;color:#fff}
+              .ok{color:#16a34a;margin-top:14px;min-height:22px;font-weight:600}
+            </style></head><body>
+            <h2>מכשיר זה אינו מורשה לשימוש באפליקציה.</h2>
+            $body
+            </body></html>
+        """.trimIndent()
+    }
+
+    private fun escapeHtml(s: String): String =
+        s.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&#39;")
 
     private fun showWebView() {
         loadingSpinner.visibility = View.GONE
