@@ -172,7 +172,11 @@
       "PowerShell($apk = \"c:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android\\\\app\\\\build\\\\outputs\\\\apk\\\\debug\\\\app-debug.apk\"; if \\(Test-Path $apk\\) { $info = Get-Item $apk; \"APK: $\\($info.FullName\\)`nSize: $\\([math]::Round\\($info.Length/1MB, 2\\)\\) MB`nBuilt: $\\($info.LastWriteTime\\)\" } else { \"APK not found\" })",
       "PowerShell($apk = \"c:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android\\\\app\\\\build\\\\outputs\\\\apk\\\\debug\\\\app-debug.apk\"; if \\(Test-Path $apk\\) { $info = Get-Item $apk; \"APK: $\\($info.FullName\\)`nSize: $\\([math]::Round\\($info.Length/1MB, 2\\)\\) MB`nBuilt: $\\($info.LastWriteTime\\)\" })",
       "PowerShell($apk = \"c:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android\\\\app\\\\build\\\\outputs\\\\apk\\\\debug\\\\app-debug.apk\"; $info = Get-Item $apk; \"APK: $\\($info.FullName\\)`nSize: $\\([math]::Round\\($info.Length/1MB, 2\\)\\) MB`nBuilt: $\\($info.LastWriteTime\\)\")",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "Bash(git push *)",
+      "Bash(dir input *)",
+      "Bash(dir \"c:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\input\\\\\")",
+      "Bash(cat > *)"
     ],
     "additionalDirectories": [
       "\\tmp"
