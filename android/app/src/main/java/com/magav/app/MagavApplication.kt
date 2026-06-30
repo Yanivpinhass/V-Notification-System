@@ -106,7 +106,7 @@ class MagavApplication : Application() {
 
         database = Room.databaseBuilder(this, MagavDatabase::class.java, "magav.db")
             .openHelperFactory(factory)
-            .addMigrations(MagavDatabase.MIGRATION_3_4, MagavDatabase.MIGRATION_4_5, MagavDatabase.MIGRATION_5_6, MagavDatabase.MIGRATION_6_7, MagavDatabase.MIGRATION_7_8)
+            .addMigrations(MagavDatabase.MIGRATION_3_4, MagavDatabase.MIGRATION_4_5, MagavDatabase.MIGRATION_5_6, MagavDatabase.MIGRATION_6_7, MagavDatabase.MIGRATION_7_8, MagavDatabase.MIGRATION_8_9)
             .build()
 
         // Verify DB can be opened. ONLY recover on SQLCipher key errors (wrong passphrase /
@@ -132,7 +132,7 @@ class MagavApplication : Application() {
             java.io.File(dbFile.path + "-journal").delete()
             database = Room.databaseBuilder(this, MagavDatabase::class.java, "magav.db")
                 .openHelperFactory(factory)
-                .addMigrations(MagavDatabase.MIGRATION_3_4, MagavDatabase.MIGRATION_4_5, MagavDatabase.MIGRATION_5_6, MagavDatabase.MIGRATION_6_7, MagavDatabase.MIGRATION_7_8)
+                .addMigrations(MagavDatabase.MIGRATION_3_4, MagavDatabase.MIGRATION_4_5, MagavDatabase.MIGRATION_5_6, MagavDatabase.MIGRATION_6_7, MagavDatabase.MIGRATION_7_8, MagavDatabase.MIGRATION_8_9)
                 .build()
         }
     }

@@ -5,6 +5,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.magav.app.db.dao.AppSettingDao
+import com.magav.app.db.dao.CallbackConfigDao
 import com.magav.app.db.dao.JewishHolidayDao
 import com.magav.app.db.dao.LocationDao
 import com.magav.app.db.dao.MessageTemplateDao
@@ -15,6 +16,7 @@ import com.magav.app.db.dao.SmsLogDao
 import com.magav.app.db.dao.UserDao
 import com.magav.app.db.dao.VolunteerDao
 import com.magav.app.db.entity.AppSettingEntity
+import com.magav.app.db.entity.CallbackConfigEntity
 import com.magav.app.db.entity.JewishHolidayEntity
 import com.magav.app.db.entity.LocationEntity
 import com.magav.app.db.entity.MessageTemplateEntity
@@ -36,9 +38,10 @@ import com.magav.app.db.entity.VolunteerEntity
         AppSettingEntity::class,
         MessageTemplateEntity::class,
         LocationEntity::class,
-        JewishHolidayEntity::class
+        JewishHolidayEntity::class,
+        CallbackConfigEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class MagavDatabase : RoomDatabase() {
@@ -52,6 +55,7 @@ abstract class MagavDatabase : RoomDatabase() {
     abstract fun messageTemplateDao(): MessageTemplateDao
     abstract fun locationDao(): LocationDao
     abstract fun jewishHolidayDao(): JewishHolidayDao
+    abstract fun callbackConfigDao(): CallbackConfigDao
 
     companion object {
         val MIGRATION_3_4 = object : Migration(3, 4) {
@@ -129,6 +133,37 @@ abstract class MagavDatabase : RoomDatabase() {
         val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_Shifts_IsCanceled ON Shifts(IsCanceled)")
+            }
+        }
+
+        // v8 → v9: add the CallbackConfig singleton table (auto-callback-to-gate feature).
+        // ADDITIVE ONLY — creates one new table + seeds its single row; touches NO existing
+        // table, so existing user data (volunteers/shifts/logs/configs/holidays/users) is
+        // preserved (ADR-004). The CREATE TABLE column list, NOT NULL flags and DEFAULT
+        // clauses MUST match CallbackConfigEntity exactly or Room's schema-hash check fails
+        // on open (verified via exportSchema). INSERT OR IGNORE seeds the singleton on
+        // upgrade; DatabaseInitializer also seeds it idempotently for fresh installs.
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `CallbackConfig` (
+                        `Id` INTEGER NOT NULL,
+                        `IsActive` INTEGER NOT NULL DEFAULT 0,
+                        `GatePhone` TEXT NOT NULL DEFAULT '',
+                        `FromHour` TEXT NOT NULL DEFAULT '08:00',
+                        `ToHour` TEXT NOT NULL DEFAULT '20:00',
+                        `AllDay` INTEGER NOT NULL DEFAULT 0,
+                        `AllCallers` INTEGER NOT NULL DEFAULT 0,
+                        `UpdatedAt` TEXT,
+                        `UpdatedBy` TEXT,
+                        PRIMARY KEY(`Id`)
+                    )
+                """.trimIndent())
+                db.execSQL(
+                    "INSERT OR IGNORE INTO `CallbackConfig` " +
+                        "(`Id`,`IsActive`,`GatePhone`,`FromHour`,`ToHour`,`AllDay`,`AllCallers`,`UpdatedAt`,`UpdatedBy`) " +
+                        "VALUES (1,0,'','08:00','20:00',0,0,NULL,NULL)"
+                )
             }
         }
     }

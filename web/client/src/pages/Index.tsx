@@ -12,6 +12,7 @@ import { SmsLogSummaryPage } from '@/pages/SmsLogSummaryPage';
 import { SchedulerSettingsPage } from '@/pages/SchedulerSettingsPage';
 import { SchedulerRunLogPage } from '@/pages/SchedulerRunLogPage';
 import { SmsSettingsPage } from '@/pages/SmsSettingsPage';
+import { CallbackSettingsPage } from '@/pages/CallbackSettingsPage';
 import { ShiftsManagementPage } from '@/pages/ShiftsManagementPage';
 import { CanceledShiftsPage } from '@/pages/CanceledShiftsPage';
 import { MessageTemplatesPage } from '@/pages/MessageTemplatesPage';
@@ -84,6 +85,8 @@ const Index = () => {
         return <SchedulerRunLogPage />;
       case 'sms-settings':
         return <SmsSettingsPage />;
+      case 'callback-settings':
+        return <CallbackSettingsPage />;
       case 'shifts-management':
         return <ShiftsManagementPage />;
       case 'canceled-shifts':

@@ -142,6 +142,18 @@ class MainActivity : AppCompatActivity() {
                 needed.add(android.Manifest.permission.POST_NOTIFICATIONS)
             }
         }
+        // Auto-callback-to-gate: dial the gate (CALL_PHONE), reject the ringing call
+        // (ANSWER_PHONE_CALLS), and read the incoming number (READ_CALL_LOG — its own CALL_LOG
+        // dialog). Missing perms make the feature inert (fail-safe), never crash.
+        if (checkSelfPermission(android.Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+            needed.add(android.Manifest.permission.CALL_PHONE)
+        }
+        if (checkSelfPermission(android.Manifest.permission.ANSWER_PHONE_CALLS) != PackageManager.PERMISSION_GRANTED) {
+            needed.add(android.Manifest.permission.ANSWER_PHONE_CALLS)
+        }
+        if (checkSelfPermission(android.Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
+            needed.add(android.Manifest.permission.READ_CALL_LOG)
+        }
         if (needed.isNotEmpty()) {
             permissionLauncher.launch(needed.toTypedArray())
         }

@@ -14,6 +14,11 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Auto-callback-to-gate (Android-only): detect ringing caller, reject + dial the gate. -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+
     <application
         android:name=".MagavApplication"
         android:allowBackup="false"
@@ -52,6 +57,20 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!-- Auto-callback-to-gate: PHONE_STATE is a protected broadcast → exported=true is safe. -->
+        <receiver
+            android:name=".callback.CallbackPhoneStateReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PHONE_STATE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- +20s alarm fire target: explicit-intent only, NOT externally triggerable. -->
+        <receiver
+            android:name=".callback.CallbackAlarmReceiver"
+            android:exported="false" />
 
         <!-- Required for WorkManager setForeground() on API 34+ -->
         <service

@@ -2,6 +2,7 @@ package com.magav.app.db
 
 import at.favre.lib.crypto.bcrypt.BCrypt
 import com.magav.app.db.entity.AppSettingEntity
+import com.magav.app.db.entity.CallbackConfigEntity
 import com.magav.app.db.entity.MessageTemplateEntity
 import com.magav.app.db.entity.SchedulerConfigEntity
 import com.magav.app.db.entity.JewishHolidayEntity
@@ -19,6 +20,16 @@ class DatabaseInitializer(private val database: MagavDatabase) {
         migrateSchedulerConfigs()
         seedAppSettings()
         seedJewishHolidays()
+        seedCallbackConfig()
+    }
+
+    // Idempotent: ensures the CallbackConfig singleton (Id = 1) exists on BOTH fresh AND
+    // upgraded installs. Called unconditionally every startup. insertOrIgnore conflicts on the
+    // PK (Id = 1) → never touches an existing row or admin edits. The MIGRATION_8_9 also seeds
+    // this row on upgrade; this call is the fresh-install path and a belt-and-suspenders backstop.
+    // Android-only feature → no .NET mirror. Mirrors migrateSchedulerConfigs() idempotency.
+    private suspend fun seedCallbackConfig() {
+        database.callbackConfigDao().insertOrIgnore(CallbackConfigEntity())
     }
 
     private suspend fun seedAdminUser() {
