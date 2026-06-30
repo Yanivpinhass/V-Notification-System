@@ -1,5 +1,6 @@
-<!-- DeepInit Horizontal | Component: system-wide
-Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-25b (commit 5124870 — a THIRD web↔android runtime JS bridge window.NativeClip on the device-block page, §4.6) · prior: deepinit-2026-06-25 (commit 970cdcc — Duty Log: html2canvas added to web-client (lazy); a SECOND web↔android runtime JS bridge window.NativeMedia, §4.6)
+<!-- DeepInit C8 update | Run ID: deepinit-2026-06-30 | Generated: 2026-06-30
+Component: system-wide
+Updated: deepinit-2026-06-30 (Auto-Callback-to-Gate — Android-only /api/callback-config endpoint as a NEW accepted three-way-contract divergence [ISS-004], like /api/settings/sms-sim; new android.telecom/android.telephony/AlarmManager platform deps; Room schema 8→9, §4.2/§4.3/§4.7) · prior: deepinit-2026-06-25b (commit 5124870 — a THIRD web↔android runtime JS bridge window.NativeClip on the device-block page, §4.6) · prior: deepinit-2026-06-25 (commit 970cdcc — Duty Log: html2canvas added to web-client (lazy); a SECOND web↔android runtime JS bridge window.NativeMedia, §4.6)
 Input files processed: the 5 component docs + discovery.md
 Generated: 2026-06-18 -->
 
@@ -95,7 +96,7 @@ Afferent coupling (Ca) = number of components that depend ON this one. Efferent 
 | **server** | 1 (`api`) | 1 (`common`) | Middle layer; owns scheduler + auth + repositories. | HIGH |
 | **api** | 0 (compile) / 2 runtime consumers of its *contract* (`web-client`, `android`-mirror) | 2 (`server`, `common`) | Top of the .NET stack; `Program.cs` is the single API hub (§3.1). | HIGH |
 | **web-client** | 0 | runtime: `api` (web) OR `android` Ktor (APK); build-time consumer of `android` (its dist is copied there) | Pure sink at compile time; runtime-couples to whichever backend hosts it. | HIGH |
-| **android** | build-time: consumes `web-client` dist | runtime-mirrors `api` contract; platform APIs (SmsManager/AlarmManager/Room) | Self-contained second implementation of the whole stack. | HIGH |
+| **android** | build-time: consumes `web-client` dist | runtime-mirrors `api` contract; platform APIs (SmsManager/AlarmManager/Room, + new `TelecomManager`/`TelephonyManager` for Auto-Callback-to-Gate, §4.7) | Self-contained second implementation of the whole stack; some endpoints are Android-only native settings with no .NET counterpart (§4.2, ISS-004 accepted). | HIGH |
 
 ### 3.1 Identified hubs (high-fan-in / high-fan-out single files)
 
@@ -127,10 +128,13 @@ Therefore **any change to an endpoint's path, request DTO, response shape, auth 
 
 - Because `web-client` is one build served by BOTH backends, a contract change that lands in only one backend means the SAME UI works against the web deployment and breaks (or silently misbehaves) inside the APK, or vice-versa. The compiler catches none of this; there are no contract tests (§5 cross-references / 0 tests). [HIGH]
 - Concrete live examples of where the three implementations are already kept in lockstep by hand: the file-upload validation pattern (CSRF header + ext + magic bytes + 10MB) appears in api.md BR-api:008, android.md BR-android:015, and is honored client-side by `X-Requested-With` (web-client.md BR-web-client:008); the soft-cancel convention (api.md BR-api:006, android.md WF-android:006, web-client.md IP-014); the "exact id-set match" bulk-scheduler-save rule (api.md BR-api:011 ↔ android.md BR-android:020). Each of these is a triple that must move together. [HIGH]
+- **Accepted ASYMMETRIES (Android-only native-setting endpoints — NOT a divergence defect) [ISS-004 accepted]:** a small number of endpoints exist in the Android Ktor surface ONLY, with NO .NET `Magav.Api` counterpart, because they configure a device-local native capability the web build cannot run. The React page for each is gated to the Android WebView (presence-detected, e.g. `window.NativeMedia`), so it never ships behind the web deployment. Known instances: (1) `GET/PUT /api/settings/sms-sim` — SIM-selection for native SMS (`android/.../api/routes/SettingsRoutes.kt:53,68`); (2) **NEW — `GET/PUT /api/callback-config`** — the Auto-Callback-to-Gate setting, wired only in Android `KtorServer.kt:87` (`callbackConfigRoutes(database)`, right after `settingsRoutes`, before the static catch-all) and served by `android/.../api/routes/CallbackConfigRoutes.kt`; consumed by the Android-gated React page `web/client/src/pages/CallbackSettingsPage.tsx` via `web/client/src/services/callbackConfigService.ts`. There is intentionally NO `Program.cs` handler and NO web-served implementation. This is the SAME accepted "Android-only native setting" pattern as `/api/settings/sms-sim` — **accepted by design, not a contract drift to reconcile.** [HIGH]
 
 ### 4.3 Schema change → dual-schema cascade (two independent DDL definitions)
 
-The DB schema is defined **independently twice**: .NET `DbInitializer.cs` CREATE TABLE/migrations (server.md WF-server:005) and Android Room `@Entity` + migrations to `@Database(version=8)` (android.md BR-android:001-003). A column added on one side does NOT propagate to the other; on Android a botched entity change without the version-bump + migration triple **silently wipes the entire device DB** (CLAUDE.md 🚨; android.md BR-android:001-002). See `data-layer.md` §3 for the actual code-vs-code drift already present. [HIGH]
+The DB schema is defined **independently twice**: .NET `DbInitializer.cs` CREATE TABLE/migrations (server.md WF-server:005) and Android Room `@Entity` + migrations to `@Database(version=9)` (`android/.../db/MagavDatabase.kt:44`; android.md BR-android:001-003). A column added on one side does NOT propagate to the other; on Android a botched entity change without the version-bump + migration triple **silently wipes the entire device DB** (CLAUDE.md 🚨; android.md BR-android:001-002). See `data-layer.md` §3 for the actual code-vs-code drift already present. [HIGH]
+
+**Schema is now version 9 (was 8)** with the new `CallbackConfigEntity` as the 11th `@Entity` (`MagavDatabase.kt:42`). `MIGRATION_8_9` (`MagavDatabase.kt:146-168`) is a worked second example of the full migration ritual done CORRECTLY: it is **additive-only** (`CREATE TABLE IF NOT EXISTS CallbackConfig` + `INSERT OR IGNORE` the singleton row; touches NO existing table, so existing user data is preserved), the migration's column list + `NOT NULL` + `DEFAULT` clauses match the entity exactly (Room schema-hash verified via `exportSchema`), and it is registered in BOTH `addMigrations(...)` sites in `MagavApplication.kt` (initial build + SQLCipher-recovery rebuild) with `fallbackToDestructiveMigration` still ABSENT. Belt-and-suspenders: `DatabaseInitializer.seedCallbackConfig()` also seeds the singleton idempotently on the fresh-install path. NOTE: because this is an Android-only table backing an Android-only setting, there is NO matching .NET `DbInitializer.cs` DDL — the dual-schema rule does not apply here (one side intentionally has no counterpart, mirroring the §4.2 endpoint asymmetry). [HIGH]
 
 ### 4.4 Background-service / scheduler change → behavioral mirror
 
@@ -140,6 +144,20 @@ The SMS-scheduler semantics (DayGroup = send-day, holiday-aware effective group,
 
 There are now **three** `window.*` JS↔native bridges the shared React build consumes only when running inside the Android WebView: `NativeAuth` (session persistence — `authService` ↔ `auth/NativeAuthBridge.kt`); **`NativeMedia`** (Duty Log save/share — `exportDutyLogPng` ↔ `media/MediaBridge.kt`), new in `970cdcc`; and **`NativeClip`** (`copyDeviceId()` on the device-block page — `MainActivity.buildDeviceBlockHtml` ↔ `license/DeviceClipboardBridge.kt`), new in `5124870` — all registered at `MainActivity.kt:115-119`. Each is a **runtime coupling with no code edge** in the structural graph, so the compiler catches nothing: changing a JS method name on the React side OR a Kotlin `@JavascriptInterface` signature on the Android side silently breaks the other. The React side always feature-detects (`if (window.NativeMedia)`) so the plain-web deployment (bridge absent) degrades to `<a download>`. Additional Android-only guard: R8 strips un-kept `@JavascriptInterface` methods, so `proguard-rules.pro` carries a generic keep — forgetting it would no-op the bridge in a release build only. [HIGH] (web-client.md IP-023/024; android.md IP-013/015; decisions.md KL-integration:003/006)
 
+### 4.7 Auto-Callback-to-Gate — new Android platform dependencies (Android-only, no .NET / no cross-component cascade)
+
+The `callback/` package (`CallbackLogic` + `CallbackPhoneStateReceiver` + `CallbackAlarmReceiver`) adds NEW Android-platform API dependencies that exist ONLY in the android component — the web build cannot reference them, and .NET (`common/server/api`) is UNCHANGED. They are leaf platform edges (Android → OS), not internal-component edges, so nothing else in the system cascades from them. [HIGH]
+
+| New platform dependency | Used for | Permission | Evidence | Certainty |
+|---|---|---|---|---|
+| `android.telecom.TelecomManager` — `endCall()` / `placeCall(tel:…, EXTRA_PHONE_ACCOUNT_HANDLE)` | reject the ringing call, then auto-dial the Gate | `ANSWER_PHONE_CALLS` (reject) + `CALL_PHONE` (dial) | `android/.../callback/CallbackLogic.kt:13,159,179,181` | HIGH |
+| `android.telephony.TelephonyManager` — `callState` (fire-time RINGING re-check) + `createForSubscriptionId(subId).phoneAccountHandle` | the SINGLE authoritative gate is `callState==RINGING`; resolve the `PhoneAccountHandle` for the SMS-selected SIM | (read state) | `CallbackLogic.kt:14,209-211`; fire receiver re-check in `callback/CallbackAlarmReceiver.kt` | HIGH |
+| `AlarmManager` exact one-shot — `setExactAndAllowWhileIdle(ELAPSED_REALTIME_WAKEUP, now+20s)` | the 20s unanswered wait; a single live alarm per ringing call (fixed `requestCode=770042`, `FLAG_IMMUTABLE`) | `SCHEDULE_EXACT_ALARM` (canScheduleExactAlarms guard) | `CallbackLogic.kt:34,110,116` | HIGH |
+
+- **Reuses, does NOT duplicate, the existing alarm pattern.** The one-shot exact alarm follows the same `AlarmScheduler` / `SmsAlarmReceiver` mechanism the SMS scheduler already uses (manifest `BroadcastReceiver` + exact `AlarmManager`), and the Gate call **reuses the existing SMS SIM setting** `AppSettings 'sms_sim_subscription_id'` to pick the dialing SIM (`CallbackLogic.kt:175`). No new `AppSettings` key, no new SQL — eligibility joins the EXISTING `shiftDao().getByDateRange(today-1, today+1)` (already `IsCanceled=0`) against `volunteerDao().getAll()` in Kotlin, the same join shape as `SmsReminderService`. [HIGH]
+- **Decoupled from the SMS subsystem.** Despite sharing the alarm/SIM patterns, the feature touches NO SMS file and NOT `MagavServerService` — `CallbackLogic.kt:22-30` (file header) states it is fully decoupled. So a change to the SMS scheduler/worker does NOT cascade here, and vice-versa; the only shared surface is the read-only `sms_sim_subscription_id` setting. [HIGH] [ADR-021]
+- New `MainActivity.requestPermissions()` entries (`CALL_PHONE`/`ANSWER_PHONE_CALLS`/`READ_CALL_LOG`) reuse the existing `permissionLauncher`; missing perms ⇒ feature inert (fail-safe), never a crash. The fire receiver `CallbackAlarmReceiver` is `exported=false`; the phone-state receiver listens on the protected `PHONE_STATE` broadcast (exported-safe). [HIGH]
+
 ### 4.5 Cascade summary
 
 | Change at | Compile-time blast radius | Convention/contract obligation (NOT compiler-checked) |
@@ -147,7 +165,8 @@ There are now **three** `window.*` JS↔native bridges the shared React build co
 | `common` Model / `MagavConstants` / `DbHelper` | `server` + `api` | Android `Constants.kt` + Room entity; client TS types |
 | `server` service signature | `api` | Android service equivalent |
 | `api` endpoint contract | (none — it's the top) | **Android Ktor route + web-client service** (three-way) |
-| DB schema | `server` DbInitializer + repos | Android Room entity+migration (data-loss risk) |
+| Android-only native-setting endpoint (`/api/settings/sms-sim`, `/api/callback-config`) | (none) | Android Ktor route + WebView-gated web-client page ONLY — intentionally NO .NET handler (§4.2, ISS-004 accepted asymmetry) |
+| DB schema | `server` DbInitializer + repos | Android Room entity+migration (data-loss risk); Android-only tables (e.g. `CallbackConfig`, schema v9) have NO .NET DDL counterpart |
 | Scheduler/window logic | within `server` | Android worker + client `schedulerPreview.ts` |
 
 ---

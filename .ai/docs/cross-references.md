@@ -1,7 +1,7 @@
-<!-- DeepInit Horizontal | Component: system-wide
-Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-25b (through 778a2dd — + WA-009 Android device-allowlist keystore-coupling caveat; + window.NativeClip, the THIRD WebView JS bridge, in technical-dependencies §4.6; ADR-020) · prior: deepinit-2026-06-25 (commit 970cdcc — Duty Log: tech-debt rows 21 (release-R8 unvalidated) + 22 (cmdk unused); the window.NativeMedia bridge in technical-dependencies §4.6) · prior: deepinit-2026-06-24 (commit 2989b01)
+<!-- DeepInit C8 update | Run ID: deepinit-2026-06-30 | Generated: 2026-06-30
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-30 (Auto-Callback-to-Gate, Android-only — CallbackConfig 11th @Entity / Room v9; the GET/PUT /api/callback-config Android-only contract divergence under ISS-004; ADR-021 ↔ WF-004 ↔ ISS-010; the bare `db/` .gitignore rule ignoring the new db-package source files) · prior: deepinit-2026-06-25b (through 778a2dd — + WA-009 Android device-allowlist keystore-coupling caveat; + window.NativeClip, the THIRD WebView JS bridge, in technical-dependencies §4.6; ADR-020) · prior: deepinit-2026-06-25 (commit 970cdcc — Duty Log: tech-debt rows 21 (release-R8 unvalidated) + 22 (cmdk unused); the window.NativeMedia bridge in technical-dependencies §4.6) · prior: deepinit-2026-06-24 (commit 2989b01)
 Input files processed: the 5 component docs + discovery.md
-Generated: 2026-06-18 · Updated: 2026-06-25 -->
+Generated: 2026-06-18 · Updated: 2026-06-30 -->
 
 # Cross-References — Magav V-Notification-System
 
@@ -61,6 +61,18 @@ Each row links a business rule (from the component docs) to the workflow(s) that
 | BR-common:005-007,014 | DbHelper write safety (≤1-row onlyFields update, PK required, delete-count guard, PK declared) | WF-common:002-004 | HIGH |
 | BR-common:001-003 | Canonical constant value sets | (data invariant; consumed by all SMS workflows) | HIGH |
 
+### 1.4 Auto-callback-to-gate (Android-only — feature 2026-06-30)
+
+Android-native feature; **no .NET/web-served counterpart** (the React page is gated to the Android WebView). Horizontal id **WF-004** ↔ component `WF-android:008`. See §4.5 for the end-to-end trace and ADR-021 (decisions.md) for the one-shot-alarm rationale.
+
+| BR | Rule (short) | Enforced by workflow(s) | Certainty |
+|---|---|---|---|
+| BR-android:022 / BR-web-client:020 | Callback eligibility: config `IsActive==1` + in `[from,to]`/All-day window; `AllCallers==1` bypasses the WHO filter, else last-9-digit match vs today/yesterday volunteers (`IsCanceled=0`). **No `ApproveToReceiveSms` gating** | WF-android:008 / WF-web-client:009 (client mirror) | HIGH |
+| BR-android:023 | Fire gate is a SINGLE +20s fire-time `callState==CALL_STATE_RINGING` re-check (answered⇒OFFHOOK, hung-up⇒IDLE, busy⇒OFFHOOK; do-nothing-while-busy by design) → reject (`ANSWER_PHONE_CALLS`) + dial Gate (`CALL_PHONE`) on the SMS-selected SIM | WF-android:008 | HIGH |
+| BR-android:024 | `CallbackConfig` is a single-row singleton (`Id=1`), seeded idempotently by BOTH `MIGRATION_8_9` and `DatabaseInitializer.seedCallbackConfig()`; every `@ColumnInfo(defaultValue=…)` MUST match the migration `DEFAULT` clauses (ADR-004 schema-hash) | WF-android:001 (init/seed) | HIGH |
+| BR-web-client:019 | Callback settings page is ANDROID-ONLY — gated on `window.NativeMedia` presence; web build shows a Hebrew "Android-app-only" notice and makes ZERO API calls | WF-web-client:009 | HIGH |
+| BR-web-client:021 | `callbackConfigService` (extends `BaseApiClient`) targets `GET/PUT /callback-config` — an Android-Ktor-ONLY endpoint (ISS-004 accepted divergence; same pattern as `/settings/sms-sim`) | WF-web-client:009 | HIGH |
+
 ---
 
 ## 2. Coverage Gaps
@@ -81,6 +93,7 @@ CLAUDE.md documents a public route `/sms-approval/:accessKey` → `VolunteerSmsA
 - **`Manual` reminder type** is in the canonical constants (BR-common:001) and CLAUDE.md, but server.md notes no `Manual` send originates in the `server` component — it is driven from the API layer (api.md WF-api:009 maps templateId→Manual). Enforced, but only at the api edge. [MEDIUM]
 - **`WeekdayAdvance`** is actively scheduled (server.md WF-server:007; android.md WF-android:002) and in `MagavConstants` — now also listed in the regenerated CLAUDE.md ReminderTypes (the earlier doc-lag is closed). [HIGH]
 - **Volunteer-identity rules don't cross platforms:** BR-server:016 (one-way approval keyed on `InternalIdHash`) has no Android column equivalent (see `data-layer.md` §3 D-1/D-3) — the rule is enforced on .NET but the underlying schema can't host it on Android. [HIGH]
+- **Auto-callback config is an Android-only slice of the triplicated contract (ISS-004 accepted divergence):** `GET/PUT /api/callback-config` exists in the **Android Ktor surface ONLY** (`api/routes/CallbackConfigRoutes.kt`) — there is NO .NET `Magav.Api` counterpart and NO web-served implementation; the React `CallbackSettingsPage` is gated to the Android WebView (`window.NativeMedia`). This is the SAME accepted "Android-only native setting" pattern as the SIM-selection endpoint (`/api/settings/sms-sim`), **not a new defect** — a reviewer scanning for the usual three-way mirror will (correctly) find only one backend. Recorded in `issues.md` ISS-004's accepted-divergence list. [HIGH]
 
 ---
 
@@ -112,6 +125,7 @@ Pulled from §10 of each component doc, ranked by blast radius / severity.
 | 20 | **Crypto smells (common):** `Rfc2898DeriveBytes` default iteration count + legacy `Rijndael`; hardcoded `PasswordKey` literal used to decrypt connection-string passwords. | common | MEDIUM | common.md §10 |
 | 21 | **`assembleRelease` (R8) never validated at runtime** — release builds were never run before `970cdcc`; the first one needed POI `-dontwarn` rules and there is no release `signingConfig` (release APK unsigned). R8 build now passes + keeps `@JavascriptInterface` names, but POI/SQLCipher/Ktor under full minify is untested on a device. The team ships debug APKs. | android | MEDIUM | android.md §10; decisions.md KL-mistake:013 |
 | 22 | **`cmdk` + `components/ui/command.tsx` installed but unused** — added (`f432dce`) for a Duty Log combobox that ended up using Radix `Select`; dead dependency. | web-client | LOW | web-client.md §10 |
+| 23 | **[ISS-010 — new/open] Root `.gitignore` `db/` rule git-IGNORES the new Android db-package source files.** Line 41 (under "# Database & Sensitive Data") is a **bare, unanchored `db/`** that greedily matches the Android source package `android/app/src/main/java/com/magav/app/db/`. Existing files there are tracked only because they predate the rule (gitignore never un-tracks); the TWO new files `db/entity/CallbackConfigEntity.kt` + `db/dao/CallbackConfigDao.kt` are git-IGNORED (verified `git check-ignore -v` → `.gitignore:41:db/`; `git ls-files` returns nothing) — a plain `git add` silently skips them, breaking a fresh-checkout build/commit. **Running build is unaffected** (compiler reads disk). Fix: `git add -f`, or anchor the rule (`/db/`) / scope it to the SQLite data dir. | android (repo-hygiene) | MEDIUM | issues.md ISS-010; android.md §10; `.gitignore:41` |
 
 ---
 
@@ -152,9 +166,25 @@ Pulled from §10 of each component doc, ranked by blast radius / severity.
 | Client login + token mgmt | web-client | WF-web-client:001,002,004 | BR-web-client:001,002,012 | `web/client/src/services/authService.ts:42-122`; `services/api/BaseApiClient.ts:44-68` |
 | Android equivalent | android | WF-android:004 | BR-android:013,014 | `android/.../service/AuthService.kt:24-103`; `api/auth/JwtConfig.kt` |
 
+### 4.5 Auto-callback-to-gate (Android-only — feature 2026-06-30)
+
+Event-driven, fully Android-native (no .NET/web build can run it). Horizontal **WF-004** ↔ `WF-android:008`; rationale in **ADR-021** (decisions.md — one event + ONE transient +20s exact alarm + ONE fire-time `callState` re-check, no state machine/epoch/wakelock). Reuses the SMS subsystem's `AlarmManager` exact-alarm pattern (cf. `scheduler/AlarmScheduler.kt` / `scheduler/SmsAlarmReceiver.kt`) but is **fully decoupled** — its own `callback/` package, own fixed alarm requestCode `770042`, touches NO SMS file. SIM for the gate call reuses the SMS SIM setting (`AppSettings 'sms_sim_subscription_id'`).
+
+| Layer | Component | Workflow | Rule(s) | file:line |
+|---|---|---|---|---|
+| Ring → eligibility → arm | android | WF-android:008 | BR-android:022 | `android/.../callback/CallbackPhoneStateReceiver.kt:24-39`; `callback/CallbackLogic.kt:70-121` |
+| +20s fire → reject + dial | android | WF-android:008 | BR-android:023 | `android/.../callback/CallbackAlarmReceiver.kt:20-37`; `callback/CallbackLogic.kt:141-192` |
+| Config singleton + seed | android | WF-android:001/008 | BR-android:024 | `android/.../db/entity/CallbackConfigEntity.kt:15-45`; `db/dao/CallbackConfigDao.kt:13-22`; `db/DatabaseInitializer.kt:23,31-33`; `db/MagavDatabase.kt:44,146-168` |
+| Config endpoint (Android-only) | android | (Ktor route) | BR-web-client:021 | `android/.../api/routes/CallbackConfigRoutes.kt:47-110`; wired `api/KtorServer.kt:87` |
+| Permissions + manifest receivers | android | WF-android:008 | BR-android:023 | `android/.../AndroidManifest.xml:18-20,63,72`; `MainActivity.kt:145-159` |
+| Settings page (android-gated) + service | web-client | WF-web-client:009 | BR-web-client:019,020,021 | `web/client/src/pages/CallbackSettingsPage.tsx:18-19,90-105`; `services/callbackConfigService.ts:19-25`; menu `components/layout/menuItems.ts:64`; route `pages/Index.tsx:88-89` |
+
+`CallbackConfig` is the **11th Room `@Entity`** and the schema is now **version 9** (was 8); the additive `MIGRATION_8_9` is the latest correct example of the full migration ritual (dual `addMigrations` registration + entity↔migration `DEFAULT` agreement) — see `data-layer.md` (CallbackConfig table) and the Room data-loss gotcha (§3 row 2 / ADR-004). [HIGH]
+
 ---
 
 ### Summary
 - BR→WF maps cover SMS/scheduler, auth, and import/lifecycle across all five components; every core BR has an enforcing workflow.
 - Coverage gaps: **0 tests system-wide** remains the dominant gap. The public SMS-approval page is now wired (`2989b01`) — that orphan gap is closed.
 - **2026-06-24 `--update`:** rows 8 (swallowed-exception dedup) and 10 (`Results.Problem` deviation) are RESOLVED; row 13 (dead code) shrank; row 1 narrowed to the persisting hardcoded `PasswordKey` (the committed-`appsettings.json` secrets were externalized — ADR-017). The top standing concerns are now the Room data-loss discipline, the five god objects (Program.cs ~2250 / ShiftsManagementPage 1135 / DbHelper 960 / ShiftRoutes 907 / DbInitializer 859), the hardcoded `PasswordKey`, the Volunteers code-vs-code drift (accepted — ADR-016), and the vendored-DbHelper / fresh-DB-only-seeding gotchas.
+- **2026-06-30 `--update` (Auto-Callback-to-Gate, Android-only):** added §1.4 (callback BR→WF map) and §4.5 (end-to-end trace); ADR-021 ↔ WF-004 ↔ `WF-android:008` linked. The `GET/PUT /api/callback-config` endpoint is a new **ISS-004 accepted divergence** (Android-Ktor-only; same pattern as `/api/settings/sms-sim`) — noted in §2.3. New tech-debt **row 23 = ISS-010** (bare `db/` `.gitignore` rule ignores the new `CallbackConfigEntity.kt`/`CallbackConfigDao.kt` source files; verified via `git check-ignore` + empty `git ls-files`). `CallbackConfig` is the 11th Room `@Entity`; schema is now v9 with additive `MIGRATION_8_9` (the latest correct full-ritual example, ADR-004).

@@ -1,5 +1,5 @@
 <!-- DeepInit Horizontal | Component: system-wide
-Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-25b (commit 778a2dd — UC-009 Duty Log editable-hours preview; commit 5124870 — UC-010 Android device-allowlist launch gate) · prior: deepinit-2026-06-25 (commit 970cdcc — UC-009 Duty Log client-only PNG report added) · prior: deepinit-2026-06-24 (commit 2989b01; UC-006 route wired, WA-008 dedup tightened)
+DeepInit C8 update | Run ID: deepinit-2026-06-30 | Generated: 2026-06-30 — WF-004 Android-only auto-callback-to-gate added · prior: deepinit-2026-06-25b (commit 778a2dd — UC-009 Duty Log editable-hours preview; commit 5124870 — UC-010 Android device-allowlist launch gate) · prior: deepinit-2026-06-25 (commit 970cdcc — UC-009 Duty Log client-only PNG report added) · prior: deepinit-2026-06-24 (commit 2989b01; UC-006 route wired, WA-008 dedup tightened)
 Input files processed: the 5 component docs + discovery.md
 Generated: 2026-06-18 -->
 
@@ -157,6 +157,23 @@ Both variants converge on the SAME domain rules: DR-002/003 (day-group gate), DR
 11. `refresh failure → authService.logout() clears localStorage; BaseApiClient reloads to login` → `authService.ts:127`, `BaseApiClient.ts:63-68` *(web-client)*
 (Android adds: stale-session biometric prompt before silent refresh — `MainActivity.handleSessionAwareStartup()`, `auth/BiometricAuthHelper.kt`.) [HIGH]
 
+### WF-004 — Auto-callback-to-gate on an unanswered eligible call — ANDROID-ONLY
+
+Fully Android-native (cannot run in the web build); event-driven, ~zero idle battery cost. On the on-duty patrol phone, an ELIGIBLE incoming call that rings UNANSWERED for 20s is rejected and the configured "Gate" number is auto-dialed. The 20s wait is a SINGLE one-shot exact alarm that exists only during a live eligible ringing call.
+
+1. `action: incoming call → ACTION_PHONE_STATE_CHANGED with EXTRA_STATE=RINGING` → `callback/CallbackPhoneStateReceiver.kt:19-24` (manifest receiver, exported=true; PHONE_STATE is a protected broadcast) *(android, system→app)*
+2. `read EXTRA_INCOMING_NUMBER (needs READ_CALL_LOG; withheld/empty ⇒ fail-safe skip); goAsync() + GlobalScope.IO` → `CallbackPhoneStateReceiver.kt:25-32` *(android)*
+3. `CallbackLogic.isEligible(number) — cheap-first gate: DB ready → config.isActive==1 → isWithinWindow(allDay,from,to, now Asia/Jerusalem)` → `callback/CallbackLogic.kt:70-78` (`callbackConfigDao().get()`) *(android→Room)*
+4. **All-callers bypass:** `if config.allCallers==1 RETURN TRUE — ANY incoming call qualifies; the WHO filter (and the number itself) is skipped, the Active toggle + window/All-day WHEN filter still applied` → `CallbackLogic.kt:80-81` *(android)*
+5. `else WHO filter: empty/withheld number ⇒ false (no call-log recovery); else last-9-digit national key match against today/yesterday volunteers` → `CallbackLogic.kt:83-99` (`shiftDao().getByDateRange(today-1, today+1)` already `IsCanceled=0` ⋈ `volunteerDao().getAll()` Kotlin join — same join as SmsReminderService; NO ApproveToReceiveSms gating) *(android→Room)*
+6. `if eligible → armAlarm(): single one-shot setExactAndAllowWhileIdle(ELAPSED_REALTIME_WAKEUP, +20s), fixed requestCode 770042, FLAG_IMMUTABLE; no-op if exact alarms not permitted` → `CallbackLogic.kt:32-39 (RINGING branch)`, `CallbackLogic.armAlarm CallbackLogic.kt:107-121` *(android→AlarmManager)*
+7. `(optimization) OFFHOOK/IDLE before fire ⇒ cancelAlarm() — battery only; correctness rests on the fire-time re-check, NOT this cancel` → `CallbackPhoneStateReceiver.kt:41-44`, `CallbackLogic.cancelAlarm CallbackLogic.kt:124-135` *(android)*
+8. `+20s: alarm fires → CallbackAlarmReceiver (manifest, exported=false — explicit-intent target, not externally triggerable); goAsync() + GlobalScope.IO; if DB ready AND tm.callState==CALL_STATE_RINGING` → `callback/CallbackAlarmReceiver.kt:20-28` — **the SINGLE authoritative gate** (answered⇒OFFHOOK, hung-up⇒IDLE, busy-line⇒OFFHOOK; only still-ringing passes → no state machine/epoch/wakelock) *(android)*
+9. **Do-nothing-while-busy branch:** a call-waiting call arriving while the phone is already OFFHOOK is NEVER dropped and the gate is NOT dialed — the fire-time gate requires `callState==RINGING`, so an OFFHOOK device fails the check and returns silently. By design. → `CallbackAlarmReceiver.kt:27-28` *(android)*
+10. `still-ringing ⇒ rejectAndDialGate(): read gate from config, sanitize to digits/+; TelecomManager.endCall() [ANSWER_PHONE_CALLS] → delay(700) → placeCall(tel:gate) with EXTRA_PHONE_ACCOUNT_HANDLE from the SMS SIM (sms_sim_subscription_id) [CALL_PHONE]` → `CallbackAlarmReceiver.kt:29`, `CallbackLogic.rejectAndDialGate CallbackLogic.kt:141-192` (endCall `:159`, placeCall `:181`; each native call try/catch, perms re-checked, whole thing fail-safe — missing perms ⇒ inert, never crash) *(android→TelecomManager)*
+
+Settings come from the Android-only `GET/PUT /api/callback-config` Ktor surface — there is NO .NET `Magav.Api` counterpart and the React `CallbackSettingsPage` is gated to the Android WebView (`window.NativeMedia` presence), an accepted "Android-only native setting" divergence of the triplicated contract (ISS-004), same pattern as `/api/settings/sms-sim`. SIM reuses the SMS `sms_sim_subscription_id` AppSetting. Decoupled from the SMS subsystem (touches no SMS file). [HIGH] (`android/.../api/routes/CallbackConfigRoutes.kt`; `android/.../api/KtorServer.kt`)
+
 ---
 
 ## 4. User Stories (`US-NNN`) + BDD
@@ -168,6 +185,7 @@ Both variants converge on the SAME domain rules: DR-002/003 (day-group gate), DR
 - **US-005:** As a volunteer, I want to opt in to SMS reminders via a link, using only my personal id, without an account. (UC-006 — server + client route both wired as of `2989b01`)
 - **US-006:** As any user, I want to stay logged in across short token lifetimes without re-typing my password. (UC-007)
 - **US-007:** As an admin, I want to tune scheduler timing without accidentally breaking the send semantics (reminder type / day group are protected). (UC-008)
+- **US-008:** As the on-duty patrol phone, I want an eligible incoming call that goes unanswered for 20s to be rejected and the gate to be auto-dialed — but only inside the active window, and never disturbing a call I'm already on. (WF-004, Android-only)
 
 **BDD — key journeys**
 
@@ -212,6 +230,19 @@ Scenario: Soft-cancel preserves the record
   # Program.cs:870-940 ; DR-005
 ```
 
+```gherkin
+Scenario: Unanswered eligible call auto-dials the gate; a busy line is left alone
+  Given the Android callback feature is Active and now is inside the [from,to] window (Asia/Jerusalem)
+    And the caller's number matches a volunteer on a shift dated today or yesterday
+        (OR the "All callers" toggle is ON, in which case any number qualifies)
+  When the incoming call RINGS unanswered for 20s
+  Then the one-shot +20s alarm fires, finds callState still RINGING,
+       rejects the call (TelecomManager.endCall) and dials the configured Gate (placeCall)
+  But given the phone is already on a call (OFFHOOK) when an eligible call-waiting call arrives
+  Then at fire time callState is OFFHOOK, the gate is NOT dialed and the active call is undisturbed
+  # CallbackLogic.kt:70-104,141-192 ; CallbackAlarmReceiver.kt:20-29 ; WA-010
+```
+
 ---
 
 ## 5. Workarounds (`WA-NNN`)
@@ -227,9 +258,10 @@ Scenario: Soft-cancel preserves the record
 | **WA-007** | **Native session bridge `window.NativeAuth`** — the React layer notifies `onLoginSuccess`/`onTokenRefresh`/`onLogout` (guarded `if present`); Android persists the JWT into EncryptedSharedPreferences and re-injects on silent refresh. | The WebView's localStorage session must stay in sync with the native app's persisted/biometric-gated session so users aren't re-prompted every launch. | `web/client/src/services/authService.ts:74-79,120-122,152-154`; `android/.../auth/NativeAuthBridge.kt` | HIGH |
 | **WA-008** | **`SchedulerRunLogRepository.InsertAsync` per-run dedup catch** swallows **only** the SQLite UNIQUE violation as "already ran"; any other DB error is logged distinctly and returned-null **without rethrowing** (a rethrow would re-run the batch → duplicate SMS). | Implements the per-run dedup cheaply while no longer masking real DB errors as dedup hits. The Android mirror (`SmsReminderService.kt`) catches `SQLiteConstraintException` only, identically. (Tightened in `2989b01`; was a bare catch-all — ISS-006 resolved.) | `web/server/Magav.Server/Database/Repositories/SchedulerRunLogRepository.cs:25-44`; `android/.../service/SmsReminderService.kt:188-200` | HIGH |
 | **WA-009** | **Android device-allowlist is fail-CLOSED + keystore-coupled.** A hardcoded `Settings.Secure.ANDROID_ID` set gates app launch; an empty set or an unreadable id blocks ALL devices, and ANDROID_ID is scoped to the APK signing key so a regenerated/release keystore re-locks everyone. | Restricts the distributed APK to approved devices without a server round-trip; fail-closed is the safe default for a gate, but the keystore coupling is a real lockout footgun → always build the distributed APK on the same machine + back up the keystore (intentional + self-documented in `DeviceAllowlist.kt`; tracked as a caveat, not an issue). | `android/.../license/DeviceAllowlist.kt:11-41`; `android/.../MainActivity.kt:191-194`; CLAUDE.md | HIGH |
+| **WA-010** | **Auto-callback uses ONE fire-time `callState==RINGING` re-check as the sole authoritative gate** — no per-call state machine, epoch token, or wakelock. A single one-shot +20s exact alarm (fixed requestCode `770042`) is armed on a RINGING eligible call; at fire it dials the gate only if still RINGING. OFFHOOK/IDLE cancel is a battery optimization, not correctness. | Encodes the 20s-unanswered condition without tracking call lifecycle in app state: answered⇒OFFHOOK, hung-up⇒IDLE, busy/call-waiting⇒OFFHOOK all fail the re-check, so only a genuinely still-ringing call passes. This also yields the do-nothing-while-busy guarantee for free (an active call is OFFHOOK at fire). Every entry point is fail-safe (missing perms / exact-alarm denial / any exception ⇒ does nothing). | `android/.../callback/CallbackAlarmReceiver.kt:20-29`; `android/.../callback/CallbackPhoneStateReceiver.kt:24-44`; `android/.../callback/CallbackLogic.kt:107-135` | HIGH |
 
 ---
 
 ### Summary
-- **Captured:** 10 use cases (UC-001–010; UC-009 Duty Log incl. editable-hours preview, UC-010 Android device-allowlist launch gate), 3 end-to-end traces (WF-001–003, WF-001 with both web+android variants), 7 user stories, 9 workarounds (WA-001–009).
+- **Captured:** 10 use cases (UC-001–010; UC-009 Duty Log incl. editable-hours preview, UC-010 Android device-allowlist launch gate), 4 end-to-end traces (WF-001–004; WF-001 with both web+android variants, WF-004 the Android-only auto-callback-to-gate), 8 user stories, 10 workarounds (WA-001–010).
 - **Single most important cross-component workflow risk:** the SMS-reminder send path (WF-001) is implemented **twice and independently** (web `BackgroundService` vs Android `AlarmManager`+Worker), governed by subtle shared rules (DayGroup=send-day, holiday ladder, two-tier dedup, WeekdayAdvance half-open window) that must stay byte-identical across .NET, Kotlin, and the client preview with no shared code or tests — so a fix or rule change applied to one backend that is forgotten on the other will silently mis-send or fail to send reminders. (The new `tools/parity-lint.mjs` guards only the string value-sets, not the send-path logic.) The former secondary risk — the unwired public SMS-approval client route (UC-006) — was **resolved** in `2989b01` (route wired at `App.tsx:25`).

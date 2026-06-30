@@ -1,7 +1,6 @@
-<!-- DeepInit Issues (C-ISSUE ledger) | Component: system-wide
-Run ID: deepinit-2026-06-25b (consolidating --update through 778a2dd) · prior: deepinit-2026-06-25 · prior: deepinit-2026-06-24
-Input files processed: changed components (web-client, android) + horizontal docs + decisions.md + targeted code re-reads (Duty Log editable-hours 778a2dd, Android device-allowlist gate 5124870)
-Generated: 2026-06-25 -->
+<!-- DeepInit C8 update | Run ID: deepinit-2026-06-30 | Generated: 2026-06-30 · prior: deepinit-2026-06-25b (consolidating --update through 778a2dd) · prior: deepinit-2026-06-25 · prior: deepinit-2026-06-24
+Input files processed: changed components (android, web-client) + horizontal docs + targeted code re-reads (Auto-Callback-to-Gate feature; .gitignore db/ rule + new db-package source files; git check-ignore verification)
+Generated: 2026-06-30 -->
 
 # Issue Ledger — Magav V-Notification-System
 
@@ -18,6 +17,10 @@ Generated: 2026-06-25 -->
 
 **Lifecycle update (2026-06-25b `--update`, consolidating through `778a2dd`).** New source since the prior baseline: the Duty Log **editable-hours preview** (`778a2dd`, web-client) and the **Android device-allowlist launch gate** (`5124870`). Both are additive — no DB write, no endpoint/contract change, no secret, no Room `@Entity`/`@Database` change — so **NO new IF-* finding** and no baseline match-key change. **NEW: 0 · RESOLVED: 0 · REGRESSED: 0.** ISS-007 re-verified still OPEN (`common` untouched). The editable-hours export-correctness concern was fixed in-commit (one `effectiveData` feeds report + export), not a shipped defect. The device-allowlist is **fail-CLOSED and keystore-coupled** (an empty set or a regenerated/release keystore locks out every device) — a real operational footgun, but **intentional and self-documented** (`DeviceAllowlist.kt` header), so it is recorded as ADR-020 + WA-009 + a lean-tier gotcha, **not** a formal IF-* issue (AF-1). This run also reconciled the prior partial refresh (state files were stuck at `2989b01`).
 
+**Lifecycle update (2026-06-30 `--update`, "Auto-Callback-to-Gate" feature).** Dirty: `android`, `web-client`; .NET (`common`/`server`/`api`) UNCHANGED. The feature adds an Android-native auto-callback (reject an unanswered eligible ringing call after 20s, auto-dial a configured Gate number) with a new `CallbackConfig` Room `@Entity` (schema **8 → 9**, additive `MIGRATION_8_9`) and an Android-only `GET/PUT /api/callback-config` Ktor endpoint. **NEW: 1 (ISS-010) · RESOLVED: 0 · REGRESSED: 0.** ISS-007 re-verified still OPEN (`common` untouched). ISS-003/ISS-004 still accepted-by-design — the new `/api/callback-config` endpoint is appended to ISS-004's accepted Android-only-divergence list (same pattern as `/api/settings/sms-sim`; accepted by design, no new defect). The Room version bump was done with the full migration ritual correctly (both `addMigrations(...)` sites + entity/migration default agreement; `MIGRATION_8_9` is additive-only, touches no existing table) so it raises **no** ADR-004 data-wipe finding. **NEW finding: ISS-010** — the root `.gitignore:41` bare `db/` rule git-ignores the two NEW Android db-package source files (verified via `git check-ignore -v`); grounded repo-hygiene issue, **not auto-accepted** (new findings never are).
+
+**Open after this run: 2 (ISS-007 narrowed + ISS-010 new) + 2 accepted-by-design (ISS-003, ISS-004).**
+
 | ID | Family | Severity | Criticality | Certainty | Verified | Lifecycle | One-line |
 |----|--------|----------|-------------|-----------|----------|-----------|----------|
 | ISS-001 | IF-4 | Medium | Supporting | HIGH | ✓ | **resolved** | Public SMS-approval React route now wired (`/sms-approval/:accessKey` → `VolunteerSmsApprovalPage`) |
@@ -29,6 +32,7 @@ Generated: 2026-06-25 -->
 | ISS-007 | IF-1(d)/sec | Medium | Core | HIGH | ✓ | **persisting** | Appsettings creds externalized; **hardcoded `PasswordKey` encryption-key constant remains** |
 | ISS-008 | IF-5 | — (ranking) | — | MEDIUM | n/a | refreshed | Risk-hotspot overlay + change-coupling |
 | ISS-009 | IF-1 | Medium | Supporting | HIGH | ✓ | **resolved** | Dead `PasswordValidator` deleted; the inline `change-password` policy is now the single canonical rule |
+| ISS-010 | IF-9 | Medium | Supporting | HIGH | ✓ | **new/open** | Root `.gitignore:41` bare `db/` rule git-ignores NEW Android db-package source files → need `git add -f` or a fresh checkout/build breaks |
 
 ---
 
@@ -58,6 +62,7 @@ Generated: 2026-06-25 -->
   - **Refresh-token TTL** — .NET `RefreshTokenExpirationDays = 7` (`web/server/Magav.Server/Services/AuthService.cs:226`, `web/server/Magav.Api/appsettings.json:13`) vs Android `REFRESH_TOKEN_EXPIRY_DAYS = 3L` (`android/app/src/main/java/com/magav/app/api/auth/JwtConfig.kt:17`) — accepted divergence #1 (`tools/parity.md`).
   - **Password policy** — .NET change-password (≥6 + letter + digit) vs Android (≥4) — accepted divergence #2.
   - **Volunteer schema** — accepted divergence #3 (ISS-003 / ADR-016).
+  - **Android-only native settings endpoints** — accepted divergence #4: a small set of endpoints exist in the Android Ktor surface ONLY, with NO .NET `Magav.Api` counterpart and NO web-served implementation (their React pages are gated to the Android WebView). Members: `GET/PUT /api/settings/sms-sim` (SIM selection) and, as of 2026-06-30, **`GET/PUT /api/callback-config`** (`android/app/src/main/java/com/magav/app/api/routes/CallbackConfigRoutes.kt`; wired in `android/app/src/main/java/com/magav/app/api/KtorServer.kt` just after `settingsRoutes`, before the static catch-all). These are device-native settings (SIM, gate-callback) with no meaning in the web/.NET deployment — accepted by design, **NOT a new defect**; the absence of a .NET twin is intentional, not drift.
 - **note:** This is a *mitigation*, not a unification — a future contract/DTO change is still applied by hand to all three. Run `node tools/parity-lint.mjs` before shipping a constant change.
 
 ## ISS-005 — [IF-4] Auth error responses break the mandated error convention — RESOLVED 2026-06-19
@@ -97,6 +102,14 @@ Deterministic ranking from git-intel × criticality × test coverage (0 tests an
 - **resolution (commit `2989b01`):** `web/server/Magav.Server/Helpers/PasswordValidator.cs` was **deleted**. The inline `change-password` rule is now the **single, canonical** password policy — the contradiction (two rules for the same set-operation) is gone. Re-verified: file absent; no remaining first-party reference (the nested CLAUDE.md mentions were stale and are updated this run). NOTE: the *cross-platform* .NET-vs-Android policy difference (≥6 vs ≥4) is a **separate, intentional** divergence recorded in `tools/parity.md` #2 — not this issue.
 - **provenance:** former `web/server/Magav.Server/Helpers/PasswordValidator.cs` (deleted); enforcement `web/server/Magav.Api/Program.cs` change-password.
 - **severity:** Medium · **criticality:** Supporting · **certainty:** HIGH · **verified:** ✓ · **lifecycle:** resolved · **sarif:** deepinit/IF-1
+
+## ISS-010 — [IF-9 repo-hygiene] Root `.gitignore` `db/` rule silently git-ignores new Android db-package source files — NEW / OPEN 2026-06-30
+- **claim:** The root `.gitignore:41` declares a **bare, unanchored** `db/` rule (under the `# Database & Sensitive Data` header, intended for the SQLite data directory) that **greedily matches every `db/` directory anywhere in the tree** — including the Android source package `android/app/src/main/java/com/magav/app/db/`. The new "Auto-Callback-to-Gate" feature adds two source files in that package, `db/entity/CallbackConfigEntity.kt` and `db/dao/CallbackConfigDao.kt`, which are therefore **git-ignored**: a plain `git add` silently skips them, so a commit (and any fresh checkout/CI build) is missing the new `@Entity`/DAO and **breaks the Android build**. The running local build is unaffected (the Kotlin compiler reads the working tree from disk, not the index), which masks the problem. The pre-existing files in the same package (`MagavDatabase.kt`, `DatabaseInitializer.kt`, the other entities/DAOs) are tracked **only because they predate the rule** — `.gitignore` never un-tracks already-tracked files — so the breakage surfaces only for **newly added** files in that directory.
+- **verification:** `git check-ignore -v` on both paths returns `.gitignore:41:db/` (the rule + line, confirming the match) for `…/db/entity/CallbackConfigEntity.kt` and `…/db/dao/CallbackConfigDao.kt`. Both files exist on disk; neither is in `git ls-files`. The previously-tracked db-package files ARE in `git ls-files` (predate the rule).
+- **provenance:** `.gitignore:41` (`db/`); ignored-but-needed `android/app/src/main/java/com/magav/app/db/entity/CallbackConfigEntity.kt` + `android/app/src/main/java/com/magav/app/db/dao/CallbackConfigDao.kt`.
+- **severity:** Medium · **criticality:** Supporting · **certainty:** HIGH · **verified:** ✓ · **lifecycle:** new / open · **sarif:** deepinit/IF-9
+- **immediate workaround:** `git add -f android/app/src/main/java/com/magav/app/db/entity/CallbackConfigEntity.kt android/app/src/main/java/com/magav/app/db/dao/CallbackConfigDao.kt` so the new sources are committed.
+- **suggested fix:** narrow the over-broad rule — **anchor it to the repo root** (`/db/` instead of `db/`) or **scope it to the actual SQLite data dir** so it no longer captures the Android `db` source package. (Any newly added file under that package is at risk until the rule is fixed.) DeepInit does not modify source. **NOT auto-accepted** — new findings are never auto-accepted; this enters the ledger as open pending a maintainer decision.
 
 ---
 

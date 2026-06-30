@@ -1,14 +1,14 @@
 {
   "schema_version": 4,
   "deepinit_version": "0.5.0",
-  "run_id": "deepinit-2026-06-25b",
+  "run_id": "deepinit-2026-06-30",
   "run_kind": "incremental-update",
-  "based_on_run": "deepinit-2026-06-24",
-  "generated": "2026-06-25",
-  "source_through_commit": "778a2dd",
-  "reconciliation_note": "Consolidates a multi-refresh partial state: 6ef6183 ('Refresh for Duty Log') advanced the component docs + .issue_baseline.json (run deepinit-2026-06-25) but NOT manifest.json/.file_hashes.json (left at deepinit-2026-06-24 / 2989b01). This run brings all state, component docs, lean tier, and horizontal docs consistent through HEAD 778a2dd.",
-  "profile": { "depth": "deep", "review": "update (incremental; DP-1 skip)", "issues": "on (lifecycle diff)", "db": "skipped (R7 — SQLCipher-encrypted, no live read)", "graphify": "unavailable (grep-inferred imports)" },
-  "update_summary": { "dirty_components": ["web-client", "android"], "skipped_unchanged": ["common", "server", "api"], "skipped_note": "server/api content_hash advanced via their nested CLAUDE.md only — zero source change since 2989b01 (git-verified), so no re-analysis; common byte-identical.", "horizontal_rerun": true, "issue_lifecycle": { "resolved": 0, "accepted": 2, "persisting": 1, "new": 0, "regressed": 0 } },
+  "based_on_run": "deepinit-2026-06-25b",
+  "generated": "2026-06-30",
+  "source_through_commit": "778a2dd + uncommitted working tree (auto-callback-to-gate feature)",
+  "reconciliation_note": "Incremental --update for the Android-only 'Auto-Callback-to-Gate' feature, applied to the UNCOMMITTED working tree on top of HEAD 778a2dd. Step-0 symmetric set-diff (git-advisory + find-authoritative): the only committed delta since 778a2dd is the prior run's own .ai/docs output (0964e79); the real source change is the working tree. Dirty = {android, web-client}; .NET (common/server/api) byte-unchanged. DP-1: nothing imports android or web-client (the three REST implementations are independent — ISS-004), so no dependent propagation; horizontal docs re-run regardless. The 2 new db/-package source files (CallbackConfigEntity.kt, CallbackConfigDao.kt) are git-ignored (ISS-010) — caught by the find arm of the source ladder, which the git-only diff would miss.",
+  "profile": { "depth": "deep", "review": "update (incremental; DP-1 skip)", "issues": "on (lifecycle diff)", "db": "skipped (R7 — SQLCipher-encrypted, no live read)", "graphify": "available (graph.json refreshed via `graphify update .`)" },
+  "update_summary": { "dirty_components": ["web-client", "android"], "skipped_unchanged": ["common", "server", "api"], "skipped_note": "common/server/api: zero source change since 778a2dd (git-verified) — no re-analysis.", "horizontal_rerun": true, "issue_lifecycle": { "resolved": 0, "accepted": 0, "persisting": 1, "new": 1, "regressed": 0 } },
   "components": {
     "common": {
       "doc": ".ai/docs/components/common.md",
@@ -43,32 +43,32 @@
     "web-client": {
       "doc": ".ai/docs/components/web-client.md",
       "path": "web/client/src",
-      "files": 119,
-      "content_hash": "sha256:a2970538920ee1da",
-      "interface_hash": "sha256:a2970538920ee1da",
-      "verified_at": "2026-06-25",
+      "files": 121,
+      "content_hash": "sha256:e0bc1325fd601d6d",
+      "interface_hash": "sha256:e0bc1325fd601d6d",
+      "verified_at": "2026-06-30",
       "dirty_this_run": true,
-      "metrics": { "risk": 3183.0, "churn": 38, "bus_factor": 1, "coverage": 0, "criticality": "Core" }
+      "metrics": { "risk": 3183.0, "churn": 39, "bus_factor": 1, "coverage": 0, "criticality": "Core" }
     },
     "android": {
       "doc": ".ai/docs/components/android.md",
       "path": "android/app/src/main",
-      "files": 69,
-      "content_hash": "sha256:af64410476bae779",
-      "interface_hash": "sha256:af64410476bae779",
-      "verified_at": "2026-06-25",
+      "files": 75,
+      "content_hash": "sha256:3fa47f306fe213fb",
+      "interface_hash": "sha256:3fa47f306fe213fb",
+      "verified_at": "2026-06-30",
       "dirty_this_run": true,
-      "metrics": { "risk": 3179.0, "churn": 33, "bus_factor": 1, "coverage": 0, "criticality": "Core" }
+      "metrics": { "risk": 3179.0, "churn": 34, "bus_factor": 1, "coverage": 0, "criticality": "Core" }
     }
   },
-  "metrics_note": "metrics carried from the 2026-06-24 git-intel window (churn nudged for web-client/android to reflect the Duty Log + device-allowlist commits); a full bare run recomputes the 6-month IF-5 risk signals.",
+  "metrics_note": "metrics carried from the 2026-06-24 git-intel window (churn nudged for web-client/android to reflect the auto-callback feature working tree); a full bare run recomputes the 6-month IF-5 risk signals.",
   "deep_docs": ["decisions.md", "domain-model.md", "technical-dependencies.md", "data-layer.md", "functional-workflows.md", "cross-references.md", "discovery.md", "git-intelligence.md"],
   "issues": {
     "ledger": ".ai/docs/issues.md",
     "sarif": ".ai/deepinit.sarif",
     "baseline": ".ai/docs/.issue_baseline.json",
-    "counts": { "open": 1, "accepted": 2, "resolved": 5, "regressed": 0, "ranking": 1, "by_severity_open": { "Medium": 1 } },
-    "lifecycle_note": "Through 778a2dd: Open=ISS-007 (persisting, narrowed). Accepted-by-design=ISS-003,ISS-004. Resolved=ISS-001,002,005,006,009. ISS-008=ranking. Duty Log (client-only PNG) + Android device-allowlist gate added NO new IF-* finding; the allowlist fail-closed/keystore-coupling risk is a KL/tech-debt caveat (intentional + self-documented), not a formal issue (AF-1)."
+    "counts": { "open": 2, "accepted": 2, "resolved": 5, "regressed": 0, "ranking": 1, "by_severity_open": { "Medium": 2 } },
+    "lifecycle_note": "Through the auto-callback working tree (on 778a2dd): Open=ISS-007 (persisting, narrowed) + ISS-010 (new — root .gitignore db/ rule ignores new Android db/ source files; IF-9 repo-hygiene, Medium, NOT auto-accepted). Accepted-by-design=ISS-003, ISS-004 (the new Android-only /api/callback-config endpoint appended to ISS-004's accepted-divergence list). Resolved=ISS-001,002,005,006,009. ISS-008=ranking. The auto-callback feature added NO defect in its own code (fail-safe, well-guarded); the additive 8->9 Room migration raises no ADR-004 finding."
   },
   "lean_tier": { "canonical": "CLAUDE.md", "emit_agents_export": false, "agents_export_reason": "not_needed (no .cursor/.windsurf/.github cross-tool consumer detected)", "gitignore_policy": "committed/visible (mirrors tracked CLAUDE.md)" },
   "lean_budget": { "root": 150 }

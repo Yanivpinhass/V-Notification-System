@@ -1,5 +1,38 @@
 # DeepInit Changelog
 
+## 2026-06-30 — Run deepinit-2026-06-30 (incremental `--update`, source through `778a2dd` + uncommitted working tree)
+
+Refreshes the context layer for the Android-only **Auto-Callback-to-Gate** feature (an eligible unanswered
+incoming call is rejected and a configured Gate number auto-dialed after 20s), applied to the UNCOMMITTED
+working tree on top of HEAD `778a2dd`. Change detection (Step-0 symmetric set-diff; git advisory + `find`
+authoritative): **Dirty:** `web-client`, `android`. **Unchanged:** `common`, `server`, `api` (zero .NET source
+change — git-verified). DP-1: nothing imports `android`/`web-client` (the three REST implementations are
+independent — ISS-004) → no dependent propagation. Horizontal docs re-run. Note: the 2 new `db/`-package
+source files are git-ignored (ISS-010) — caught by the `find` arm of the source ladder, which a git-only diff
+would miss.
+
+### ADDED
+- **Auto-Callback-to-Gate (Android-only)** — new `callback/` package: `CallbackLogic` (eligibility = independent WHO∧WHEN gates, cheap-first, fail-safe; one-shot `setExactAndAllowWhileIdle(+20s)` arm/cancel; `endCall()`→`placeCall()` reject+dial), `CallbackPhoneStateReceiver` (manifest `PHONE_STATE`), `CallbackAlarmReceiver` (`exported=false` fire target, fire-time `callState==RINGING` re-check). New `CallbackConfig` Room entity/DAO (singleton, schema **8→9**, additive `MIGRATION_8_9`), Android-only Ktor `GET/PUT /api/callback-config` (`CallbackConfigRoutes.kt` + `KtorServer.kt:87`), 3 new perms (`CALL_PHONE`/`ANSWER_PHONE_CALLS`/`READ_CALL_LOG`) + 2 manifest receivers, React `CallbackSettingsPage` + `callbackConfigService` (gated to the Android WebView via `window.NativeMedia`) + menu/Index wiring. Decoupled from SMS (no `MagavServerService`/SMS-file change). **ADR-021**, **WF-004**, **DR-020/DR-021**, component ids BR/IP/WF-android + -web-client.
+- **Lean tier**: callback bullet added to root `CLAUDE.md` + `android/CLAUDE.md`; Room version `8→9`, `versionCode` `75→76` / `1.4.26`; issues "as of" note refreshed; ADR count `18→21`.
+
+### MODIFIED
+- Component deep docs: `android.md` (callback subsystem, 11 entities, MIGRATION_8_9, perms, Android-only endpoint), `web-client.md` (callback page/service, NativeMedia gate).
+- Horizontal docs (all re-run): `data-layer.md` (CallbackConfig schema §2.1 + version 9 + MIGRATION_8_9 + drift row D-7), `functional-workflows.md` (WF-004 + US-008 + WA-010), `technical-dependencies.md` (§4.7 telecom/telephony/alarm deps + Android-only-endpoint asymmetry), `domain-model.md` (DR-020/DR-021 + glossary + ownership), `decisions.md` (ADR-021 + KL-integration:007), `cross-references.md` (feature traceability + ISS-010 tech-debt row).
+- State: `manifest.json`, `.file_hashes.json` (android `af64…`→`3fa4…` / 69→75 files; web-client `a297…`→`e0bc…` / 119→121 files — same documented git-blob hash method, extended to include the new not-yet-committed source files), `.issue_baseline.json` (ISS-010 added to `open`).
+
+### BREAKING
+- (none for runtime contracts — the Room `@Entity`/`@Database` change is additive-only and handled per the full ADR-004 ritual, schema-hash verified via `exportSchema`; no existing table/endpoint/timezone/`IsCanceled` invariant changed.) The new `GET/PUT /api/callback-config` is Android-only by design (accepted ISS-004 divergence, like `/api/settings/sms-sim`).
+
+### ISSUES (lifecycle diff vs baseline deepinit-2026-06-25b)
+- **NEW: 1 (ISS-010)** · RESOLVED: 0 · REGRESSED: 0
+- ISS-010 (IF-9 repo-hygiene, Medium, HIGH, **not auto-accepted**): root `.gitignore:41` bare `db/` rule git-ignores the new Android db-package source files (`CallbackConfigEntity.kt`, `CallbackConfigDao.kt`) — verified `git check-ignore -v` → `.gitignore:41:db/`. Workaround `git add -f`; fix = anchor to `/db/` or scope to the SQLite data dir.
+- PERSISTING: ISS-007 (hardcoded `MagavConstants.PasswordKey` — `common` untouched).
+- ACCEPTED (by design): ISS-003 (ADR-016), ISS-004 (now incl. the Android-only `/api/callback-config`).
+- **Open after this run: 2 (ISS-007 + ISS-010) + 2 accepted-by-design.**
+
+### REVIEW
+- Incremental update: the dirty-set changes were verified by Pass-1 citation-existence against the working-tree code (each doc agent confirmed `MagavDatabase.kt:44`/`:146-168`, `MagavApplication.kt:109,135`, `CallbackLogic.kt`, the two receivers, `CallbackConfigRoutes.kt`, `KtorServer.kt:87`, `MainActivity.kt:145-159`, manifest + ISS-010 via `git check-ignore`). The Android source-tree change (DB version 9 + migration) was independently build-verified this session (`assembleDebug` succeeds; schema-hash exact-match via `exportSchema`). No full adversarial re-run (mode = `--update`).
+
 ## 2026-06-25 — Run deepinit-2026-06-25b (consolidating incremental `--update`, source through commit `778a2dd`)
 
 Reconciles a multi-refresh **partial** prior state: `6ef6183` ("Refresh for Duty Log") advanced the component
