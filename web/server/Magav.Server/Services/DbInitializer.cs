@@ -9,6 +9,17 @@ public class DbInitializer
     private readonly string _dbPath;
     private readonly string _dbPassword;
 
+    // Administrative-shifts template NAMES (canonical) + AppSettings keys. Template ids are resolved
+    // BY NAME at runtime (never a hardcoded auto-increment id — an upgraded DB may already have used
+    // ids 4/5). MessageTemplate.Name is NOT unique, so every by-name lookup is deterministic
+    // (ORDER BY Id LIMIT 1). KEEP the names/keys/contents byte-in-sync with the Android mirror in
+    // android/.../db/DatabaseInitializer.kt (migrateMessageTemplates / migrateAdminSchedulerConfig / seedAppSettings).
+    private const string AdminAssignmentTemplateName = "שיבוץ למשמרת מנהלית";
+    private const string AdminTodayTemplateName = "משמרת מנהלית היום";
+    private const string AdminAdvanceTemplateName = "תזכורת מוקדמת למשמרת מנהלית";
+    private const string AdminAssignmentTemplateKey = MagavConstants.AppSettingsKeys.AdminAssignmentTemplateId;
+    private const string AdminTodayTemplateKey = MagavConstants.AppSettingsKeys.AdminTodayTemplateId;
+
     public DbInitializer(IConfiguration config)
     {
         _dbPath = config["Database:Path"] ?? "../db/magav.db";
@@ -97,7 +108,8 @@ public class DbInitializer
                     City TEXT NULL,
                     Navigation TEXT NULL,
                     CreatedAt TEXT NULL,
-                    UpdatedAt TEXT NULL
+                    UpdatedAt TEXT NULL,
+                    LocationType TEXT NOT NULL DEFAULT 'Vehicle'
                 );
             ";
 
@@ -121,6 +133,12 @@ public class DbInitializer
                     CanceledAt TEXT NULL,
                     CreatedAt TEXT NULL,
                     UpdatedAt TEXT NULL,
+                    ShiftType TEXT NOT NULL DEFAULT 'Operational',
+                    Description TEXT NULL,
+                    ShiftTime TEXT NULL,
+                    Address TEXT NULL,
+                    VehicleLocation TEXT NULL,
+                    VehicleLocationId INTEGER NULL,
                     FOREIGN KEY (VolunteerId) REFERENCES Volunteers(Id),
                     FOREIGN KEY (LocationId) REFERENCES Locations(Id)
                 );
@@ -212,6 +230,20 @@ public class DbInitializer
             // Seed default SchedulerConfig rows
             await SeedSchedulerConfigAsync(connection);
 
+            // Create AppSettings key-value table (administrative-shifts feature — mirrors the
+            // existing Android AppSettings table; stores admin_assignment_template_id +
+            // admin_today_template_id). Left empty here — MigrateAppSettingsAsync seeds its keys
+            // (by template Name) unconditionally at the tail, so fresh AND existing DBs converge.
+            var createAppSettingsSql = @"
+                CREATE TABLE AppSettings (
+                    Key TEXT PRIMARY KEY,
+                    Value TEXT NOT NULL
+                );
+            ";
+
+            await using var appSettingsCmd = new SqliteCommand(createAppSettingsSql, connection);
+            await appSettingsCmd.ExecuteNonQueryAsync();
+
             // Create JewishHolidays table
             var createJewishHolidaysSql = @"
                 CREATE TABLE JewishHolidays (
@@ -264,12 +296,24 @@ public class DbInitializer
             await MigrateLocationsAsync(connection);
             await MigrateJewishHolidaysAsync(connection);
             await MigrateCancellationColumnsAsync(connection);
+            await MigrateShiftTypeColumnsAsync(connection);
+            await MigrateLocationTypeColumnsAsync(connection);
         }
 
         // Idempotent: ensure the WeekdayAdvance scheduler config row exists on BOTH fresh AND
         // existing DBs. MUST be unconditional (outside the if/else) — placing it inside the else
         // would skip fresh installs, and inside the if would skip upgraded installs.
         await MigrateSchedulerConfigAsync(connection);
+
+        // Administrative-shifts backfills — all idempotent, unconditional (reach fresh AND existing
+        // DBs), and ORDER-SENSITIVE: templates FIRST (the config + settings resolve their template
+        // ids BY NAME, so the admin templates must exist before those two run). Each admin template
+        // id is resolved by Name at runtime — NEVER a hardcoded auto-increment id (an upgraded DB may
+        // already have consumed ids 4/5). If a by-name lookup fails, the config/settings insert is
+        // SKIPPED + logged (never write an invalid FK).
+        await MigrateMessageTemplatesAsync(connection);
+        await MigrateAdminSchedulerConfigAsync(connection);
+        await MigrateAppSettingsAsync(connection);
     }
 
     public string GetConnectionString()
@@ -353,7 +397,8 @@ public class DbInitializer
                             City TEXT NULL,
                             Navigation TEXT NULL,
                             CreatedAt TEXT NULL,
-                            UpdatedAt TEXT NULL
+                            UpdatedAt TEXT NULL,
+                            LocationType TEXT NOT NULL DEFAULT 'Vehicle'
                         );
                     ";
                     await using var createCmd = new SqliteCommand(createSql, connection);
@@ -434,6 +479,114 @@ public class DbInitializer
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Cancellation columns migration error: {ex}");
+        }
+    }
+
+    // Administrative-shifts feature: add the 5 admin columns to Shifts on existing DBs (additive).
+    // Mirrors the MigrateCancellationColumnsAsync PRAGMA table_info pattern. The ShiftType column is
+    // added WITH a default so SQLite backfills every existing row to 'Operational'; the 4 nullable
+    // admin columns are NULL for operational rows. Deliberately NO index on ShiftType (low volume;
+    // keeps parity with the Room-mirror "no index" guidance). Mirrors Android MIGRATION_9_10.
+    private static async Task MigrateShiftTypeColumnsAsync(SqliteConnection connection)
+    {
+        try
+        {
+            var existingColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using (var pragmaCmd = new SqliteCommand("PRAGMA table_info(Shifts)", connection))
+            await using (var reader = await pragmaCmd.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    existingColumns.Add(reader.GetString(1));
+                }
+            }
+
+            if (!existingColumns.Contains("ShiftType"))
+            {
+                Console.WriteLine("Adding column ShiftType to Shifts table...");
+                await using var alterCmd = new SqliteCommand(
+                    "ALTER TABLE Shifts ADD COLUMN ShiftType TEXT NOT NULL DEFAULT 'Operational'", connection);
+                await alterCmd.ExecuteNonQueryAsync();
+            }
+
+            // 4 nullable admin-only columns. Column names come from a fixed whitelist below (never
+            // user input), so the interpolation into DDL — which SQLite cannot parameterize — is safe.
+            foreach (var col in new[] { "Description", "ShiftTime", "Address", "VehicleLocation" })
+            {
+                if (!existingColumns.Contains(col))
+                {
+                    Console.WriteLine($"Adding column {col} to Shifts table...");
+                    await using var alterCmd = new SqliteCommand(
+                        $"ALTER TABLE Shifts ADD COLUMN {col} TEXT NULL", connection);
+                    await alterCmd.ExecuteNonQueryAsync();
+                }
+            }
+
+            // Belt-and-suspenders: normalize any NULL ShiftType to 'Operational' (idempotent).
+            await using var backfillCmd = new SqliteCommand(
+                "UPDATE Shifts SET ShiftType = 'Operational' WHERE ShiftType IS NULL", connection);
+            await backfillCmd.ExecuteNonQueryAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"ShiftType columns migration error: {ex}");
+        }
+    }
+
+    // v2 general-locations feature: add Locations.LocationType (discriminator) + Shifts.VehicleLocationId
+    // (admin vehicle-location reference) on existing DBs (additive). Same PRAGMA table_info pattern.
+    // LocationType is added WITH a default so existing Locations backfill to 'Vehicle'; VehicleLocationId
+    // is nullable. NO index on either. Mirrors Android MIGRATION_10_11.
+    private static async Task MigrateLocationTypeColumnsAsync(SqliteConnection connection)
+    {
+        try
+        {
+            var locationColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using (var pragmaCmd = new SqliteCommand("PRAGMA table_info(Locations)", connection))
+            await using (var reader = await pragmaCmd.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    locationColumns.Add(reader.GetString(1));
+                }
+            }
+
+            if (!locationColumns.Contains("LocationType"))
+            {
+                Console.WriteLine("Adding column LocationType to Locations table...");
+                await using var alterCmd = new SqliteCommand(
+                    "ALTER TABLE Locations ADD COLUMN LocationType TEXT NOT NULL DEFAULT 'Vehicle'", connection);
+                await alterCmd.ExecuteNonQueryAsync();
+            }
+
+            // Belt-and-suspenders: normalize any NULL LocationType to 'Vehicle' (idempotent).
+            await using (var backfillCmd = new SqliteCommand(
+                "UPDATE Locations SET LocationType = 'Vehicle' WHERE LocationType IS NULL", connection))
+            {
+                await backfillCmd.ExecuteNonQueryAsync();
+            }
+
+            var shiftColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using (var pragmaCmd = new SqliteCommand("PRAGMA table_info(Shifts)", connection))
+            await using (var reader = await pragmaCmd.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    shiftColumns.Add(reader.GetString(1));
+                }
+            }
+
+            if (!shiftColumns.Contains("VehicleLocationId"))
+            {
+                Console.WriteLine("Adding column VehicleLocationId to Shifts table...");
+                await using var alterCmd = new SqliteCommand(
+                    "ALTER TABLE Shifts ADD COLUMN VehicleLocationId INTEGER NULL", connection);
+                await alterCmd.ExecuteNonQueryAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"LocationType columns migration error: {ex}");
         }
     }
 
@@ -674,6 +827,9 @@ public class DbInitializer
         Console.WriteLine($"Jewish holidays seeded with {holidays.Length} entries.");
     }
 
+    // Fresh-install seed of the 3 OPERATIONAL templates. The 3 ADMINISTRATIVE templates are NOT
+    // seeded here — they are handled solely by the idempotent, unconditional MigrateMessageTemplatesAsync
+    // (single source of truth → no duplicated hardcoded admin list), which reaches fresh AND existing DBs.
     private static async Task SeedMessageTemplatesAsync(SqliteConnection connection)
     {
         var templates = new[]
@@ -758,6 +914,139 @@ public class DbInitializer
         {
             Console.Error.WriteLine($"Scheduler config migration error: {ex}");
         }
+    }
+
+    // Resolve a MessageTemplate id by Name deterministically. MessageTemplate.Name is NOT unique — the
+    // ORDER BY Id LIMIT 1 makes a user-authored duplicate name pick the lowest (oldest) id, never random.
+    // Returns null if no template of that name exists (callers SKIP + log rather than write an invalid FK).
+    private static async Task<int?> ResolveTemplateIdByNameAsync(SqliteConnection connection, string name)
+    {
+        await using var cmd = new SqliteCommand(
+            "SELECT Id FROM MessageTemplate WHERE Name = @Name ORDER BY Id LIMIT 1", connection);
+        cmd.Parameters.AddWithValue("@Name", name);
+        var result = await cmd.ExecuteScalarAsync();
+        if (result is null || result is DBNull) return null;
+        return Convert.ToInt32(result);
+    }
+
+    // Idempotent seed of the 3 administrative-shifts message templates. Safe on every startup (fresh
+    // AND existing DBs): each row is inserted only if a template of that Name is ABSENT (INSERT ... SELECT
+    // ... WHERE NOT EXISTS), so operational templates, user edits and re-runs are never touched. The
+    // seeded contents deliberately include {שם} and {תאריך} so they pass the mandatory-placeholder
+    // template validation (F2). KEEP names/contents in sync with Android DatabaseInitializer.kt
+    // migrateMessageTemplates().
+    private static async Task MigrateMessageTemplatesAsync(SqliteConnection connection)
+    {
+        try
+        {
+            var now = DateTime.UtcNow.ToString("o");
+            var templates = new[]
+            {
+                (AdminAssignmentTemplateName, "שלום {שם},\nשובצת למשימה {תיאור},\nבתאריך {תאריך} בשעה {שעה}.\nבהצלחה"),
+                (AdminTodayTemplateName, "שלום {שם},\nמשימה {תיאור} מתקיימת היום ({יום}, {תאריך}) בשעה {שעה}."),
+                (AdminAdvanceTemplateName, "שלום {שם},\nתזכורת: משימה {תיאור} מתקיימת ביום {יום} {תאריך} בשעה {שעה}."),
+            };
+
+            var sql = @"INSERT INTO MessageTemplate (Name, Content, CreatedAt, UpdatedAt)
+                        SELECT @Name, @Content, @CreatedAt, @UpdatedAt
+                        WHERE NOT EXISTS (SELECT 1 FROM MessageTemplate WHERE Name = @Name)";
+
+            foreach (var (name, content) in templates)
+            {
+                await using var cmd = new SqliteCommand(sql, connection);
+                cmd.Parameters.AddWithValue("@Name", name);
+                cmd.Parameters.AddWithValue("@Content", content);
+                cmd.Parameters.AddWithValue("@CreatedAt", now);
+                cmd.Parameters.AddWithValue("@UpdatedAt", now);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            Console.WriteLine("Message templates migration: 3 administrative templates ensured (insert-if-name-absent).");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Admin message templates migration error: {ex}");
+        }
+    }
+
+    // Idempotent seed of the administrative advance SchedulerConfig row (ReminderType='AdminAdvance').
+    // Unconditional (fresh AND existing DBs). INSERT OR IGNORE on UNIQUE(DayGroup, ReminderType) creates
+    // (SunThu, AdminAdvance) once and never overwrites user edits. Ships DISABLED (IsEnabled=0) with
+    // DaysBeforeShift=1 (the reused half-open WeekdayAdvance window is only gap/overlap-free for N=1).
+    // MessageTemplateId is resolved BY NAME (advance template); if that lookup fails the INSERT is SKIPPED
+    // + logged (a bad FK would break the run-log dedup / SMS send). KEEP values in sync with Android
+    // DatabaseInitializer.kt migrateAdminSchedulerConfig().
+    private static async Task MigrateAdminSchedulerConfigAsync(SqliteConnection connection)
+    {
+        try
+        {
+            var templateId = await ResolveTemplateIdByNameAsync(connection, AdminAdvanceTemplateName);
+            if (templateId is null)
+            {
+                Console.Error.WriteLine(
+                    $"Admin scheduler config migration SKIPPED: advance template '{AdminAdvanceTemplateName}' not found (would create an invalid FK).");
+                return;
+            }
+
+            var sql = @"INSERT OR IGNORE INTO SchedulerConfig (DayGroup, ReminderType, Time, DaysBeforeShift, IsEnabled, MessageTemplateId)
+                        VALUES (@DayGroup, @ReminderType, @Time, @DaysBeforeShift, 0, @MessageTemplateId)";
+
+            await using var cmd = new SqliteCommand(sql, connection);
+            cmd.Parameters.AddWithValue("@DayGroup", MagavConstants.DayGroups.SunThu);
+            cmd.Parameters.AddWithValue("@ReminderType", MagavConstants.ReminderTypes.AdminAdvance);
+            cmd.Parameters.AddWithValue("@Time", "06:00");
+            cmd.Parameters.AddWithValue("@DaysBeforeShift", 1);
+            cmd.Parameters.AddWithValue("@MessageTemplateId", templateId.Value);
+            await cmd.ExecuteNonQueryAsync();
+
+            Console.WriteLine("Scheduler config migration: AdminAdvance row ensured (INSERT OR IGNORE, disabled).");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Admin scheduler config migration error: {ex}");
+        }
+    }
+
+    // Idempotent create + seed of the AppSettings key-value table for the administrative template roles.
+    // Unconditional (fresh AND existing DBs). CREATE TABLE IF NOT EXISTS covers DBs that predate the
+    // AppSettings table; INSERT OR IGNORE seeds each key once (never clobbers a user-set value). The
+    // default values are the assignment/today template ids resolved BY NAME — if a lookup fails, that key
+    // is SKIPPED (no invalid reference persisted). KEEP keys in sync with Android DatabaseInitializer.kt
+    // seedAppSettings().
+    private static async Task MigrateAppSettingsAsync(SqliteConnection connection)
+    {
+        try
+        {
+            await using (var createCmd = new SqliteCommand(
+                "CREATE TABLE IF NOT EXISTS AppSettings (Key TEXT PRIMARY KEY, Value TEXT NOT NULL)", connection))
+            {
+                await createCmd.ExecuteNonQueryAsync();
+            }
+
+            await SeedAppSettingKeyAsync(connection, AdminAssignmentTemplateKey, AdminAssignmentTemplateName);
+            await SeedAppSettingKeyAsync(connection, AdminTodayTemplateKey, AdminTodayTemplateName);
+
+            Console.WriteLine("AppSettings migration: admin template-id keys ensured (INSERT OR IGNORE).");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"AppSettings migration error: {ex}");
+        }
+    }
+
+    private static async Task SeedAppSettingKeyAsync(SqliteConnection connection, string key, string templateName)
+    {
+        var templateId = await ResolveTemplateIdByNameAsync(connection, templateName);
+        if (templateId is null)
+        {
+            Console.Error.WriteLine($"AppSettings seed SKIPPED for '{key}': template '{templateName}' not found.");
+            return;
+        }
+        await using var cmd = new SqliteCommand(
+            "INSERT OR IGNORE INTO AppSettings (Key, Value) VALUES (@Key, @Value)", connection);
+        cmd.Parameters.AddWithValue("@Key", key);
+        cmd.Parameters.AddWithValue("@Value", templateId.Value.ToString());
+        await cmd.ExecuteNonQueryAsync();
     }
 
     // === SAMPLE DATA FOR TESTING — remove this method before production ===

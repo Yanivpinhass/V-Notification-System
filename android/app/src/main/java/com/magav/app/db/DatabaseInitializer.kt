@@ -13,11 +13,27 @@ import java.time.Instant
 
 class DatabaseInitializer(private val database: MagavDatabase) {
 
+    companion object {
+        // Administrative-shifts template NAMES + AppSettings keys. Template ids are resolved BY NAME
+        // at runtime (never a hardcoded auto-increment id — an upgraded DB may already have used ids
+        // 4/5). KEEP byte-in-sync with .NET DbInitializer.cs (AdminAssignmentTemplateName /
+        // AdminTodayTemplateName / AdminAdvanceTemplateName / AdminAssignmentTemplateKey / AdminTodayTemplateKey).
+        private const val ADMIN_ASSIGNMENT_TEMPLATE_NAME = "שיבוץ למשמרת מנהלית"
+        private const val ADMIN_TODAY_TEMPLATE_NAME = "משמרת מנהלית היום"
+        private const val ADMIN_ADVANCE_TEMPLATE_NAME = "תזכורת מוקדמת למשמרת מנהלית"
+        private const val ADMIN_ASSIGNMENT_TEMPLATE_KEY = com.magav.app.util.AppSettingsKeys.ADMIN_ASSIGNMENT_TEMPLATE_ID
+        private const val ADMIN_TODAY_TEMPLATE_KEY = com.magav.app.util.AppSettingsKeys.ADMIN_TODAY_TEMPLATE_ID
+    }
+
     suspend fun initialize() {
         seedAdminUser()
         seedMessageTemplates()
+        // Admin templates FIRST (unconditional, idempotent) — migrateAdminSchedulerConfig() and
+        // seedAppSettings() resolve their template ids BY NAME, so the admin templates must exist first.
+        migrateMessageTemplates()
         seedSchedulerConfigs()
         migrateSchedulerConfigs()
+        migrateAdminSchedulerConfig()
         seedAppSettings()
         seedJewishHolidays()
         seedCallbackConfig()
@@ -203,13 +219,84 @@ class DatabaseInitializer(private val database: MagavDatabase) {
         )
     }
 
-    private suspend fun seedAppSettings() {
-        val existing = database.appSettingDao().getByKey("sms_sim_subscription_id")
-        if (existing != null) return
-
-        database.appSettingDao().upsert(
-            AppSettingEntity(key = "sms_sim_subscription_id", value = "-1")
+    // Idempotent seed of the 3 administrative-shifts message templates. Safe on every startup (fresh
+    // AND upgraded installs). Each row is inserted only if a template of that Name is ABSENT, so
+    // operational templates, user edits and re-runs are never touched (MessageTemplate.Name is NOT
+    // unique — getByName is deterministic via ORDER BY Id LIMIT 1). Seeded contents include {שם}+{תאריך}
+    // to pass the mandatory-placeholder validation (F2). KEEP names/contents in sync with .NET
+    // DbInitializer.cs MigrateMessageTemplatesAsync().
+    private suspend fun migrateMessageTemplates() {
+        val dao = database.messageTemplateDao()
+        val now = Instant.now().toString()
+        val templates = listOf(
+            ADMIN_ASSIGNMENT_TEMPLATE_NAME to "שלום {שם},\nשובצת למשימה {תיאור},\nבתאריך {תאריך} בשעה {שעה}.\nבהצלחה",
+            ADMIN_TODAY_TEMPLATE_NAME to "שלום {שם},\nמשימה {תיאור} מתקיימת היום ({יום}, {תאריך}) בשעה {שעה}.",
+            ADMIN_ADVANCE_TEMPLATE_NAME to "שלום {שם},\nתזכורת: משימה {תיאור} מתקיימת ביום {יום} {תאריך} בשעה {שעה}."
         )
+        templates.forEach { (name, content) ->
+            if (dao.getByName(name) == null) {
+                dao.insert(
+                    MessageTemplateEntity(id = 0, name = name, content = content, createdAt = now, updatedAt = now)
+                )
+            }
+        }
+    }
+
+    // IMPORTANT: Keep the AdminAdvance default values (time / daysBeforeShift / isEnabled) in sync with
+    // .NET DbInitializer.cs MigrateAdminSchedulerConfigAsync(). Idempotent: ensures the (SunThu,
+    // AdminAdvance) scheduler row exists on BOTH fresh AND upgraded installs. Called unconditionally.
+    // insertOrIgnore conflicts on UNIQUE(DayGroup, ReminderType) → never overwrites admin edits. Ships
+    // DISABLED (isEnabled = 0) with daysBeforeShift = 1 (the reused half-open WeekdayAdvance window is
+    // only gap/overlap-free for N=1). MessageTemplateId is resolved BY NAME (advance template); if
+    // absent the row is SKIPPED (no dangling reference — there is no @ForeignKey on MessageTemplateId,
+    // so a bad id would silently persist and fail at send time).
+    private suspend fun migrateAdminSchedulerConfig() {
+        val advanceTemplateId = database.messageTemplateDao().getByName(ADMIN_ADVANCE_TEMPLATE_NAME)?.id
+        if (advanceTemplateId == null) {
+            android.util.Log.w(
+                "DbInit",
+                "Admin scheduler config SKIPPED: advance template '$ADMIN_ADVANCE_TEMPLATE_NAME' not found"
+            )
+            return
+        }
+        val now = Instant.now().toString()
+        database.schedulerConfigDao().insertOrIgnore(
+            SchedulerConfigEntity(
+                id = 0,
+                dayGroup = DayGroups.SUN_THU,
+                reminderType = ReminderTypes.ADMIN_ADVANCE,
+                time = "06:00",
+                daysBeforeShift = 1,
+                isEnabled = 0,
+                messageTemplateId = advanceTemplateId,
+                updatedAt = now,
+                updatedBy = null
+            )
+        )
+    }
+
+    // Per-key idempotent seed. IMPORTANT: each key is guarded INDEPENDENTLY (getByKey == null) rather
+    // than bailing the whole method — on upgraded installs sms_sim_subscription_id already exists, and a
+    // single early-return would then never seed the admin template-id keys. The admin template ids are
+    // resolved BY NAME; a key whose template is absent is SKIPPED (no dangling reference). KEEP the admin
+    // keys in sync with .NET DbInitializer.cs MigrateAppSettingsAsync().
+    private suspend fun seedAppSettings() {
+        val dao = database.appSettingDao()
+
+        // SIM subscription id (existing) — default -1 (system default SIM).
+        if (dao.getByKey("sms_sim_subscription_id") == null) {
+            dao.upsert(AppSettingEntity(key = "sms_sim_subscription_id", value = "-1"))
+        }
+
+        // Administrative-shifts template roles.
+        if (dao.getByKey(ADMIN_ASSIGNMENT_TEMPLATE_KEY) == null) {
+            val id = database.messageTemplateDao().getByName(ADMIN_ASSIGNMENT_TEMPLATE_NAME)?.id
+            if (id != null) dao.upsert(AppSettingEntity(key = ADMIN_ASSIGNMENT_TEMPLATE_KEY, value = id.toString()))
+        }
+        if (dao.getByKey(ADMIN_TODAY_TEMPLATE_KEY) == null) {
+            val id = database.messageTemplateDao().getByName(ADMIN_TODAY_TEMPLATE_NAME)?.id
+            if (id != null) dao.upsert(AppSettingEntity(key = ADMIN_TODAY_TEMPLATE_KEY, value = id.toString()))
+        }
     }
 
     // IMPORTANT: Keep holiday dates in sync with web/server/Magav.Server/Services/DbInitializer.cs SeedJewishHolidaysAsync()

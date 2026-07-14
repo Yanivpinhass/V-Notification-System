@@ -119,7 +119,7 @@
       "Bash(cmd.exe /c \"cd /d C:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android && gradlew.bat assembleDebug 2>&1\")",
       "Bash(cmd.exe /c \"call gradlew.bat assembleDebug\")",
       "Bash(powershell.exe -Command \"Set-Location ''C:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android''; .\\\\gradlew.bat assembleDebug\")",
-      "Bash(grep -l \"about-version\\\\|אודות\" /c/MyData/Projects/Magav/V-Notification-System/android/app/src/main/assets/web/assets/*.js)",
+      "Bash(grep -l \"about-version\\\\|\u05d0\u05d5\u05d3\u05d5\u05ea\" /c/MyData/Projects/Magav/V-Notification-System/android/app/src/main/assets/web/assets/*.js)",
       "Bash(powershell.exe -Command \"Set-Location ''C:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\android''; .\\\\gradlew.bat clean assembleDebug\")",
       "Bash(grep -E \"\\\\.\\(ts|cs\\)$\")",
       "Bash(grep -r date c:MyDataProjectsMagavV-Notification-Systemwebclientsrccomponentsui --include=*.tsx -l)",
@@ -134,7 +134,7 @@
       "Bash(grep -r \"s\\\\.VolunteerId\\\\|shift\\\\.VolunteerId\" /c/MyData/Projects/Magav/V-Notification-System --include=*.cs)",
       "Bash(grep -r \"SELECT.*VolunteerId\\\\|VolunteerId.*=\" /c/MyData/Projects/Magav/V-Notification-System --include=*.cs --include=*.kt)",
       "Bash(find c:/MyData/Projects/Magav/V-Notification-System -type f \\\\\\(-name *.json -o -name *.config -o -name appsettings* \\\\\\))",
-      "Bash(grep -n \"סיום\\\\|Close\\\\|Done\" /c/MyData/Projects/Magav/V-Notification-System/web/client/src/pages/*.tsx)",
+      "Bash(grep -n \"\u05e1\u05d9\u05d5\u05dd\\\\|Close\\\\|Done\" /c/MyData/Projects/Magav/V-Notification-System/web/client/src/pages/*.tsx)",
       "Bash(\"c:/MyData/Projects/Magav/V-Notification-System/build-apk.bat\")",
       "Bash(\"c:/MyData/Projects/Magav/V-Notification-System/android/gradlew.bat\" assembleDebug -p \"c:/MyData/Projects/Magav/V-Notification-System/android\")",
       "Read(//c/MyData/Projects/Magav/**)",
@@ -145,7 +145,7 @@
       "Bash(xargs wc:*)",
       "Read(//tmp/**)",
       "Read(//c/tmp/**)",
-      "Bash(grep -l \"jewish-holidays\\\\|jewishHolidays\\\\|חגים יהודיים\" /c/MyData/Projects/Magav/V-Notification-System/android/app/src/main/assets/web/assets/*.js)",
+      "Bash(grep -l \"jewish-holidays\\\\|jewishHolidays\\\\|\u05d7\u05d2\u05d9\u05dd \u05d9\u05d4\u05d5\u05d3\u05d9\u05d9\u05dd\" /c/MyData/Projects/Magav/V-Notification-System/android/app/src/main/assets/web/assets/*.js)",
       "Bash(cmd.exe //c \"build-apk.bat\")",
       "Bash(cmd.exe /c \"c:\\\\MyData\\\\Projects\\\\Magav\\\\V-Notification-System\\\\build-apk.bat\")",
       "Bash(cmd.exe //c \".\\\\\\\\build-apk.bat\")",
@@ -182,5 +182,27 @@
       "\\tmp"
     ]
   },
-  "effortLevel": "high"
+  "effortLevel": "high",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CMD=$(python3 -c \"import json,sys; d=json.load(sys.stdin); print(d.get('tool_input',d).get('command',''))\" 2>/dev/null || true); case \"$CMD\" in *grep*|*rg\\ *|*ripgrep*|*find\\ *|*fd\\ *|*ack\\ *|*ag\\ *)   [ -f graphify-out/graph.json ] &&   echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"MANDATORY: graphify-out/graph.json exists. You MUST run `graphify query \\\"<question>\\\"` before grepping raw files. Only grep after graphify has oriented you, or to modify/debug specific lines.\"}}'   || true ;; esac"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "HIT=$(python3 -c \"import json,sys;d=json.load(sys.stdin);t=d.get('tool_input',d);exts=('.py','.js','.ts','.tsx','.jsx','.astro','.vue','.svelte','.go','.rs','.java','.rb','.c','.h','.cpp','.hpp','.cc','.cs','.kt','.swift','.php','.scala','.lua','.sh','.md','.rst','.txt','.mdx');vals=[str(t.get('file_path') or ''),str(t.get('pattern') or ''),str(t.get('path') or '')];j=' '.join(vals).lower().replace(chr(92),'/');tails=[('.'+x.rsplit('.',1)[-1]) for v in vals if v for x in [v.lower().replace(chr(92),'/').rsplit('/',1)[-1]] if '.' in x];sys.stdout.write('1' if 'graphify-out/' not in j and any(tl in exts for tl in tails) else '')\" 2>/dev/null || true); if [ \"$HIT\" = 1 ] && [ -f graphify-out/graph.json ]; then echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"MANDATORY: graphify-out/graph.json exists. You MUST run graphify before reading source files. Use: `graphify query \\\"<question>\\\"` (scoped subgraph), `graphify explain \\\"<concept>\\\"`, or `graphify path \\\"<A>\\\" \\\"<B>\\\"`. Only read raw files after graphify has oriented you, or to modify/debug specific lines. This rule applies to subagents too \u2014 include it in every subagent prompt involving code exploration.\"}}'; fi || true"
+          }
+        ]
+      }
+    ]
+  }
 }

@@ -13,4 +13,8 @@ public class Location
     public string? Navigation { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+
+    // Location-type discriminator (Vehicle = מיקומי ניידות | General = מיקומים כללי). Existing rows
+    // backfill to 'Vehicle' via the column DEFAULT (see DbInitializer.MigrateLocationTypeColumnsAsync).
+    public string LocationType { get; set; } = MagavConstants.LocationTypes.Vehicle;
 }

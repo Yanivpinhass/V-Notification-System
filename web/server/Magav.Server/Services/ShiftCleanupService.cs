@@ -85,6 +85,9 @@ public class ShiftCleanupService : BackgroundService
                 "SELECT COUNT(*) FROM Shifts WHERE ShiftDate < @0",
                 cutoffDate);
 
+            // D11: monthly cleanup is deliberately TYPE-AGNOSTIC — administrative shifts age out after a
+            // month exactly like operational (confirmed by user). Do NOT add a ShiftType predicate here
+            // (or to the SmsLog/SchedulerRunLog deletes above/below). Mirrors Android ShiftDao.deleteOlderThan.
             await db.Db.ExecuteQueryAsync(
                 "DELETE FROM Shifts WHERE ShiftDate < @0",
                 cutoffDate);

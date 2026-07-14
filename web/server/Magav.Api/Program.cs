@@ -384,12 +384,20 @@ app.MapPost("/api/volunteers/import", async (HttpRequest request, MagavDbManager
 // LOCATIONS ENDPOINTS
 // ============================================
 
-// GET /api/locations
-app.MapGet("/api/locations", async (MagavDbManager db) =>
+// GET /api/locations?type=Vehicle|General|All  (default: Vehicle — keeps old clients seeing today's set)
+app.MapGet("/api/locations", async (string? type, MagavDbManager db) =>
 {
     try
     {
-        var locations = await db.Locations.GetAllAsync();
+        var t = string.IsNullOrWhiteSpace(type) ? MagavConstants.LocationTypes.Vehicle : type;
+        if (t != MagavConstants.LocationTypes.Vehicle
+            && t != MagavConstants.LocationTypes.General
+            && t != "All")
+            return Results.BadRequest(ApiResponse<object>.Fail("סוג מיקום לא תקין"));
+
+        var locations = t == "All"
+            ? await db.Locations.GetAllAsync()
+            : await db.Locations.GetByTypeAsync(t);
         return Results.Ok(ApiResponse<object>.Ok(locations));
     }
     catch (Exception ex)
@@ -428,6 +436,11 @@ app.MapPost("/api/locations", async (LocationRequest request, MagavDbManager db)
         if (string.IsNullOrWhiteSpace(request.Name))
             return Results.BadRequest(ApiResponse<object>.Fail("שם מיקום נדרש"));
 
+        // POST default = Vehicle (old clients creating patrol locations keep working).
+        var type = string.IsNullOrWhiteSpace(request.Type) ? MagavConstants.LocationTypes.Vehicle : request.Type;
+        if (type != MagavConstants.LocationTypes.Vehicle && type != MagavConstants.LocationTypes.General)
+            return Results.BadRequest(ApiResponse<object>.Fail("סוג מיקום לא תקין"));
+
         var existing = await db.Locations.GetByNameAsync(request.Name.Trim());
         if (existing != null)
             return Results.BadRequest(ApiResponse<object>.Fail("מיקום עם שם זה כבר קיים"));
@@ -439,6 +452,7 @@ app.MapPost("/api/locations", async (LocationRequest request, MagavDbManager db)
             Address = request.Address?.Trim(),
             City = request.City?.Trim(),
             Navigation = request.Navigation?.Trim(),
+            LocationType = type,
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -471,10 +485,17 @@ app.MapPut("/api/locations/{id:int}", async (int id, LocationRequest request, Ma
         if (duplicate != null && duplicate.Id != id)
             return Results.BadRequest(ApiResponse<object>.Fail("מיקום עם שם זה כבר קיים"));
 
+        // PUT default = the row's EXISTING type (preserve-on-omit) — NOT Vehicle. Defaulting to Vehicle
+        // would silently flip a General row whenever a caller omits the field. An explicit Type is honored.
+        var type = string.IsNullOrWhiteSpace(request.Type) ? location.LocationType : request.Type;
+        if (type != MagavConstants.LocationTypes.Vehicle && type != MagavConstants.LocationTypes.General)
+            return Results.BadRequest(ApiResponse<object>.Fail("סוג מיקום לא תקין"));
+
         location.Name = request.Name.Trim();
         location.Address = request.Address?.Trim();
         location.City = request.City?.Trim();
         location.Navigation = request.Navigation?.Trim();
+        location.LocationType = type;
         location.UpdatedAt = DateTime.UtcNow;
 
         await db.Locations.UpdateAsync(location);
@@ -1028,10 +1049,14 @@ app.MapPost("/api/shifts/cancel-group", async (CancelShiftGroupRequest request,
         var nowIso = DateTime.UtcNow.ToString("o");
         var dateStart = parsedDate.Date.ToString("o");
         var dateEnd = parsedDate.Date.AddDays(1).ToString("o");
+        // ShiftType='Operational' MUST match the Android cancelShiftGroup predicate exactly — an admin
+        // group whose ShiftName=Description collides with an operational (ShiftName, CarId) cancel request
+        // would otherwise be wrongly canceled here while Android skips it → cross-platform divergence (§7a).
         await db.Db.ExecuteQueryAsync(
             @"UPDATE Shifts SET IsCanceled = 1, CanceledAt = @0, UpdatedAt = @1
               WHERE ShiftDate >= @2 AND ShiftDate < @3
                 AND ShiftName = @4 AND CarId = @5
+                AND ShiftType = 'Operational'
                 AND IsCanceled = 0",
             nowIso, nowIso, dateStart, dateEnd, request.ShiftName, request.CarId ?? "");
 
@@ -1369,6 +1394,367 @@ app.MapPost("/api/shifts/send-location-update", async (
             statusCode: StatusCodes.Status500InternalServerError);
     }
 }).RequireAuthorization("CanManageMessages");
+
+// ============================================
+// ADMINISTRATIVE SHIFTS ENDPOINTS (msmarot minhaliot)
+// Strictly isolated from operational shifts: reads = CanManageMessages, config/settings writes = AdminOnly.
+// ============================================
+
+// GET /api/shifts/administrative/by-week?weekStart=YYYY-MM-DD - admin shifts for a Sun→Sat week
+app.MapGet("/api/shifts/administrative/by-week", async (string? weekStart, MagavDbManager db) =>
+{
+    try
+    {
+        if (string.IsNullOrWhiteSpace(weekStart) || !DateTime.TryParse(weekStart, out var parsedWeekStart))
+            return Results.BadRequest(ApiResponse<object>.Fail("פורמט תאריך תחילת שבוע לא תקין"));
+
+        var rows = await db.Shifts.GetAdministrativeByWeekAsync(parsedWeekStart);
+        return Results.Ok(ApiResponse<List<AdminShiftRow>>.Ok(rows));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error fetching administrative shifts: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בטעינת המשמרות המנהליות"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// POST /api/shifts/administrative - create an administrative shift group (one row per volunteer)
+app.MapPost("/api/shifts/administrative", async (
+    CreateAdminShiftRequest request, MagavDbManager db,
+    ISmsProvider smsProvider, ILogger<SmsReminderService> logger) =>
+{
+    try
+    {
+        // Description is REQUIRED — it also becomes ShiftName (which is NOT NULL); an empty ShiftName
+        // would violate the constraint / empty-bucket the group.
+        if (string.IsNullOrWhiteSpace(request.Description))
+            return Results.BadRequest(ApiResponse<object>.Fail("תיאור המשימה נדרש"));
+        if (!DateTime.TryParse(request.Date, out var parsedDate))
+            return Results.BadRequest(ApiResponse<object>.Fail("פורמט תאריך לא תקין"));
+
+        var shiftTime = AdminSendHelpers.NormalizeShiftTime(request.ShiftTime);
+        if (string.IsNullOrWhiteSpace(shiftTime))
+            return Results.BadRequest(ApiResponse<object>.Fail("שעת המשמרת נדרשת"));
+        if (request.VolunteerIds == null || request.VolunteerIds.Length == 0)
+            return Results.BadRequest(ApiResponse<object>.Fail("יש לבחור לפחות מתנדב אחד"));
+
+        var description = request.Description.Trim();
+        var now = DateTime.UtcNow;
+
+        // Vehicle location: id wins — a picked Vehicle location (VehicleLocationId) nulls the free text.
+        var vehicleLocationId = request.VehicleLocationId;
+        var vehicleLocationText = vehicleLocationId.HasValue
+            ? null
+            : (string.IsNullOrWhiteSpace(request.VehicleLocation) ? null : request.VehicleLocation.Trim());
+
+        // Dup-volunteer guard (enables add-volunteers-in-edit, which re-POSTs the group): skip
+        // volunteers already ACTIVE in this exact (Date, ShiftTime, Description) admin group.
+        var existingVolunteerIds = await db.Shifts.GetAdminGroupVolunteerIdsAsync(parsedDate, shiftTime, description);
+
+        // Pair each created shift with the volunteer we already fetched, so the send loop below never
+        // re-queries the volunteer.
+        var created = new List<(Shift Shift, Volunteer Volunteer)>();
+
+        foreach (var volunteerId in request.VolunteerIds.Distinct())
+        {
+            if (existingVolunteerIds.Contains(volunteerId)) continue;   // already in the group — idempotent
+
+            var volunteer = await db.Volunteers.GetByIdAsync(volunteerId);
+            if (volunteer == null)
+                return Results.NotFound(ApiResponse<object>.Fail($"מתנדב {volunteerId} לא נמצא"));
+
+            var shift = new Shift
+            {
+                ShiftDate = parsedDate,
+                ShiftName = description,       // ShiftName == Description (NOT NULL, non-empty)
+                ShiftType = MagavConstants.ShiftTypes.Administrative,
+                Description = description,
+                ShiftTime = shiftTime,
+                Address = string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim(),
+                VehicleLocation = vehicleLocationText,
+                VehicleLocationId = vehicleLocationId,
+                CarId = request.CarId?.Trim() ?? "",
+                VolunteerId = volunteerId,
+                LocationId = request.LocationId,
+                CustomLocationName = request.CustomLocationName?.Trim(),
+                CustomLocationNavigation = request.CustomLocationNavigation?.Trim(),
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+            await db.Shifts.InsertAsync(shift);
+            created.Add((shift, volunteer));
+        }
+
+        var smsSent = 0;
+        var smsFailed = 0;
+        if (request.SendSms)
+        {
+            // Save+send uses the ASSIGNMENT template (D8). Logs Manual, no dedup.
+            var template = await AdminSendHelpers.ResolveAdminTemplateAsync(db, MagavConstants.AppSettingsKeys.AdminAssignmentTemplateId);
+            if (template == null)
+                return Results.Ok(ApiResponse<object>.Ok(
+                    new { Created = created.Count, SmsSent = 0, SmsFailed = 0 },
+                    "המשמרות נוצרו, אך תבנית השיבוץ לא הוגדרה — לא נשלחו הודעות"));
+
+            var smsService = new SmsReminderService(db, smsProvider, logger);
+            foreach (var (shift, volunteer) in created)
+            {
+                if (string.IsNullOrEmpty(volunteer.MobilePhone) || !volunteer.ApproveToReceiveSms)
+                    continue;
+                try
+                {
+                    var result = await smsService.SendAdminSmsAsync(shift, volunteer, template);
+                    if (result.Success) smsSent++; else smsFailed++;
+                }
+                catch { smsFailed++; }
+            }
+        }
+
+        return Results.Ok(ApiResponse<object>.Ok(
+            new { Created = created.Count, SmsSent = smsSent, SmsFailed = smsFailed },
+            "המשמרת המנהלית נוצרה בהצלחה"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error creating administrative shift: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה ביצירת המשמרת המנהלית"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// PUT /api/shifts/administrative/update-group - update an admin group keyed on old (Date, Time, Description)
+app.MapPut("/api/shifts/administrative/update-group", async (UpdateAdminShiftGroupRequest request, MagavDbManager db) =>
+{
+    try
+    {
+        if (string.IsNullOrWhiteSpace(request.NewDescription))
+            return Results.BadRequest(ApiResponse<object>.Fail("תיאור המשימה נדרש"));
+        if (!DateTime.TryParse(request.Date, out var parsedDate))
+            return Results.BadRequest(ApiResponse<object>.Fail("פורמט תאריך לא תקין"));
+
+        var oldShiftTime = AdminSendHelpers.NormalizeShiftTime(request.OldShiftTime);
+        var newShiftTime = AdminSendHelpers.NormalizeShiftTime(request.NewShiftTime);
+        if (string.IsNullOrWhiteSpace(newShiftTime))
+            return Results.BadRequest(ApiResponse<object>.Fail("שעת המשמרת נדרשת"));
+
+        // Vehicle location: id wins — a picked Vehicle location nulls the free text.
+        var vehicleLocationId = request.VehicleLocationId;
+        var vehicleLocationText = vehicleLocationId.HasValue
+            ? null
+            : (string.IsNullOrWhiteSpace(request.VehicleLocation) ? null : request.VehicleLocation.Trim());
+
+        var updated = await db.Shifts.UpdateAdminGroupAsync(
+            parsedDate, oldShiftTime, request.OldDescription.Trim(),
+            request.NewDescription.Trim(), newShiftTime,
+            string.IsNullOrWhiteSpace(request.Address) ? null : request.Address.Trim(),
+            request.LocationId, request.CustomLocationName?.Trim(), request.CustomLocationNavigation?.Trim(),
+            request.CarId?.Trim(), vehicleLocationText, vehicleLocationId);
+
+        if (updated == 0)
+            return Results.NotFound(ApiResponse<object>.Fail("לא נמצאו שיבוצים לעדכון"));
+
+        return Results.Ok(ApiResponse<object>.Ok(new { Updated = updated }, "המשמרת המנהלית עודכנה בהצלחה"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error updating administrative shift group: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בעדכון המשמרת המנהלית"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// POST /api/shifts/administrative/cancel-group - soft-cancel an admin group (Date, Time, Description)
+app.MapPost("/api/shifts/administrative/cancel-group", async (CancelAdminShiftGroupRequest request, MagavDbManager db) =>
+{
+    try
+    {
+        if (string.IsNullOrWhiteSpace(request.Description))
+            return Results.BadRequest(ApiResponse<object>.Fail("תיאור המשימה נדרש"));
+        if (!DateTime.TryParse(request.Date, out var parsedDate))
+            return Results.BadRequest(ApiResponse<object>.Fail("פורמט תאריך לא תקין"));
+
+        var shiftTime = AdminSendHelpers.NormalizeShiftTime(request.ShiftTime);
+        var canceled = await db.Shifts.CancelAdminGroupAsync(parsedDate, shiftTime, request.Description.Trim());
+        if (canceled == 0)
+            return Results.NotFound(ApiResponse<object>.Fail("לא נמצאו שיבוצים לביטול"));
+
+        return Results.Ok(ApiResponse<object>.Ok(new { Canceled = canceled }, "המשמרת המנהלית בוטלה"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error canceling administrative shift group: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בביטול המשמרת המנהלית"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// POST /api/shifts/administrative/{id}/send-sms - per-volunteer admin send (today template on the
+// shift's own day, else the assignment template — D6). Logs Manual, no dedup.
+app.MapPost("/api/shifts/administrative/{id:int}/send-sms", async (
+    int id, MagavDbManager db, ISmsProvider smsProvider, ILogger<SmsReminderService> logger) =>
+{
+    try
+    {
+        var shift = await db.Shifts.GetByIdAsync(id);
+        if (shift == null || shift.ShiftType != MagavConstants.ShiftTypes.Administrative)
+            return Results.NotFound(ApiResponse<object>.Fail("משמרת מנהלית לא נמצאה"));
+        if (shift.IsCanceled)
+            return Results.BadRequest(ApiResponse<object>.Fail("לא ניתן לשלוח SMS למשמרת מבוטלת"));
+        if (shift.VolunteerId == null)
+            return Results.BadRequest(ApiResponse<object>.Fail("לא ניתן לשלוח SMS למתנדב לא מזוהה"));
+
+        var volunteer = await db.Volunteers.GetByIdAsync(shift.VolunteerId.Value);
+        if (volunteer == null)
+            return Results.NotFound(ApiResponse<object>.Fail("מתנדב לא נמצא"));
+        if (string.IsNullOrEmpty(volunteer.MobilePhone))
+            return Results.BadRequest(ApiResponse<object>.Fail("למתנדב אין מספר טלפון"));
+        if (!volunteer.ApproveToReceiveSms)
+            return Results.BadRequest(ApiResponse<object>.Fail("המתנדב לא אישר קבלת הודעות SMS"));
+
+        // D6: today template on the shift's own day (Israel tz), else the assignment template.
+        var israelTz = TimeZoneInfo.FindSystemTimeZoneById(
+            OperatingSystem.IsWindows() ? "Israel Standard Time" : "Asia/Jerusalem");
+        var today = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, israelTz).Date;
+        var appSettingKey = shift.ShiftDate.Date == today
+            ? MagavConstants.AppSettingsKeys.AdminTodayTemplateId
+            : MagavConstants.AppSettingsKeys.AdminAssignmentTemplateId;
+
+        var template = await AdminSendHelpers.ResolveAdminTemplateAsync(db, appSettingKey);
+        if (template == null)
+            return Results.BadRequest(ApiResponse<object>.Fail("תבנית ההודעה המנהלית לא הוגדרה"));
+
+        var smsService = new SmsReminderService(db, smsProvider, logger);
+        var result = await smsService.SendAdminSmsAsync(shift, volunteer, template);
+
+        if (!result.Success)
+            return Results.Json(
+                ApiResponse<object>.Fail(result.Error ?? "שליחת SMS נכשלה"),
+                statusCode: StatusCodes.Status500InternalServerError);
+
+        return Results.Ok(ApiResponse<object>.Ok(null!, "הודעת SMS נשלחה בהצלחה"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error sending administrative shift SMS: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בשליחת SMS"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// ============================================
+// ADMIN SCHEDULER CONFIG + TEMPLATE-ROLE ENDPOINTS (administrative advance reminder)
+// ============================================
+
+// GET /api/admin-scheduler/config - the single AdminAdvance scheduler row
+app.MapGet("/api/admin-scheduler/config", async (MagavDbManager db) =>
+{
+    try
+    {
+        var config = await db.SchedulerConfig.GetAdminAdvanceAsync();
+        if (config == null)
+            return Results.NotFound(ApiResponse<object>.Fail("הגדרת תזמון מנהלית לא נמצאה"));
+        return Results.Ok(ApiResponse<SchedulerConfig>.Ok(config));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error fetching admin scheduler config: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בטעינת הגדרות התזמון המנהליות"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// PUT /api/admin-scheduler/config - update ONLY Time/IsEnabled/MessageTemplateId. DayGroup,
+// ReminderType and DaysBeforeShift are server-owned/immutable (DaysBeforeShift stays pinned at 1).
+app.MapPut("/api/admin-scheduler/config", async (
+    AdminSchedulerConfigUpdateDto config, MagavDbManager db, HttpContext context) =>
+{
+    try
+    {
+        var existing = await db.SchedulerConfig.GetAdminAdvanceAsync();
+        if (existing == null)
+            return Results.NotFound(ApiResponse<object>.Fail("הגדרת תזמון מנהלית לא נמצאה"));
+
+        if (!SchedulerConfigValidation.IsValidTime(config.Time))
+            return Results.BadRequest(ApiResponse<object>.Fail("שעה לא תקינה (HH:mm)"));
+        if (config.IsEnabled != 0 && config.IsEnabled != 1)
+            return Results.BadRequest(ApiResponse<object>.Fail("ערך הפעלה לא תקין"));
+
+        var template = await db.MessageTemplates.GetByIdAsync(config.MessageTemplateId);
+        if (template == null)
+            return Results.BadRequest(ApiResponse<object>.Fail("תבנית הודעה לא נמצאה"));
+
+        var username = context.User.FindFirst(ClaimTypes.Name)?.Value ?? "unknown";
+
+        // Only the three editable fields are touched; DayGroup/ReminderType/DaysBeforeShift are left
+        // exactly as stored (server-owned). DaysBeforeShift stays 1 (window is gap/overlap-free only for N=1).
+        existing.Time = config.Time;
+        existing.IsEnabled = config.IsEnabled;
+        existing.MessageTemplateId = config.MessageTemplateId;
+        existing.UpdatedAt = DateTime.UtcNow;
+        existing.UpdatedBy = username;
+        await db.SchedulerConfig.UpdateAsync(existing);
+
+        return Results.Ok(ApiResponse<SchedulerConfig>.Ok(existing, "ההגדרה נשמרה בהצלחה"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error updating admin scheduler config: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בשמירת ההגדרה המנהלית"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("AdminOnly");
+
+// GET /api/admin-settings/templates - the assignment + today admin template-role ids
+app.MapGet("/api/admin-settings/templates", async (MagavDbManager db) =>
+{
+    try
+    {
+        var assignment = await db.AppSettings.GetValueAsync(MagavConstants.AppSettingsKeys.AdminAssignmentTemplateId);
+        var todayVal = await db.AppSettings.GetValueAsync(MagavConstants.AppSettingsKeys.AdminTodayTemplateId);
+        int? assignmentId = int.TryParse(assignment, out var a) ? a : null;
+        int? todayId = int.TryParse(todayVal, out var t) ? t : null;
+        return Results.Ok(ApiResponse<AdminTemplatesDto>.Ok(new AdminTemplatesDto(assignmentId, todayId)));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error fetching admin template roles: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בטעינת תבניות המשמרות המנהליות"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("CanManageMessages");
+
+// PUT /api/admin-settings/templates - set the assignment + today admin template-role ids
+app.MapPut("/api/admin-settings/templates", async (AdminTemplatesUpdateDto dto, MagavDbManager db) =>
+{
+    try
+    {
+        var assignment = await db.MessageTemplates.GetByIdAsync(dto.AssignmentTemplateId);
+        var todayTemplate = await db.MessageTemplates.GetByIdAsync(dto.TodayTemplateId);
+        if (assignment == null || todayTemplate == null)
+            return Results.BadRequest(ApiResponse<object>.Fail("תבנית הודעה לא נמצאה"));
+
+        await db.AppSettings.UpsertAsync(MagavConstants.AppSettingsKeys.AdminAssignmentTemplateId, dto.AssignmentTemplateId.ToString());
+        await db.AppSettings.UpsertAsync(MagavConstants.AppSettingsKeys.AdminTodayTemplateId, dto.TodayTemplateId.ToString());
+
+        return Results.Ok(ApiResponse<object>.Ok(null!, "התבניות נשמרו בהצלחה"));
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Error updating admin template roles: {ex}");
+        return Results.Json(
+            ApiResponse<object>.Fail("אירעה שגיאה בשמירת התבניות"),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).RequireAuthorization("AdminOnly");
 
 // ============================================
 // PUBLIC SMS APPROVAL ENDPOINTS (No Auth Required)
@@ -1845,6 +2231,7 @@ app.MapGet("/api/sms-log", async (int? days, MagavDbManager db) =>
               JOIN Shifts s ON sl.ShiftId = s.Id
               JOIN Volunteers v ON s.VolunteerId = v.Id
               WHERE sl.SentAt >= @0
+                AND s.ShiftType = 'Operational'
               ORDER BY sl.SentAt DESC", from);
 
         return Results.Ok(ApiResponse<object>.Ok(logs));
@@ -1879,6 +2266,7 @@ app.MapGet("/api/sms-log/summary", async (int? days, MagavDbManager db) =>
               LEFT JOIN SmsLog sl ON sl.ShiftId = s.Id
               WHERE s.ShiftDate >= @0
                 AND s.IsCanceled = 0
+                AND s.ShiftType = 'Operational'
               GROUP BY s.ShiftDate, s.ShiftName
               HAVING COUNT(sl.Id) > 0
               ORDER BY s.ShiftDate DESC, s.ShiftName", from, MagavConstants.SmsStatuses.Success, MagavConstants.SmsStatuses.Fail);
@@ -1903,7 +2291,9 @@ app.MapGet("/api/scheduler/config", async (MagavDbManager db) =>
 {
     try
     {
-        var configs = await db.SchedulerConfig.GetAllAsync();
+        // Operational configs ONLY — the administrative AdminAdvance row is managed via
+        // /api/admin-scheduler/config and must never leak into the operational scheduler UI (§6c).
+        var configs = await db.SchedulerConfig.GetOperationalAsync();
         return Results.Ok(ApiResponse<List<SchedulerConfig>>.Ok(configs));
     }
     catch (Exception ex)
@@ -1929,9 +2319,10 @@ app.MapPut("/api/scheduler/config", async (
         if (configs == null || configs.Count == 0)
             return Results.BadRequest(ApiResponse<object>.Fail("לא התקבלו רשומות הגדרה"));
 
-        // Fetch all configs once and reuse for both the id-set validation and the update loop,
-        // instead of re-fetching each row by id inside the loop below.
-        var configsById = (await db.SchedulerConfig.GetAllAsync()).ToDictionary(c => c.Id);
+        // Fetch OPERATIONAL configs once and reuse for both the id-set validation and the update loop.
+        // MUST exclude the AdminAdvance row (§6c) — otherwise the exact set-equality check below would
+        // reject every operational save (the operational UI never submits the admin row's id).
+        var configsById = (await db.SchedulerConfig.GetOperationalAsync()).ToDictionary(c => c.Id);
         var submittedIds = configs.Select(c => c.Id).ToHashSet();
         if (configs.Count != configsById.Count || !submittedIds.SetEquals(configsById.Keys))
             return Results.BadRequest(ApiResponse<object>.Fail("רשימת ההגדרות אינה תואמת את ההגדרות הקיימות"));
@@ -1993,6 +2384,12 @@ app.MapPut("/api/scheduler/config/{id:int}", async (
     {
         var existing = await db.SchedulerConfig.GetByIdAsync(id);
         if (existing == null)
+            return Results.NotFound(ApiResponse<object>.Fail("הגדרת תזמון לא נמצאה"));
+
+        // The administrative AdminAdvance row must NOT be editable through the operational endpoint —
+        // it is managed by /api/admin-scheduler/config (which owns its DayGroup/ReminderType/DaysBeforeShift
+        // immutability guards). Reject to avoid cross-type edits (§6c).
+        if (existing.ReminderType == MagavConstants.ReminderTypes.AdminAdvance)
             return Results.NotFound(ApiResponse<object>.Fail("הגדרת תזמון לא נמצאה"));
 
         var template = await db.MessageTemplates.GetByIdAsync(config.MessageTemplateId);
@@ -2216,6 +2613,10 @@ static class SchedulerConfigValidation
 {
     private static readonly Regex TimeRegex = new(@"^([01]\d|2[0-3]):[0-5]\d$", RegexOptions.Compiled);
 
+    // Shared HH:mm check so the admin scheduler PUT reuses the SAME compiled regex as the operational
+    // scheduler validation (one time-format source of truth on the .NET side).
+    public static bool IsValidTime(string? time) => time != null && TimeRegex.IsMatch(time);
+
     public static string? Validate(SchedulerConfigUpdateDto config, string reminderType, MessageTemplate? template)
     {
         if (!TimeRegex.IsMatch(config.Time))
@@ -2257,10 +2658,61 @@ public record CancelShiftGroupRequest(string Date, string ShiftName, string CarI
 public record CancelGroupResult(int CanceledCount, int SmsSentCount, int SmsFailedCount);
 
 // Location Management DTOs
-public record LocationRequest(string Name, string? Address, string? City, string? Navigation);
+public record LocationRequest(string Name, string? Address, string? City, string? Navigation, string? Type = null);
 public record UpdateGroupLocationRequest(string Date, string ShiftName, string CarId,
     int? LocationId, string? CustomLocationName, string? CustomLocationNavigation);
 public record SendLocationUpdateRequest(string Date, string ShiftName, string CarId);
 
 // Jewish Holidays
 public record JewishHolidayRequest(string Date, string Name);
+
+// ============================================
+// ADMINISTRATIVE SHIFTS DTOs
+// ============================================
+public record CreateAdminShiftRequest(
+    string Description, string Date, string ShiftTime,
+    string? Address = null, string? VehicleLocation = null,
+    string? CarId = null, int? LocationId = null,
+    string? CustomLocationName = null, string? CustomLocationNavigation = null,
+    int? VehicleLocationId = null,
+    int[]? VolunteerIds = null, bool SendSms = false);
+
+public record UpdateAdminShiftGroupRequest(
+    string Date, string OldShiftTime, string OldDescription,
+    string NewDescription, string NewShiftTime,
+    string? Address = null, string? VehicleLocation = null,
+    string? CarId = null, int? LocationId = null,
+    string? CustomLocationName = null, string? CustomLocationNavigation = null,
+    int? VehicleLocationId = null);
+
+public record CancelAdminShiftGroupRequest(string Date, string ShiftTime, string Description);
+
+// Admin scheduler config PUT — only the editable fields (DayGroup/ReminderType/DaysBeforeShift are server-owned).
+public record AdminSchedulerConfigUpdateDto(string Time, int IsEnabled, int MessageTemplateId);
+
+// Admin template-role ids (assignment + today; advance lives on the SchedulerConfig row).
+public record AdminTemplatesDto(int? AssignmentTemplateId, int? TodayTemplateId);
+public record AdminTemplatesUpdateDto(int AssignmentTemplateId, int TodayTemplateId);
+
+// Helpers for the one-shot administrative sends + shift-time normalization.
+static class AdminSendHelpers
+{
+    // Resolve an admin template from an AppSettings key (value = template id). Returns null if the
+    // key is unset/non-numeric or the referenced template no longer exists.
+    public static async Task<MessageTemplate?> ResolveAdminTemplateAsync(MagavDbManager db, string appSettingKey)
+    {
+        var val = await db.AppSettings.GetValueAsync(appSettingKey);
+        if (val == null || !int.TryParse(val, out var tid)) return null;
+        return await db.MessageTemplates.GetByIdAsync(tid);
+    }
+
+    // Zero-pad to HH:mm so "8:00" and "08:00" bucket together (D3). Falls back to the trimmed input
+    // if it can't be parsed (validation elsewhere rejects an empty result).
+    public static string NormalizeShiftTime(string? raw)
+    {
+        var trimmed = (raw ?? "").Trim();
+        return TimeOnly.TryParse(trimmed, System.Globalization.CultureInfo.InvariantCulture, out var t)
+            ? t.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture)
+            : trimmed;
+    }
+}

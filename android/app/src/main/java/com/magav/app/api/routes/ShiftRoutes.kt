@@ -33,6 +33,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import com.magav.app.util.ReminderTypes
+import com.magav.app.util.ShiftTypes
 import com.magav.app.util.SmsStatuses
 import com.magav.app.util.toIsoInstant
 import com.magav.app.util.toIsoRange
@@ -66,7 +67,7 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
 
                 val (from, to) = date.toIsoRange()
 
-                val shifts = database.shiftDao().getByDateRange(from, to)
+                val shifts = database.shiftDao().getByDateRangeAndType(from, to, ShiftTypes.OPERATIONAL)
                 val volunteers = database.volunteerDao().getAll()
                 val volunteerMap = volunteers.associateBy { it.id }
                 val locations = database.locationDao().getAll().associateBy { it.id }
@@ -186,7 +187,7 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
 
                 val (from, to) = date.toIsoRange()
 
-                val allShifts = database.shiftDao().getByDateRange(from, to)
+                val allShifts = database.shiftDao().getByDateRangeAndType(from, to, ShiftTypes.OPERATIONAL)
                 val carId = request.carId.ifBlank { "" }
                 val matching = allShifts.filter { it.shiftName == request.shiftName && it.carId == carId }
 
@@ -318,7 +319,7 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
 
                 val (from, to) = date.toIsoRange()
                 // getByDateRange already excludes canceled
-                val allShifts = database.shiftDao().getByDateRange(from, to)
+                val allShifts = database.shiftDao().getByDateRangeAndType(from, to, ShiftTypes.OPERATIONAL)
                 val carId = request.carId.ifBlank { "" }
                 val matching = allShifts.filter { it.shiftName == request.shiftName && it.carId == carId }
 
@@ -548,7 +549,7 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                 // Check for duplicates
                 val from = shiftDateIso
                 val to = LocalDate.parse(request.shiftDate).plusDays(1).toIsoInstant()
-                val existingShifts = database.shiftDao().getByDateRange(from, to)
+                val existingShifts = database.shiftDao().getByDateRangeAndType(from, to, ShiftTypes.OPERATIONAL)
                 val isDuplicate = existingShifts.any {
                     it.shiftName == request.shiftName &&
                     it.carId == request.carId &&
@@ -629,7 +630,7 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                 val nameCarChanged = request.oldShiftName != newShiftName || request.oldCarId != newCarId
 
                 // Check if location changed by comparing against first existing shift
-                val existingShifts = database.shiftDao().getByDateRange(from, to)
+                val existingShifts = database.shiftDao().getByDateRangeAndType(from, to, ShiftTypes.OPERATIONAL)
                 val groupShifts = existingShifts.filter { it.shiftName == request.oldShiftName && it.carId == request.oldCarId }
                 val firstShift = groupShifts.firstOrNull()
                 val locationChanged = firstShift != null && (
@@ -799,7 +800,7 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                 val israelTz = ZoneId.of("Asia/Jerusalem")
                 val today = LocalDate.now(israelTz)
                 if (date == today) {
-                    val allShifts = database.shiftDao().getByDateRange(from, to)
+                    val allShifts = database.shiftDao().getByDateRangeAndType(from, to, ShiftTypes.OPERATIONAL)
                     val groupShifts = allShifts.filter { it.shiftName == request.shiftName && it.carId == request.carId }
                     for (shift in groupShifts) {
                         val existingLog = database.smsLogDao().getByShiftIdAndReminderType(shift.id, ReminderTypes.SAME_DAY)
@@ -841,7 +842,7 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
 
                 val (from, to) = date.toIsoRange()
 
-                val allShifts = database.shiftDao().getByDateRange(from, to)
+                val allShifts = database.shiftDao().getByDateRangeAndType(from, to, ShiftTypes.OPERATIONAL)
                 val groupShifts = allShifts.filter { it.shiftName == request.shiftName && it.carId == request.carId }
 
                 if (groupShifts.isEmpty()) {

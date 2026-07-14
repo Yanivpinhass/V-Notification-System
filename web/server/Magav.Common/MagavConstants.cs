@@ -13,6 +13,27 @@
             public const string LocationUpdate = "LocationUpdate";
             public const string Manual = "Manual";
             public const string WeekdayAdvance = "WeekdayAdvance";
+            public const string AdminAdvance = "AdminAdvance";
+        }
+
+        public static class ShiftTypes
+        {
+            public const string Operational = "Operational";
+            public const string Administrative = "Administrative";
+        }
+
+        public static class LocationTypes
+        {
+            public const string Vehicle = "Vehicle";
+            public const string General = "General";
+        }
+
+        // AppSettings keys (administrative-shifts template roles — D5). NOT part of the parity-lint
+        // value-sets, but MUST match the Android DatabaseInitializer.kt key literals exactly.
+        public static class AppSettingsKeys
+        {
+            public const string AdminAssignmentTemplateId = "admin_assignment_template_id";
+            public const string AdminTodayTemplateId = "admin_today_template_id";
         }
 
         public static class SmsStatuses

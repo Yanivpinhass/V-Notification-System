@@ -26,6 +26,8 @@ interface LocationDao {
     @Query("DELETE FROM Locations WHERE Id = :id")
     suspend fun deleteById(id: Int)
 
-    @Query("SELECT COUNT(*) FROM Shifts WHERE LocationId = :locationId AND ShiftDate >= :today")
+    // A location is undeletable while a FUTURE shift references it as EITHER its mission location
+    // (LocationId) OR its vehicle location (VehicleLocationId — v2). Mirrors .NET IsReferencedByFutureShiftsAsync.
+    @Query("SELECT COUNT(*) FROM Shifts WHERE (LocationId = :locationId OR VehicleLocationId = :locationId) AND ShiftDate >= :today")
     suspend fun countFutureShiftsByLocationId(locationId: Int, today: String): Int
 }

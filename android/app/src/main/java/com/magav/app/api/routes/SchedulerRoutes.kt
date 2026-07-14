@@ -51,11 +51,15 @@ fun Route.schedulerRoutes(database: MagavDatabase, context: Context) {
     authenticate("auth-bearer") {
         route("/api/scheduler") {
 
-            // GET /api/scheduler/config - get all scheduler configs
+            // GET /api/scheduler/config - operational configs ONLY. The administrative AdminAdvance row
+            // is managed via /api/admin-scheduler/config and must never leak into the operational UI
+            // (§6c). NOTE: filter the RESPONSE only — never the DAO getAll() (AlarmScheduler reuses it
+            // and must still see the enabled admin row to schedule it).
             get("/config") {
                 call.requireRole("Admin", "SystemManager")
 
                 val configs = database.schedulerConfigDao().getAll()
+                    .filter { it.reminderType != ReminderTypes.ADMIN_ADVANCE }
                 call.respond(ApiResponse.ok(configs.map { toDto(it) }))
             }
 
@@ -67,9 +71,12 @@ fun Route.schedulerRoutes(database: MagavDatabase, context: Context) {
                 val now = Instant.now().toString()
                 val updatedBy = call.getUserName() ?: "unknown"
 
-                // Fetch all configs once and reuse for both the id-set validation and the update
-                // loop, instead of re-fetching each row by id below.
-                val configsById = database.schedulerConfigDao().getAll().associateBy { it.id }
+                // Fetch OPERATIONAL configs once and reuse for both the id-set validation and the
+                // update loop. MUST exclude the AdminAdvance row (§6c) — otherwise the exact
+                // set-equality check below would reject every operational save.
+                val configsById = database.schedulerConfigDao().getAll()
+                    .filter { it.reminderType != ReminderTypes.ADMIN_ADVANCE }
+                    .associateBy { it.id }
                 val submittedIds = updates.map { it.id }.toSet()
                 // Validate the submitted id-set EXACTLY matches the existing config id-set:
                 // reject unknown ids, missing ids, and duplicate ids — without a hardcoded count
@@ -120,7 +127,9 @@ fun Route.schedulerRoutes(database: MagavDatabase, context: Context) {
                     ?: throw IllegalArgumentException("מזהה לא תקין")
 
                 val existing = database.schedulerConfigDao().getById(id)
-                if (existing == null) {
+                // Also reject the AdminAdvance row here — it is managed by /api/admin-scheduler/config,
+                // not the operational endpoint (§6c). Return the same 404 as a missing row.
+                if (existing == null || existing.reminderType == ReminderTypes.ADMIN_ADVANCE) {
                     call.respond(
                         HttpStatusCode.NotFound,
                         ApiResponse.fail<Unit>("הגדרת תזמון לא נמצאה")

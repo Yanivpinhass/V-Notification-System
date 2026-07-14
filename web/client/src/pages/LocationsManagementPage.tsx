@@ -10,12 +10,21 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { locationsService, LocationDto } from '@/services/locationsService';
+import { locationsService, LocationDto, LocationType } from '@/services/locationsService';
 import { LocationDialog } from '@/components/locations/LocationDialog';
 import { DeleteLocationDialog } from '@/components/locations/DeleteLocationDialog';
 import { Plus, Pencil, Trash2, Loader2, Search, ExternalLink } from 'lucide-react';
 
-export const LocationsManagementPage: React.FC = () => {
+interface LocationsManagementPageProps {
+  // Which location type this page manages. Defaults to Vehicle (מיקומי ניידות) for back-compat.
+  locationType?: LocationType;
+  title?: string;
+}
+
+export const LocationsManagementPage: React.FC<LocationsManagementPageProps> = ({
+  locationType = 'Vehicle',
+  title = 'מיקומי ניידות',
+}) => {
   const [locations, setLocations] = useState<LocationDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -30,14 +39,14 @@ export const LocationsManagementPage: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await locationsService.getAll();
+      const data = await locationsService.getAll(locationType);
       setLocations(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'אירעה שגיאה בטעינת הנתונים');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [locationType]);
 
   useEffect(() => {
     loadLocations();
@@ -79,7 +88,7 @@ export const LocationsManagementPage: React.FC = () => {
       <Card className="overflow-hidden">
         <CardHeader className="pb-4 space-y-3">
           <div className="flex items-center justify-between">
-            <CardTitle>מיקומי ניידות</CardTitle>
+            <CardTitle>{title}</CardTitle>
             <div className="flex items-center gap-2">
               <Button size="sm" onClick={handleCreate}>
                 <Plus className="h-4 w-4 ml-2" />
@@ -174,6 +183,7 @@ export const LocationsManagementPage: React.FC = () => {
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         location={editingLocation}
+        locationType={locationType}
         onSaved={handleSaved}
       />
 

@@ -102,16 +102,20 @@ public class SmsSchedulerService : BackgroundService
             // Compute the eligibility window and the RunLog key:
             //  • SameDay/Advance: single-day window [today+N, today+N+1); RunLog key = today+N
             //    (byte-identical to the previous single-date behavior).
-            //  • WeekdayAdvance: half-open window [today+N, nextWorkingDay(today)+N) so shifts whose
-            //    natural send day lands on Fri/Sat/holiday/holiday-eve are pulled back onto this
-            //    working day; RunLog key = today (the firing day, so one row per windowed run).
+            //  • WeekdayAdvance / AdminAdvance: half-open window [today+N, nextWorkingDay(today)+N) so
+            //    shifts whose natural send day lands on Fri/Sat/holiday/holiday-eve are pulled back
+            //    onto this working day; RunLog key = today (the firing day, so one row per windowed
+            //    run). AdminAdvance reuses this machinery verbatim — its config is DayGroup='SunThu'
+            //    (so it fires only on working days, never Fri/Sat/holiday/holiday-eve) with N=1, the
+            //    only value for which the half-open window is gap/overlap-free.
             var today = now.Date;
             var n = config.DaysBeforeShift;
             var windowStart = today.AddDays(n);
             DateTime windowEnd;
             DateTime runLogTargetDate;
 
-            if (config.ReminderType == MagavConstants.ReminderTypes.WeekdayAdvance)
+            if (config.ReminderType == MagavConstants.ReminderTypes.WeekdayAdvance
+                || config.ReminderType == MagavConstants.ReminderTypes.AdminAdvance)
             {
                 var nextWorkingDay = await NextWorkingDayAsync(today, db);
                 windowEnd = nextWorkingDay.AddDays(n);

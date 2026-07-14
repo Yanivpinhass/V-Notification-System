@@ -1,5 +1,7 @@
 import { BaseApiClient } from './api/BaseApiClient';
 
+export type LocationType = 'Vehicle' | 'General';
+
 export interface LocationDto {
   id: number;
   name: string;
@@ -8,6 +10,7 @@ export interface LocationDto {
   navigation: string | null;
   createdAt: string | null;
   updatedAt: string | null;
+  locationType: LocationType;
 }
 
 export interface LocationRequest {
@@ -15,11 +18,14 @@ export interface LocationRequest {
   address: string | null;
   city: string | null;
   navigation: string | null;
+  type?: LocationType;
 }
 
 class LocationsService extends BaseApiClient {
-  async getAll(): Promise<LocationDto[]> {
-    return this.get<LocationDto[]>('/locations');
+  // type: 'Vehicle' (default server-side) | 'General' | 'All'. Omitting it returns Vehicle locations,
+  // preserving legacy behavior for the operational picker.
+  async getAll(type?: LocationType | 'All'): Promise<LocationDto[]> {
+    return this.get<LocationDto[]>('/locations', type ? { type } : undefined);
   }
 
   async getById(id: number): Promise<LocationDto> {

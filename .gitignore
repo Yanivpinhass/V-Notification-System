@@ -66,3 +66,14 @@ parse_shifts.py
 publish/
 nul
 plan.md
+
+# Graphify knowledge graph (local; rebuild with `graphify update .`)
+graphify-out/
+
+# Re-include the Android Room SOURCE package (NOT a database — ISS-010 fix).
+# The `db/` rule above (line 41) ignores every directory named `db` anywhere, which
+# silently swallowed the entire Android Room package (entities/DAOs). These negations
+# re-include ONLY the source tree; the live databases (repo-root `db/`, `web/db/`,
+# `*.db*`) and build artifacts (`android/app/build/`) stay ignored. Must be LAST.
+!android/app/src/main/java/com/magav/app/db/
+!android/app/src/main/java/com/magav/app/db/**

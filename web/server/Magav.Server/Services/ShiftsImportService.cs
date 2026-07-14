@@ -1,3 +1,4 @@
+using Magav.Common;
 using Magav.Common.Models;
 using Magav.Server.Database;
 using Magav.Server.Helpers;
@@ -106,7 +107,11 @@ public class ShiftsImportService
         {
             var minDate = futureShifts.Min(s => s.Date);
             var maxDate = futureShifts.Max(s => s.Date);
-            await db.Db.DeleteManyAsync<Shift>(s => s.ShiftDate >= minDate && s.ShiftDate <= maxDate);
+            // P0 DATA-LOSS GUARD: scope the range hard-delete to Operational so the Excel import never
+            // destroys administrative shifts in the imported date range (they are created manually only).
+            // Boundary stays INCLUSIVE (>= .. <=), matching the original operational behavior.
+            await db.Db.DeleteManyAsync<Shift>(s => s.ShiftDate >= minDate && s.ShiftDate <= maxDate
+                && s.ShiftType == MagavConstants.ShiftTypes.Operational);
             if (newShifts.Count > 0)
             {
                 await db.Db.BulkInsertAsync(newShifts);

@@ -59,6 +59,72 @@ export interface UpdateShiftGroupRequest {
   customLocationNavigation?: string | null;
 }
 
+// ===== Administrative shifts (משמרות מנהליות) — strictly isolated from operational shifts =====
+export interface AdminShiftDto {
+  id: number;
+  shiftDate: string;
+  shiftName: string;
+  carId: string;
+  description: string | null;
+  shiftTime: string | null;
+  address: string | null;
+  vehicleLocation: string | null;
+  volunteerId: number | null;
+  locationId: number | null;
+  volunteerName: string | null;
+  volunteerPhone: string | null;
+  volunteerApproved: boolean;
+  locationName: string | null;
+  locationNavigation: string | null;
+  locationCity: string | null;
+  vehicleLocationId: number | null;
+  vehicleLocationName: string | null;
+  vehicleLocationNavigation: string | null;
+  vehicleLocationCity: string | null;
+}
+
+export interface CreateAdminShiftRequest {
+  description: string;
+  date: string;
+  shiftTime: string;
+  address?: string | null;
+  vehicleLocation?: string | null;
+  carId?: string | null;
+  locationId?: number | null;
+  customLocationName?: string | null;
+  customLocationNavigation?: string | null;
+  vehicleLocationId?: number | null;
+  volunteerIds: number[];
+  sendSms: boolean;
+}
+
+export interface UpdateAdminShiftGroupRequest {
+  date: string;
+  oldShiftTime: string;
+  oldDescription: string;
+  newDescription: string;
+  newShiftTime: string;
+  address?: string | null;
+  vehicleLocation?: string | null;
+  carId?: string | null;
+  locationId?: number | null;
+  customLocationName?: string | null;
+  customLocationNavigation?: string | null;
+  vehicleLocationId?: number | null;
+}
+
+export interface CancelAdminShiftGroupRequest {
+  date: string;
+  shiftTime: string;
+  description: string;
+}
+
+export interface AdminCreateResult {
+  created: number;
+  smsSent: number;
+  smsFailed: number;
+}
+
 class ShiftsService extends BaseApiClient {
   async uploadShiftsFile(file: File): Promise<ImportResult> {
     const formData = new FormData();
@@ -112,6 +178,28 @@ class ShiftsService extends BaseApiClient {
 
   async getCanceledShifts(month: string): Promise<CanceledShiftDto[]> {
     return this.get<CanceledShiftDto[]>('/shifts/canceled', { month });
+  }
+
+  // ===== Administrative shifts =====
+  async getAdminByWeek(weekStart: string): Promise<AdminShiftDto[]> {
+    return this.get<AdminShiftDto[]>('/shifts/administrative/by-week', { weekStart });
+  }
+
+  async createAdminShift(data: CreateAdminShiftRequest): Promise<AdminCreateResult> {
+    return this.post<AdminCreateResult, CreateAdminShiftRequest>('/shifts/administrative', data);
+  }
+
+  async updateAdminShiftGroup(data: UpdateAdminShiftGroupRequest): Promise<{ updated: number }> {
+    return this.put<{ updated: number }, UpdateAdminShiftGroupRequest>('/shifts/administrative/update-group', data);
+  }
+
+  async cancelAdminShiftGroup(data: CancelAdminShiftGroupRequest): Promise<{ canceled: number }> {
+    return this.post<{ canceled: number }, CancelAdminShiftGroupRequest>('/shifts/administrative/cancel-group', data);
+  }
+
+  // Per-volunteer admin send (server picks today vs assignment template by the shift's date — D6).
+  async sendAdminShiftSms(id: number): Promise<void> {
+    return this.post<void>(`/shifts/administrative/${id}/send-sms`, {});
   }
 }
 

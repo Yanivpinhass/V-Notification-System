@@ -23,8 +23,10 @@ const FILES = {
 
 // React schedulerPreview is a settings-page preview engine for the user-configurable scheduler rows
 // only. LocationUpdate (event-triggered re-notify) and Manual (ad-hoc admin send) are not configurable
-// rows, so they are intentionally absent from the React constants. NOT drift — see tools/parity.md.
-const REACT_REMINDER_EXEMPT = ['LocationUpdate', 'Manual'];
+// rows, so they are intentionally absent from the React constants. AdminAdvance is the administrative
+// advance reminder — configured in its OWN admin settings cluster (AdminSchedulerSettingsPage), not a
+// schedulerPreview.ts row — so it too is intentionally absent here. NOT drift — see tools/parity.md.
+const REACT_REMINDER_EXEMPT = ['LocationUpdate', 'Manual', 'AdminAdvance'];
 
 // Extract the double-quoted string VALUES (RHS) inside a named block. We compare values, not the
 // language-specific identifier names (.NET PascalCase vs Kotlin CONSTANT_CASE legitimately differ).
@@ -42,18 +44,22 @@ const dn = {
   ReminderTypes: valuesInBlock(dotnet, /class ReminderTypes\s*\{([\s\S]*?)\}/),
   SmsStatuses: valuesInBlock(dotnet, /class SmsStatuses\s*\{([\s\S]*?)\}/),
   DayGroups: valuesInBlock(dotnet, /class DayGroups\s*\{([\s\S]*?)\}/),
+  ShiftTypes: valuesInBlock(dotnet, /class ShiftTypes\s*\{([\s\S]*?)\}/),
+  LocationTypes: valuesInBlock(dotnet, /class LocationTypes\s*\{([\s\S]*?)\}/),
 };
 const an = {
   ReminderTypes: valuesInBlock(android, /object ReminderTypes\s*\{([\s\S]*?)\}/),
   SmsStatuses: valuesInBlock(android, /object SmsStatuses\s*\{([\s\S]*?)\}/),
   DayGroups: valuesInBlock(android, /object DayGroups\s*\{([\s\S]*?)\}/),
+  ShiftTypes: valuesInBlock(android, /object ShiftTypes\s*\{([\s\S]*?)\}/),
+  LocationTypes: valuesInBlock(android, /object LocationTypes\s*\{([\s\S]*?)\}/),
 };
 
 const errors = [];
 const eq = (a, b) => a && b && a.length === b.length && a.every((v, i) => v === b[i]);
 
-// 1) .NET vs Android — MUST be identical for all three value-sets.
-for (const set of ['ReminderTypes', 'SmsStatuses', 'DayGroups']) {
+// 1) .NET vs Android — MUST be identical for all five value-sets.
+for (const set of ['ReminderTypes', 'SmsStatuses', 'DayGroups', 'ShiftTypes', 'LocationTypes']) {
   if (!dn[set]) { errors.push(`Could not parse ${set} from ${FILES.dotnet}`); continue; }
   if (!an[set]) { errors.push(`Could not parse ${set} from ${FILES.android}`); continue; }
   if (!eq(dn[set], an[set])) {
@@ -96,4 +102,6 @@ console.log('✓ parity-lint: cross-platform constants in sync');
 console.log(`  ReminderTypes: ${dn.ReminderTypes.join(', ')}`);
 console.log(`  SmsStatuses:   ${dn.SmsStatuses.join(', ')}`);
 console.log(`  DayGroups:     ${dn.DayGroups.join(', ')}`);
+console.log(`  ShiftTypes:    ${dn.ShiftTypes.join(', ')}`);
+console.log(`  LocationTypes: ${dn.LocationTypes.join(', ')}`);
 console.log(`  React preview-exempt ReminderTypes (accepted): ${REACT_REMINDER_EXEMPT.join(', ')}`);

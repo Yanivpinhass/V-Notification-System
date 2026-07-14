@@ -14,6 +14,8 @@ import { SchedulerRunLogPage } from '@/pages/SchedulerRunLogPage';
 import { SmsSettingsPage } from '@/pages/SmsSettingsPage';
 import { CallbackSettingsPage } from '@/pages/CallbackSettingsPage';
 import { ShiftsManagementPage } from '@/pages/ShiftsManagementPage';
+import { AdminShiftsPage } from '@/pages/AdminShiftsPage';
+import { AdminSchedulerSettingsPage } from '@/pages/AdminSchedulerSettingsPage';
 import { CanceledShiftsPage } from '@/pages/CanceledShiftsPage';
 import { MessageTemplatesPage } from '@/pages/MessageTemplatesPage';
 import { AboutVersionPage } from '@/pages/AboutVersionPage';
@@ -76,7 +78,9 @@ const Index = () => {
       case 'volunteers-management':
         return <VolunteersManagementPage />;
       case 'locations-management':
-        return <LocationsManagementPage />;
+        return <LocationsManagementPage locationType="Vehicle" title="מיקומי ניידות" />;
+      case 'general-locations':
+        return <LocationsManagementPage locationType="General" title="מיקומים כללי" />;
       case 'shifts-import':
         return <ShiftsImportPage />;
       case 'scheduler-settings':
@@ -89,6 +93,10 @@ const Index = () => {
         return <CallbackSettingsPage />;
       case 'shifts-management':
         return <ShiftsManagementPage />;
+      case 'admin-shifts':
+        return <AdminShiftsPage />;
+      case 'admin-scheduler-settings':
+        return <AdminSchedulerSettingsPage />;
       case 'canceled-shifts':
         return <CanceledShiftsPage />;
       case 'message-templates':

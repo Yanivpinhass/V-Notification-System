@@ -37,6 +37,13 @@ public class SmsReminderService
         var runLogDateStr = runLogTargetDate.Date.ToString("yyyy-MM-dd");
         var reminderType = config.ReminderType;
 
+        // Shift-type isolation: AdminAdvance pulls ONLY Administrative shifts; every operational
+        // reminder type pulls ONLY Operational. A shift row is exactly one type, so admin + operational
+        // sends never bleed across the SmsLog(ShiftId, ReminderType) dedup key.
+        var shiftType = reminderType == MagavConstants.ReminderTypes.AdminAdvance
+            ? MagavConstants.ShiftTypes.Administrative
+            : MagavConstants.ShiftTypes.Operational;
+
         _logger.LogInformation(
             "Scheduler run starting: ConfigId={ConfigId}, ReminderType={ReminderType}, Window=[{Start}..{End}), RunLogDate={RunLogDate}",
             config.Id, reminderType, windowStart.ToString("yyyy-MM-dd"), windowEnd.ToString("yyyy-MM-dd"), runLogDateStr);
@@ -45,15 +52,22 @@ public class SmsReminderService
         // excluding those that already have a successful SmsLog for this ReminderType
         var eligibleShifts = await _db.Db.FetchAsync<ShiftVolunteerDto>(
             @"SELECT s.Id AS ShiftId, s.ShiftDate, s.ShiftName, s.CarId,
+                     s.Description, s.ShiftTime, s.Address, s.VehicleLocation,
                      v.Id AS VolunteerId, v.FirstName, v.LastName, v.MappingName, v.MobilePhone,
                      s.LocationId,
                      COALESCE(l.Name, s.CustomLocationName) AS LocationName,
                      COALESCE(l.Navigation, s.CustomLocationNavigation) AS LocationNavigation,
-                     l.City AS LocationCity
+                     l.City AS LocationCity,
+                     s.VehicleLocationId,
+                     COALESCE(vl.Name, s.VehicleLocation) AS VehicleLocationName,
+                     vl.Navigation AS VehicleLocationNavigation,
+                     vl.City AS VehicleLocationCity
               FROM Shifts s
               JOIN Volunteers v ON s.VolunteerId = v.Id
-              LEFT JOIN Locations l ON s.LocationId = l.Id
+              LEFT JOIN Locations l  ON s.LocationId        = l.Id
+              LEFT JOIN Locations vl ON s.VehicleLocationId = vl.Id
               WHERE s.ShiftDate >= @0 AND s.ShiftDate < @1
+                AND s.ShiftType = @4
                 AND s.IsCanceled = 0
                 AND v.ApproveToReceiveSms = 1
                 AND v.MobilePhone IS NOT NULL
@@ -64,7 +78,7 @@ public class SmsReminderService
                       AND sl.ReminderType = @2
                       AND sl.Status = @3
                 )",
-            windowStartStr, windowEndStr, reminderType, MagavConstants.SmsStatuses.Success);
+            windowStartStr, windowEndStr, reminderType, MagavConstants.SmsStatuses.Success, shiftType);
 
         var totalEligible = eligibleShifts.Count;
         var smsSent = 0;
@@ -111,7 +125,9 @@ public class SmsReminderService
                 // query guarantees shift.ShiftDate == windowStart.
                 var message = BuildMessage(template.Content, shift, shift.ShiftDate);
                 if (reminderType == MagavConstants.ReminderTypes.SameDay)
-                    message += BuildLocationText(shift);
+                    message += BuildLocationText(shift);           // operational SameDay — unchanged
+                else if (reminderType == MagavConstants.ReminderTypes.AdminAdvance)
+                    message += BuildAdminSmsBlocks(shift);         // admin scheduled — mission + vehicle blocks (§5)
                 var result = await _smsProvider.SendSmsAsync(shift.MobilePhone!, message);
 
                 // Write SmsLog entry
@@ -201,6 +217,12 @@ public class SmsReminderService
             config.Id, status, smsSent, smsFailed);
     }
 
+    // These are the OPTIONAL administrative placeholders (their source columns are NULL for operational
+    // rows and may be blank for admin rows). When blank, the token itself is STRIPPED (never left as a
+    // raw {…}) and any line it emptied is collapsed. The existing 6 placeholders are unchanged.
+    private static readonly string[] AdminOptionalPlaceholders =
+        { "{תיאור}", "{שעה}", "{מיקום}", "{כתובת}", "{מיקום רכב}" };
+
     public static string BuildMessage(string template, ShiftVolunteerDto shift, DateTime targetDate)
     {
         var firstName = shift.FirstName ?? "";
@@ -210,28 +232,100 @@ public class SmsReminderService
         var dateStr = targetDate.ToString("dd/MM/yyyy");
         var dayName = GetHebrewDayName(targetDate.DayOfWeek);
 
-        return template
+        // Existing placeholders — behavior UNCHANGED, so operational output stays byte-for-byte identical.
+        var result = template
             .Replace("{שם}", firstName)
             .Replace("{שם מלא}", fullName)
             .Replace("{תאריך}", dateStr)
             .Replace("{יום}", dayName)
             .Replace("{משמרת}", shift.ShiftName)
             .Replace("{רכב}", shift.CarId);
+
+        // Does this template use any administrative placeholder? Operational templates use none, so
+        // the strip + line-collapse below is skipped for them (guaranteeing unchanged operational SMS).
+        var hasAdmin = AdminOptionalPlaceholders.Any(p => result.Contains(p));
+
+        // Substitute-or-STRIP each optional admin placeholder. Replace {מיקום רכב} BEFORE {מיקום}
+        // is irrelevant (their tokens don't overlap — "{מיקום}" requires a '}' immediately after מיקום,
+        // absent in "{מיקום רכב}") but we keep an explicit, unambiguous order.
+        result = ReplaceOrStrip(result, "{תיאור}", shift.Description);
+        result = ReplaceOrStrip(result, "{שעה}", shift.ShiftTime);
+        result = ReplaceOrStrip(result, "{כתובת}", shift.Address);
+        result = ReplaceOrStrip(result, "{מיקום רכב}", shift.VehicleLocation);
+        result = ReplaceOrStrip(result, "{מיקום}", shift.LocationName);
+
+        // Step 3: collapse lines emptied by stripping an absent token + trim trailing whitespace left
+        // by an inline strip. Gated on hasAdmin so operational messages are never re-flowed.
+        if (hasAdmin)
+            result = CollapseBlankLines(result);
+
+        return result;
     }
 
-    public static string BuildLocationText(ShiftVolunteerDto shift)
+    // Replace the token with its value when present; otherwise DELETE the token (never ship raw {…}).
+    private static string ReplaceOrStrip(string s, string token, string? value)
+        => s.Contains(token) ? s.Replace(token, string.IsNullOrWhiteSpace(value) ? "" : value) : s;
+
+    // Remove whitespace-only lines (e.g. a line that was only an absent placeholder) and strip
+    // trailing whitespace from each surviving line (e.g. a dangling space from an inline strip).
+    // Preserves any line that still has literal content. Line separator normalized to '\n'.
+    private static string CollapseBlankLines(string s)
     {
-        if (string.IsNullOrEmpty(shift.LocationName))
+        var lines = s.Replace("\r\n", "\n").Split('\n');
+        var kept = lines
+            .Select(line => line.TrimEnd())
+            .Where(line => line.Length > 0);
+        return string.Join("\n", kept);
+    }
+
+    // Operational SameDay location append (the "הניידת נמצאת ב…" vehicle wording) — used verbatim for
+    // the admin VEHICLE block too (§5b). Delegates to the (name, city, navigation) overload.
+    public static string BuildLocationText(ShiftVolunteerDto shift)
+        => BuildLocationText(shift.LocationName, shift.LocationCity, shift.LocationNavigation);
+
+    public static string BuildLocationText(string? name, string? city, string? navigation)
+    {
+        if (string.IsNullOrEmpty(name))
             return "";
 
-        var text = !string.IsNullOrEmpty(shift.LocationCity)
-            ? $"\nהניידת נמצאת ב{shift.LocationCity} ({shift.LocationName})"
-            : $"\nהניידת נמצאת אצל {shift.LocationName}";
+        var text = !string.IsNullOrEmpty(city)
+            ? $"\nהניידת נמצאת ב{city} ({name})"
+            : $"\nהניידת נמצאת אצל {name}";
 
-        if (!string.IsNullOrEmpty(shift.LocationNavigation))
-            text += $"\n{AppendWazeNavigate(shift.LocationNavigation)}";
+        if (!string.IsNullOrEmpty(navigation))
+            text += $"\n{AppendWazeNavigate(navigation)}";
 
         return text;
+    }
+
+    // Admin MISSION-location block (§5a) — different wording from the vehicle block above.
+    // name = mission location name (or free-text custom name), address = the shift's snapshot Address,
+    // navigation = live location row's Navigation (Waze). Each line present only when its value is non-empty.
+    public static string BuildAdminMissionText(string? name, string? address, string? navigation)
+    {
+        var sb = new System.Text.StringBuilder();
+        if (!string.IsNullOrWhiteSpace(name)) sb.Append($"\nמיקום המשימה: {name}");
+        if (!string.IsNullOrWhiteSpace(address)) sb.Append($"\nכתובת: {address}");
+        if (!string.IsNullOrWhiteSpace(navigation)) sb.Append($"\n{AppendWazeNavigate(navigation)}");
+        return sb.ToString();
+    }
+
+    // Combined admin SMS location blocks (mission then vehicle) appended to ALL admin sends (V2-D1).
+    // Mission uses the mission-location fields; vehicle reuses BuildLocationText when a Vehicle location
+    // is picked (VehicleLocationName has a Waze link), else a plain free-text line (no Waze).
+    public static string BuildAdminSmsBlocks(ShiftVolunteerDto shift)
+    {
+        var mission = BuildAdminMissionText(shift.LocationName, shift.Address, shift.LocationNavigation);
+
+        string vehicle;
+        if (shift.VehicleLocationId.HasValue && !string.IsNullOrWhiteSpace(shift.VehicleLocationName))
+            vehicle = BuildLocationText(shift.VehicleLocationName, shift.VehicleLocationCity, shift.VehicleLocationNavigation);
+        else if (!string.IsNullOrWhiteSpace(shift.VehicleLocation))
+            vehicle = $"\nמיקום הרכב: {shift.VehicleLocation}";   // free-text fallback — no Waze
+        else
+            vehicle = "";
+
+        return mission + vehicle;
     }
 
     private static string AppendWazeNavigate(string url)
@@ -247,6 +341,68 @@ public class SmsReminderService
             return url;
 
         return url.Contains('?') ? $"{url}&navigate=yes" : $"{url}?navigate=yes";
+    }
+
+    // One-shot ADMINISTRATIVE send: builds the message from an EXPLICIT template (assignment or today —
+    // resolved from AppSettings by the endpoint), sends to one volunteer, and logs ReminderType=Manual
+    // (no dedup, re-sends allowed — D10). Admin sends NEVER go through the operational 1/2 templateId
+    // switch. Projects the admin columns + location name so BuildMessage degrades placeholders cleanly.
+    public async Task<SmsResult> SendAdminSmsAsync(Shift shift, Volunteer volunteer, MessageTemplate template)
+    {
+        Location? loc = shift.LocationId.HasValue
+            ? await _db.Locations.GetByIdAsync(shift.LocationId.Value)
+            : null;
+        Location? vehLoc = shift.VehicleLocationId.HasValue
+            ? await _db.Locations.GetByIdAsync(shift.VehicleLocationId.Value)
+            : null;
+
+        var dto = new ShiftVolunteerDto
+        {
+            ShiftId = shift.Id,
+            ShiftDate = shift.ShiftDate,
+            ShiftName = shift.ShiftName,
+            CarId = shift.CarId,
+            VolunteerId = volunteer.Id,
+            FirstName = volunteer.FirstName,
+            LastName = volunteer.LastName,
+            MappingName = volunteer.MappingName,
+            MobilePhone = volunteer.MobilePhone,
+            Description = shift.Description,
+            ShiftTime = shift.ShiftTime,
+            Address = shift.Address,
+            VehicleLocation = shift.VehicleLocation,
+            LocationId = shift.LocationId,
+            LocationName = loc?.Name ?? shift.CustomLocationName,
+            LocationNavigation = loc?.Navigation ?? shift.CustomLocationNavigation,
+            LocationCity = loc?.City,
+            VehicleLocationId = shift.VehicleLocationId,
+            VehicleLocationName = vehLoc?.Name ?? shift.VehicleLocation,
+            VehicleLocationNavigation = vehLoc?.Navigation,
+            VehicleLocationCity = vehLoc?.City
+        };
+
+        // Placeholders substitute via BuildMessage; then append the full location blocks (mission +
+        // vehicle, incl. Waze) to EVERY admin send (V2-D1) — NOT the operational SameDay block.
+        var message = BuildMessage(template.Content, dto, shift.ShiftDate) + BuildAdminSmsBlocks(dto);
+        var result = await _smsProvider.SendSmsAsync(volunteer.MobilePhone!, message);
+
+        await _db.SmsLog.InsertAsync(new SmsLog
+        {
+            ShiftId = shift.Id,
+            SentAt = DateTime.UtcNow,
+            Status = result.Success ? MagavConstants.SmsStatuses.Success : MagavConstants.SmsStatuses.Fail,
+            Error = result.Error,
+            ReminderType = MagavConstants.ReminderTypes.Manual
+        });
+
+        if (result.Success)
+        {
+            await _db.Db.ExecuteQueryAsync(
+                "UPDATE Shifts SET SmsSentAt = @0 WHERE Id = @1",
+                DateTime.UtcNow.ToString("o"), shift.Id);
+        }
+
+        return result;
     }
 
     public async Task<object> SendLocationUpdateAsync(DateTime date, string shiftName, string carId)
@@ -266,11 +422,12 @@ public class SmsReminderService
               LEFT JOIN Locations l ON s.LocationId = l.Id
               WHERE s.ShiftDate >= @0 AND s.ShiftDate < @1
                 AND s.ShiftName = @2 AND s.CarId = @3
+                AND s.ShiftType = @4
                 AND s.IsCanceled = 0
                 AND v.ApproveToReceiveSms = 1
                 AND v.MobilePhone IS NOT NULL
                 AND v.MobilePhone != ''",
-            dateStart, dateEnd, shiftName, carId);
+            dateStart, dateEnd, shiftName, carId, MagavConstants.ShiftTypes.Operational);
 
         var smsSent = 0;
         var smsFailed = 0;
@@ -338,4 +495,18 @@ public class ShiftVolunteerDto
     public string? LocationName { get; set; }
     public string? LocationNavigation { get; set; }
     public string? LocationCity { get; set; }
+
+    // Administrative-shifts columns (NULL for operational rows). Projected so BuildMessage can
+    // substitute {תיאור}/{שעה}/{כתובת}/{מיקום רכב} — otherwise raw tokens would ship in admin SMS.
+    public string? Description { get; set; }
+    public string? ShiftTime { get; set; }
+    public string? Address { get; set; }
+    public string? VehicleLocation { get; set; }
+
+    // v2: resolved Vehicle-location fields (for the SMS vehicle block). NULL for operational rows and
+    // for admin rows using free-text VehicleLocation.
+    public int? VehicleLocationId { get; set; }
+    public string? VehicleLocationName { get; set; }
+    public string? VehicleLocationNavigation { get; set; }
+    public string? VehicleLocationCity { get; set; }
 }

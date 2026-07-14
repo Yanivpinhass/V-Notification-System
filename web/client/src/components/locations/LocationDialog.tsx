@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { locationsService, LocationDto, LocationRequest } from '@/services/locationsService';
+import { locationsService, LocationDto, LocationRequest, LocationType } from '@/services/locationsService';
 import { Loader2 } from 'lucide-react';
 
 const locationSchema = z.object({
@@ -28,6 +28,8 @@ interface LocationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   location: LocationDto | null;
+  // The type new locations are created as (and the type carried on edits so the row keeps its bucket).
+  locationType?: LocationType;
   onSaved: () => void;
 }
 
@@ -35,6 +37,7 @@ export const LocationDialog: React.FC<LocationDialogProps> = ({
   open,
   onOpenChange,
   location,
+  locationType = 'Vehicle',
   onSaved,
 }) => {
   const isEditing = location !== null;
@@ -85,6 +88,7 @@ export const LocationDialog: React.FC<LocationDialogProps> = ({
           address: data.address || null,
           city: data.city || null,
           navigation: data.navigation || null,
+          type: location.locationType,   // keep the row's existing type on edit
         };
         await locationsService.update(location.id, request);
       } else {
@@ -93,6 +97,7 @@ export const LocationDialog: React.FC<LocationDialogProps> = ({
           address: data.address || null,
           city: data.city || null,
           navigation: data.navigation || null,
+          type: locationType,
         };
         await locationsService.create(request);
       }

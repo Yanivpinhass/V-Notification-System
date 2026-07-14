@@ -212,9 +212,9 @@ export const ShiftsManagementPage: React.FC = () => {
     }
   }, [volunteersLoaded]);
 
-  // Load locations for dropdown
+  // Load locations for dropdown (operational shifts use Vehicle locations = מיקומי ניידות)
   useEffect(() => {
-    locationsService.getAll().then(setLocations).catch(() => {});
+    locationsService.getAll('Vehicle').then(setLocations).catch(() => {});
   }, []);
 
   // Load Jewish holidays for date indicator

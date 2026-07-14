@@ -16,6 +16,7 @@ interface SmsLogDao {
         JOIN Shifts s ON sl.ShiftId = s.Id
         JOIN Volunteers v ON s.VolunteerId = v.Id
         WHERE sl.SentAt >= :from
+          AND s.ShiftType = 'Operational'
         ORDER BY sl.SentAt DESC
         """
     )
@@ -32,6 +33,7 @@ interface SmsLogDao {
         LEFT JOIN SmsLog sl ON sl.ShiftId = s.Id
         WHERE s.ShiftDate >= :from
           AND s.IsCanceled = 0
+          AND s.ShiftType = 'Operational'
         GROUP BY s.ShiftDate, s.ShiftName
         HAVING COUNT(sl.Id) > 0
         ORDER BY s.ShiftDate DESC, s.ShiftName

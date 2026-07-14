@@ -8,7 +8,8 @@ export const mainMenuItems: MenuItem[] = [
     icon: Calendar,
     requiredRoles: ['Admin', 'SystemManager'],
     subItems: [
-      { id: 'shifts-management', title: 'משמרות', path: '/shift-management/shifts' },
+      { id: 'shifts-management', title: 'משמרות מבצעיות', path: '/shift-management/shifts' },
+      { id: 'admin-shifts', title: 'משמרות מנהליות', path: '/shift-management/admin-shifts' },
       { id: 'canceled-shifts', title: 'משמרות מבוטלות', path: '/shift-management/canceled' },
       { id: 'shifts-import', title: 'קליטת קובץ משמרות', path: '/shift-management/import' },
     ]
@@ -30,6 +31,7 @@ export const mainMenuItems: MenuItem[] = [
     requiredRoles: ['Admin', 'SystemManager'],
     subItems: [
       { id: 'locations-management', title: 'מיקומי ניידות', path: '/locations/management' },
+      { id: 'general-locations', title: 'מיקומים כללי', path: '/locations/general' },
     ]
   },
   {
@@ -59,6 +61,7 @@ export const mainMenuItems: MenuItem[] = [
     requiredRoles: ['Admin', 'SystemManager'],
     subItems: [
       { id: 'scheduler-settings', title: 'הגדרות תזמון', path: '/settings/scheduler' },
+      { id: 'admin-scheduler-settings', title: 'הגדרות תזמון למשמרות מנהליות', path: '/settings/admin-scheduler' },
       { id: 'message-templates', title: 'הגדרות הודעות', path: '/settings/message-templates' },
       { id: 'sms-settings', title: 'הגדרות SMS', path: '/settings/sms' },
       { id: 'callback-settings', title: 'חיוג חוזר לשער', path: '/settings/callback' },

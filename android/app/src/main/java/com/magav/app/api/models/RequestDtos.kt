@@ -250,7 +250,8 @@ data class LocationRequest(
     val name: String,
     val address: String? = null,
     val city: String? = null,
-    val navigation: String? = null
+    val navigation: String? = null,
+    val type: String? = null
 )
 
 @Serializable

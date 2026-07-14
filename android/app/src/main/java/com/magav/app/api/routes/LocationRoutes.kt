@@ -15,6 +15,7 @@ import kotlinx.serialization.Serializable
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import com.magav.app.util.LocationTypes
 import com.magav.app.util.toIsoInstant
 
 @Serializable
@@ -25,7 +26,8 @@ data class LocationDto(
     val city: String?,
     val navigation: String?,
     val createdAt: String?,
-    val updatedAt: String?
+    val updatedAt: String?,
+    val locationType: String
 )
 
 private fun LocationEntity.toDto() = LocationDto(
@@ -35,17 +37,25 @@ private fun LocationEntity.toDto() = LocationDto(
     city = city,
     navigation = navigation,
     createdAt = createdAt,
-    updatedAt = updatedAt
+    updatedAt = updatedAt,
+    locationType = locationType
 )
 
 fun Route.locationRoutes(database: MagavDatabase) {
     authenticate("auth-bearer") {
         route("/api/locations") {
 
-            // GET /api/locations - list all locations
+            // GET /api/locations?type=Vehicle|General|All (default Vehicle). Filter the RESPONSE only;
+            // getAll() stays untouched for the id-keyed consumers (§6c parity with scheduler-config).
             get {
                 call.requireRole("Admin", "SystemManager")
+                val type = call.request.queryParameters["type"]?.takeIf { it.isNotBlank() } ?: LocationTypes.VEHICLE
+                if (type != LocationTypes.VEHICLE && type != LocationTypes.GENERAL && type != "All") {
+                    call.respond(HttpStatusCode.BadRequest, ApiResponse.fail<Unit>("סוג מיקום לא תקין"))
+                    return@get
+                }
                 val locations = database.locationDao().getAll()
+                    .let { all -> if (type == "All") all else all.filter { it.locationType == type } }
                 call.respond(ApiResponse.ok(locations.map { it.toDto() }))
             }
 
@@ -82,6 +92,12 @@ fun Route.locationRoutes(database: MagavDatabase) {
                     throw IllegalArgumentException("שם מיקום נדרש")
                 }
 
+                // POST default = Vehicle (old clients creating patrol locations keep working).
+                val type = request.type?.takeIf { it.isNotBlank() } ?: LocationTypes.VEHICLE
+                if (type != LocationTypes.VEHICLE && type != LocationTypes.GENERAL) {
+                    throw IllegalArgumentException("סוג מיקום לא תקין")
+                }
+
                 // Check uniqueness by name
                 val existing = database.locationDao().getByName(request.name.trim())
                 if (existing != null) {
@@ -95,7 +111,8 @@ fun Route.locationRoutes(database: MagavDatabase) {
                     city = request.city?.trim(),
                     navigation = request.navigation?.trim(),
                     createdAt = now,
-                    updatedAt = now
+                    updatedAt = now,
+                    locationType = type
                 )
 
                 val newId = database.locationDao().insert(entity)
@@ -130,6 +147,13 @@ fun Route.locationRoutes(database: MagavDatabase) {
                     throw IllegalArgumentException("שם מיקום נדרש")
                 }
 
+                // PUT default = the row's EXISTING type (preserve-on-omit) — NOT Vehicle, or an
+                // omitted field would silently flip a General row. Explicit type is honored.
+                val type = request.type?.takeIf { it.isNotBlank() } ?: existing.locationType
+                if (type != LocationTypes.VEHICLE && type != LocationTypes.GENERAL) {
+                    throw IllegalArgumentException("סוג מיקום לא תקין")
+                }
+
                 // Check name uniqueness if changed (exclude self)
                 if (request.name.trim() != existing.name) {
                     val duplicate = database.locationDao().getByName(request.name.trim())
@@ -144,7 +168,8 @@ fun Route.locationRoutes(database: MagavDatabase) {
                     address = request.address?.trim(),
                     city = request.city?.trim(),
                     navigation = request.navigation?.trim(),
-                    updatedAt = now
+                    updatedAt = now,
+                    locationType = type
                 )
 
                 database.locationDao().update(updated)

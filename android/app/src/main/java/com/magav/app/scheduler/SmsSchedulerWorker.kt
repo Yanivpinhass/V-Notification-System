@@ -266,15 +266,19 @@ class SmsSchedulerWorker(
     /**
      * Computes (windowStart, windowEnd, runLogDate) for the eligibility query + RunLog key.
      *  • SameDay/Advance: single-day window [today+N, today+N+1); runLogDate = today+N (byte-identical).
-     *  • WeekdayAdvance: half-open window [today+N, nextWorkingDay(today)+N); runLogDate = today (firing day),
-     *    so shifts whose natural send day lands on Fri/Sat/holiday/holiday-eve are pulled back onto this run.
+     *  • WeekdayAdvance/AdminAdvance: half-open window [today+N, nextWorkingDay(today)+N); runLogDate =
+     *    today (firing day), so shifts whose natural send day lands on Fri/Sat/holiday/holiday-eve are
+     *    pulled back onto this run. AdminAdvance reuses this verbatim — its config is DayGroup='SunThu'
+     *    (so it fires only on working days) with N=1 (the only gap/overlap-free value). The
+     *    dayGroup != effectiveGroup firing gate lives at the callers (doWork / checkAllConfigs).
      */
     private suspend fun computeWindow(
         config: SchedulerConfigEntity, today: LocalDate, database: MagavDatabase
     ): Triple<LocalDate, LocalDate, LocalDate> {
         val n = config.daysBeforeShift.toLong()
         val windowStart = today.plusDays(n)
-        return if (config.reminderType == ReminderTypes.WEEKDAY_ADVANCE) {
+        return if (config.reminderType == ReminderTypes.WEEKDAY_ADVANCE ||
+            config.reminderType == ReminderTypes.ADMIN_ADVANCE) {
             Triple(windowStart, nextWorkingDay(today, database).plusDays(n), today)
         } else {
             Triple(windowStart, windowStart.plusDays(1), windowStart)

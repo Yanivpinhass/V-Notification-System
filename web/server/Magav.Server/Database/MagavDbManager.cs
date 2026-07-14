@@ -24,6 +24,7 @@ public class MagavDbManager
     private MessageTemplateRepository? _messageTemplates;
     private LocationsRepository? _locations;
     private JewishHolidaysRepository? _jewishHolidays;
+    private AppSettingsRepository? _appSettings;
 
     public MagavDbManager(DbHelper db)
     {
@@ -59,6 +60,11 @@ public class MagavDbManager
     public LocationsRepository Locations => _locations ??= new LocationsRepository(_db);
 
     public JewishHolidaysRepository JewishHolidays => _jewishHolidays ??= new JewishHolidaysRepository(_db);
+
+    /// <summary>
+    /// AppSettings key-value repository (administrative-shifts template roles — D5)
+    /// </summary>
+    public AppSettingsRepository AppSettings => _appSettings ??= new AppSettingsRepository(_db);
 
     /// <summary>
     /// Direct DbHelper access for complex operations or raw queries.

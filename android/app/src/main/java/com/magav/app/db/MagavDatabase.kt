@@ -41,7 +41,7 @@ import com.magav.app.db.entity.VolunteerEntity
         JewishHolidayEntity::class,
         CallbackConfigEntity::class
     ],
-    version = 9,
+    version = 11,
     exportSchema = false
 )
 abstract class MagavDatabase : RoomDatabase() {
@@ -164,6 +164,37 @@ abstract class MagavDatabase : RoomDatabase() {
                         "(`Id`,`IsActive`,`GatePhone`,`FromHour`,`ToHour`,`AllDay`,`AllCallers`,`UpdatedAt`,`UpdatedBy`) " +
                         "VALUES (1,0,'','08:00','20:00',0,0,NULL,NULL)"
                 )
+            }
+        }
+
+        // v9 → v10: administrative-shifts feature — add the 5 admin columns to Shifts.
+        // ADDITIVE ONLY (5 × ALTER TABLE ADD COLUMN) — touches no existing column and drops
+        // no data, so all user data (shifts/logs/configs/…) is preserved (ADR-004). The column
+        // names, NOT NULL flag and DEFAULT clause below MUST byte-match ShiftEntity exactly, or
+        // Room's schema-hash check throws on open (by design → crashes visibly, never wipes).
+        // ADD COLUMN … NOT NULL DEFAULT is legal because a default is supplied; existing rows
+        // backfill to ShiftType='Operational'. NO index on ShiftType (mirrors the entity).
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE Shifts ADD COLUMN ShiftType TEXT NOT NULL DEFAULT 'Operational'")
+                db.execSQL("ALTER TABLE Shifts ADD COLUMN Description TEXT")
+                db.execSQL("ALTER TABLE Shifts ADD COLUMN ShiftTime TEXT")
+                db.execSQL("ALTER TABLE Shifts ADD COLUMN Address TEXT")
+                db.execSQL("ALTER TABLE Shifts ADD COLUMN VehicleLocation TEXT")
+            }
+        }
+
+        // v10 → v11: general-locations + admin-shift vehicle-location reference.
+        // ADDITIVE ONLY (2 × ALTER TABLE ADD COLUMN) — touches no existing column and drops no
+        // data, so all user data is preserved (ADR-004). LocationType is added WITH a default so
+        // existing Locations backfill to 'Vehicle' (every current row is a מיקום ניידת);
+        // VehicleLocationId is nullable (no default). Column names / NOT NULL / DEFAULT MUST
+        // byte-match LocationEntity + ShiftEntity or Room's schema-hash check throws on open (by
+        // design → crashes visibly, never wipes). NO index on either new column.
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE Locations ADD COLUMN LocationType TEXT NOT NULL DEFAULT 'Vehicle'")
+                db.execSQL("ALTER TABLE Shifts ADD COLUMN VehicleLocationId INTEGER")
             }
         }
     }

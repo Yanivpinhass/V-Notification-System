@@ -19,6 +19,11 @@ interface SchedulerConfigDao {
     @Query("SELECT * FROM SchedulerConfig WHERE IsEnabled = 1")
     suspend fun getEnabled(): List<SchedulerConfigEntity>
 
+    // The administrative advance config row (ReminderType='AdminAdvance'). Exactly one exists —
+    // UNIQUE(DayGroup, ReminderType) + seeded as (SunThu, AdminAdvance). Used by /api/admin-scheduler/config.
+    @Query("SELECT * FROM SchedulerConfig WHERE ReminderType = :reminderType LIMIT 1")
+    suspend fun getByReminderType(reminderType: String): SchedulerConfigEntity?
+
     @Insert
     suspend fun insert(config: SchedulerConfigEntity): Long
 

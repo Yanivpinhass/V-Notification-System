@@ -41,7 +41,9 @@ export const SchedulerSettingsPage: React.FC = () => {
         schedulerService.getConfig(),
         messageTemplateService.getAll(),
       ]);
-      setConfigs(configData);
+      // Defense-in-depth (§6c): the operational GET already excludes the AdminAdvance row, but filter
+      // it here too so it can never surface in the operational scheduler UI.
+      setConfigs(configData.filter((c) => c.reminderType !== 'AdminAdvance'));
       setTemplates(templateData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'אירעה שגיאה בטעינת הנתונים');
