@@ -144,8 +144,10 @@ class ShiftsService extends BaseApiClient {
     return this.delete<void>(`/shifts/${id}`);
   }
 
-  async sendShiftSms(shiftId: number, templateId?: number): Promise<void> {
-    return this.post<void>(`/shifts/${shiftId}/send-sms`, { templateId: templateId ?? null });
+  // Returns the server's Hebrew result note (success / dispatched-without-confirmation) —
+  // it travels as the ApiResponse data payload. [dup-sms 3.2]
+  async sendShiftSms(shiftId: number, templateId?: number): Promise<string> {
+    return this.post<string>(`/shifts/${shiftId}/send-sms`, { templateId: templateId ?? null });
   }
 
   async getDatesWithShifts(from: string, to: string): Promise<DateShiftInfo[]> {
@@ -198,8 +200,9 @@ class ShiftsService extends BaseApiClient {
   }
 
   // Per-volunteer admin send (server picks today vs assignment template by the shift's date — D6).
-  async sendAdminShiftSms(id: number): Promise<void> {
-    return this.post<void>(`/shifts/administrative/${id}/send-sms`, {});
+  // Returns the server's Hebrew result note (success / dispatched-without-confirmation). [dup-sms 3.2]
+  async sendAdminShiftSms(id: number): Promise<string> {
+    return this.post<string>(`/shifts/administrative/${id}/send-sms`, {});
   }
 }
 

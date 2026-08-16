@@ -24,7 +24,12 @@ import kotlinx.serialization.json.Json
 val JwtAttributeKey = AttributeKey<DecodedJWT>("jwt")
 
 fun createKtorServer(database: MagavDatabase, context: Context): ApplicationEngine {
-    return embeddedServer(CIO, port = 5015, host = "127.0.0.1") {
+    return embeddedServer(CIO, port = 5015, host = "127.0.0.1", configure = {
+        // A manual SMS send can legitimately hold its response ~60s (sent-broadcast wait), up to
+        // ~2 min behind one in-flight scheduler send. CIO's default 45s idle timeout would sever
+        // the connection → the client shows a network error for a DELIVERED message. [dup-sms 3.3]
+        connectionIdleTimeoutSeconds = 180
+    }) {
         install(ContentNegotiation) {
             json(Json {
                 ignoreUnknownKeys = true

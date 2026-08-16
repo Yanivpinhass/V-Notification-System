@@ -40,6 +40,10 @@
         {
             public const string Success = "Success";
             public const string Fail = "Fail";
+            // Handed to the radio, no delivery/sent confirmation inside the wait window — most
+            // likely delivered. Written by the ANDROID write-ahead send path (the .NET scheduler
+            // still logs post-send: accepted divergence, see tools/parity.md). [dup-sms plan]
+            public const string Dispatched = "Dispatched";
         }
 
         public static class DayGroups

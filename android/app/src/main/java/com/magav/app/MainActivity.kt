@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.view.View
 import android.webkit.ValueCallback
@@ -60,7 +61,7 @@ class MainActivity : AppCompatActivity() {
 
         setupWebView()
         startServerService()
-        requestPermissions()
+        ensureOsCapabilities()
         waitForServerAndLoad()
     }
 
@@ -124,7 +125,8 @@ class MainActivity : AppCompatActivity() {
         startForegroundService(intent)
     }
 
-    private fun requestPermissions() {
+    // Runtime permissions + exact-alarm access + battery-optimization exemption.
+    private fun ensureOsCapabilities() {
         val needed = mutableListOf<String>()
         if (checkSelfPermission(android.Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
             needed.add(android.Manifest.permission.SEND_SMS)
@@ -161,6 +163,25 @@ class MainActivity : AppCompatActivity() {
             val alarmManager = getSystemService(AlarmManager::class.java)
             if (!alarmManager.canScheduleExactAlarms()) {
                 startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+            }
+        }
+        // Battery-optimization exemption — Doze-deferred sends/timeouts were incident conditions.
+        // Only on the quiet path (no pending runtime-permission dialog): launching an activity
+        // over a pending permission prompt cancels it on some OEMs. The isIgnoring check makes
+        // this one-time once granted; the system consent dialog is OS-localized. [dup-sms 5.1]
+        if (needed.isEmpty()) {
+            val pm = getSystemService(PowerManager::class.java)
+            if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+                try {
+                    startActivity(
+                        Intent(
+                            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                            Uri.parse("package:$packageName")
+                        )
+                    )
+                } catch (e: Exception) {
+                    android.util.Log.w("MainActivity", "Battery-optimization request failed", e)
+                }
             }
         }
     }

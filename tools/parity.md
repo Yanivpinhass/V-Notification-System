@@ -36,7 +36,7 @@ and in the exempt list at the top of `tools/parity-lint.mjs`.
 5. **`AdminAdvance` administrative-shifts scheduler contract — Android-only Ktor endpoints `GET/PUT /api/admin-scheduler/config` + `GET/PUT /api/admin-settings/templates` have no .NET-symmetry concern for the lint** (the .NET side implements the same endpoints; this note only records that `AdminAdvance` is the administrative-shifts advance `ReminderType` and `ShiftTypes = {Operational, Administrative}` is the new type discriminator, both mirrored .NET↔Android exactly and lint-enforced). See `Plans/admin-shifts-implementation-plan.md`.
 
 ## In sync today (verified)
-`ReminderTypes` (SameDay, Advance, LocationUpdate, Manual, WeekdayAdvance, AdminAdvance), `SmsStatuses` (Success, Fail),
+`ReminderTypes` (SameDay, Advance, LocationUpdate, Manual, WeekdayAdvance, AdminAdvance), `SmsStatuses` (Success, Fail, Dispatched — Dispatched is WRITTEN only by the Android write-ahead send path; the .NET scheduler still logs post-send with Success-only dedup, an accepted divergence until the web target ships, see `Plans/duplicate-sms-fix-implementation-plan.md` Appendix),
 `DayGroups` (SunThu, Fri, Sat), `ShiftTypes` (Operational, Administrative), and `LocationTypes` (Vehicle, General) match exactly between .NET and Android (issues.md IF-6 "does NOT fire";
 ADR-007). The load-bearing dedup constraints (`SmsLog (ShiftId, ReminderType)`,
 `SchedulerRunLog UNIQUE(ConfigId, TargetDate, ReminderType)`) and the soft-cancel columns also match

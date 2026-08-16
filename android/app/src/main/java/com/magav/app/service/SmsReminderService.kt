@@ -7,6 +7,9 @@ import com.magav.app.db.entity.LocationEntity
 import com.magav.app.db.entity.SmsLogEntity
 import com.magav.app.db.entity.VolunteerEntity
 import com.magav.app.sms.SmsProvider
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -26,6 +29,18 @@ class SmsReminderService(
     private val israelTz = ZoneId.of("Asia/Jerusalem")
 
     suspend fun execute(
+        config: SchedulerConfigEntity,
+        windowStart: LocalDate,
+        windowEnd: LocalDate,
+        runLogTargetDate: LocalDate
+    ): SmsSummary = executeMutex.withLock {
+        // Process-global serialization: two configs alarmed at the same minute (or yesterday's
+        // still-retrying work item vs today's fresh one) run as PARALLEL workers — without this
+        // lock both could pass the pre-loop dedup snapshot before either inserts. [dup-sms 1.5]
+        executeInternal(config, windowStart, windowEnd, runLogTargetDate)
+    }
+
+    private suspend fun executeInternal(
         config: SchedulerConfigEntity,
         windowStart: LocalDate,
         windowEnd: LocalDate,
@@ -63,8 +78,10 @@ class SmsReminderService(
         if (shifts.isNotEmpty()) {
             volunteerMap = database.volunteerDao().getAll().associateBy { it.id }
             val shiftIds = shifts.map { it.id }
-            sentShiftIds = database.smsLogDao().getSuccessfulByShiftIdsAndReminderType(shiftIds, reminderType)
-                .map { it.shiftId }.toSet()
+            // ANY row — Success, Dispatched, or Fail — blocks automatic re-dispatch. A delivered
+            // send may be logged Dispatched (unconfirmed) or even Fail (old data); resending
+            // automatically is the incident's failure mode. [dup-sms 1.2, at-most-once doctrine]
+            sentShiftIds = database.smsLogDao().getShiftIdsWithAnyRow(shiftIds, reminderType).toSet()
             // Load locations for SAME_DAY (location-append) AND for ADMIN_ADVANCE (the {מיקום}
             // placeholder resolves to the shift's location name — matching .NET which always projects it).
             locationMap = if (reminderType == ReminderTypes.SAME_DAY || reminderType == ReminderTypes.ADMIN_ADVANCE) {
@@ -105,7 +122,16 @@ class SmsReminderService(
                 continue
             }
 
+            // Point re-check as close to dispatch as possible: a row of ANY status that appeared
+            // since the pre-loop snapshot (e.g. a concurrent manual send) means a dispatch was
+            // already attempted for this (shift, type). [dup-sms 1.3b]
+            if (database.smsLogDao().existsByShiftIdAndReminderType(shift.id, reminderType) > 0) {
+                android.util.Log.d("SmsReminder", "Skip ${volunteer.mappingName}: SmsLog row appeared after snapshot")
+                continue
+            }
+
             totalEligible++
+            var writeAheadId: Long? = null
 
             try {
                 // 🆕A: derive {תאריך}/{יום} from each shift's OWN date (the window may span several
@@ -139,25 +165,51 @@ class SmsReminderService(
                     )
                 }
                 android.util.Log.d("SmsReminder", "Sending SMS #$totalEligible to ${volunteer.mappingName} (${volunteer.mobilePhone})")
-                val result = smsProvider.sendSms(volunteer.mobilePhone, message)
-                android.util.Log.d("SmsReminder", "SMS result: success=${result.success}, error=${result.error}")
 
-                val now = Instant.now().toString()
-                val smsLog = SmsLogEntity(
-                    shiftId = shift.id,
-                    sentAt = now,
-                    status = if (result.success) SmsStatuses.SUCCESS else SmsStatuses.FAIL,
-                    error = result.error,
-                    reminderType = reminderType
+                // Write-ahead: record the dispatch BEFORE handing the message to the radio —
+                // fail-closed (no row ⇒ no dispatch). Status passed explicitly: the entity
+                // default is SUCCESS. [dup-sms 1.3]
+                writeAheadId = database.smsLogDao().insert(
+                    SmsLogEntity(
+                        shiftId = shift.id,
+                        sentAt = Instant.now().toString(),
+                        status = SmsStatuses.DISPATCHED,
+                        error = null,
+                        reminderType = reminderType
+                    )
                 )
-                database.smsLogDao().insert(smsLog)
 
-                if (result.success) {
-                    smsSent++
-                    // Update SmsSentAt
-                    database.shiftDao().update(shift.copy(smsSentAt = now))
-                } else {
-                    smsFailed++
+                val result = smsProvider.sendSms(volunteer.mobilePhone, message)
+                android.util.Log.d("SmsReminder", "SMS result: outcome=${result.outcome}, error=${result.error}")
+
+                // From here on the message may have reached the radio — the catch below must
+                // NEVER flip the row to Fail (its current Dispatched state is already safe, and
+                // a delivered message must not be re-labeled by a bookkeeping error). [review]
+                val logId = checkNotNull(writeAheadId)
+                writeAheadId = null
+
+                when (result.outcome) {
+                    SmsProvider.Outcome.CONFIRMED -> {
+                        database.smsLogDao().updateStatusById(logId, SmsStatuses.SUCCESS, null)
+                        smsSent++
+                        // smsSentAt is bookkeeping only — its failure must not fail the shift. [review]
+                        try {
+                            database.shiftDao().update(shift.copy(smsSentAt = Instant.now().toString()))
+                        } catch (be: Exception) {
+                            if (be is CancellationException) throw be
+                            android.util.Log.e("SmsReminder", "smsSentAt update failed for shift ${shift.id}", be)
+                        }
+                    }
+                    SmsProvider.Outcome.FAILED -> {
+                        database.smsLogDao().updateStatusById(logId, SmsStatuses.FAIL, result.error)
+                        smsFailed++
+                    }
+                    SmsProvider.Outcome.UNKNOWN -> {
+                        // Dispatched but unconfirmed — most likely delivered. The row stays
+                        // DISPATCHED (blocks re-dispatch) and counts as sent.
+                        android.util.Log.w("SmsReminder", "SMS outcome UNKNOWN for shift ${shift.id}: ${result.error}")
+                        smsSent++
+                    }
                 }
 
                 // Add delay between SMS to avoid carrier rate limiting
@@ -165,18 +217,20 @@ class SmsReminderService(
                     kotlinx.coroutines.delay(500)
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 smsFailed++
-                try {
-                    database.smsLogDao().insert(
-                        SmsLogEntity(
-                            shiftId = shift.id,
-                            sentAt = Instant.now().toString(),
-                            status = SmsStatuses.FAIL,
-                            error = "שגיאה פנימית",
-                            reminderType = reminderType
-                        )
-                    )
-                } catch (_: Exception) {
+                // writeAheadId is non-null ONLY between the insert and the send returning:
+                //  • pre-insert exception → no row, no dispatch attempted — a later run may retry;
+                //  • insert-to-send exception → nothing reached the radio — mark the row Fail;
+                //  • post-send exception → writeAheadId already nulled — the row keeps its
+                //    Dispatched/Success state (never flipped to Fail). [dup-sms 1.3e + review]
+                writeAheadId?.let { id ->
+                    try {
+                        database.smsLogDao().updateStatusById(id, SmsStatuses.FAIL, "שגיאה פנימית")
+                    } catch (ue: Exception) {
+                        if (ue is CancellationException) throw ue
+                        android.util.Log.e("SmsReminder", "Failed to mark write-ahead row $id as Fail", ue)
+                    }
                 }
             }
         }
@@ -226,6 +280,9 @@ class SmsReminderService(
     }
 
     companion object {
+        // Serializes ALL scheduler batch executions in the process — see execute(). [dup-sms 1.5]
+        private val executeMutex = Mutex()
+
         // The OPTIONAL administrative placeholders (their source columns are NULL for operational rows
         // and may be blank for admin rows). When blank, the token is STRIPPED (never left as raw {…})
         // and any line it emptied is collapsed. Mirrors .NET SmsReminderService.AdminOptionalPlaceholders.

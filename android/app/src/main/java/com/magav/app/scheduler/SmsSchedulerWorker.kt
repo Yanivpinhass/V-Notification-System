@@ -22,8 +22,10 @@ import com.magav.app.service.SmsReminderService
 import com.magav.app.sms.AndroidSmsProvider
 import com.magav.app.util.DayGroups
 import com.magav.app.util.ReminderTypes
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -35,14 +37,35 @@ class SmsSchedulerWorker(
 
     private val israelTz = ZoneId.of("Asia/Jerusalem")
 
+    private companion object {
+        // Per-worker foreground ids: BASE + configId (two same-minute configs run as PARALLEL
+        // workers — a shared id would let one worker's completion cancel the other's foreground
+        // notification and strip its protection).
+        const val FOREGROUND_ID_BASE = 300
+        const val ERROR_NOTIFICATION_ID = 110
+        const val SUMMARY_NOTIFICATION_ID = 100
+    }
+
     override suspend fun doWork(): Result {
-        android.util.Log.d("SmsWorker", "doWork started")
+        android.util.Log.d("SmsWorker", "doWork started (runAttemptCount=$runAttemptCount)")
 
         if (!MagavApplication.isDatabaseReady) {
             android.util.Log.e("SmsWorker", "Database not initialized, failing worker")
             return Result.failure()
         }
         val database = MagavApplication.database
+
+        // Retry cap: initial run + 1 executing retry; the attempt after that only notifies.
+        // Per-shift write-ahead dedup makes retries duplicate-safe — the cap stops churn. [dup-sms 1.6]
+        if (runAttemptCount >= 2) {
+            android.util.Log.e("SmsWorker", "Retry cap reached (runAttemptCount=$runAttemptCount), giving up")
+            try {
+                showSchedulerErrorNotification("שליחת התזכורות נכשלה לאחר מספר ניסיונות — יש לבדוק את יומן ההודעות")
+            } catch (e: Exception) {
+                android.util.Log.e("SmsWorker", "Failed to show retry-cap notification", e)
+            }
+            return Result.failure()
+        }
 
         val subIdSetting = database.appSettingDao().getByKey("sms_sim_subscription_id")
         val subscriptionId = subIdSetting?.value?.toIntOrNull() ?: -1
@@ -52,8 +75,24 @@ class SmsSchedulerWorker(
         val configId = inputData.getInt("configId", -1)
         android.util.Log.d("SmsWorker", "configId=$configId, subscriptionId=$subscriptionId")
 
+        // Foreground for the whole batch — exempts the send loop from the ~10-min execution
+        // budget and Doze stops. Degrade silently if the OS refuses (background-start
+        // restriction on Android 12+) — never fail the run over it. [dup-sms 1.7]
+        val batchNotificationId = FOREGROUND_ID_BASE + maxOf(configId, 0)
+        try {
+            setForeground(
+                buildForegroundInfo(batchNotificationId, "מגב — שליחת תזכורות", "שליחת תזכורות SMS מתבצעת")
+            )
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            android.util.Log.w("SmsWorker", "setForeground refused, continuing non-foreground", e)
+        }
+
         return try {
-            waitForCallToEnd()
+            waitForCallToEnd(batchNotificationId)
+            // Captured after the (possibly long) call-wait so the detector window covers only
+            // this batch's own rows.
+            val runStart = Instant.now()
             val summary = if (configId != -1) {
                 val config = database.schedulerConfigDao().getById(configId) ?: run {
                     android.util.Log.e("SmsWorker", "Config $configId not found")
@@ -81,6 +120,8 @@ class SmsSchedulerWorker(
                 checkAllConfigs(database, reminderService)
             }
 
+            runDuplicateDetector(database, runStart)
+
             // Notification errors must not trigger Result.retry()
             try {
                 showSmsSummaryNotification(summary)
@@ -91,8 +132,58 @@ class SmsSchedulerWorker(
             android.util.Log.d("SmsWorker", "doWork completed successfully")
             Result.success()
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             android.util.Log.e("SmsWorker", "doWork failed", e)
             Result.retry()
+        }
+    }
+
+    /**
+     * Alerts on >1 non-Fail dispatch for the same (shift, reminder type) created in THIS run.
+     * Bounded to the run window (1-min back-margin) so historical rows — including the original
+     * incident's duplicates — and cross-run remediation manual sends never alert. A Fail + one
+     * retry is the expected remediation shape, so Fail rows are excluded. Log-only: a detector
+     * error after a completed batch must never map to Result.retry(). [dup-sms 5.2]
+     */
+    private suspend fun runDuplicateDetector(database: MagavDatabase, runStart: Instant) {
+        try {
+            val since = runStart.minusSeconds(60).toString()
+            val dups = database.smsLogDao().findDuplicateDispatches(since)
+            if (dups.isNotEmpty()) {
+                android.util.Log.e("SmsWorker", "DUPLICATE SMS DETECTED in this run: $dups")
+                showSchedulerErrorNotification("זוהו הודעות SMS כפולות (${dups.size} משמרות) — יש לבדוק את יומן ההודעות")
+            }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            android.util.Log.e("SmsWorker", "Duplicate detector failed", e)
+        }
+    }
+
+    private fun showSchedulerErrorNotification(text: String) {
+        val notification = NotificationCompat.Builder(applicationContext, "magav_error_channel")
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("שגיאה בשליחת תזכורות")
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+
+        val manager = applicationContext.getSystemService(NotificationManager::class.java)
+        manager.notify(ERROR_NOTIFICATION_ID, notification)
+    }
+
+    private fun buildForegroundInfo(notificationId: Int, title: String, text: String): ForegroundInfo {
+        val notification = NotificationCompat.Builder(applicationContext, "magav_server_channel")
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setOngoing(true)
+            .build()
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ForegroundInfo(notificationId, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            ForegroundInfo(notificationId, notification)
         }
     }
 
@@ -159,31 +250,28 @@ class SmsSchedulerWorker(
             .build()
 
         val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(100, notification)
+        manager.notify(SUMMARY_NOTIFICATION_ID, notification)
     }
 
-    private suspend fun waitForCallToEnd() {
+    private suspend fun waitForCallToEnd(notificationId: Int) {
         val tm = applicationContext.getSystemService(TelephonyManager::class.java)
 
         @Suppress("DEPRECATION")
         if (tm.callState == TelephonyManager.CALL_STATE_IDLE) return
 
-        android.util.Log.w("SmsWorker", "Call active, upgrading to foreground worker and waiting for call to end")
+        android.util.Log.w("SmsWorker", "Call active, waiting for call to end (foreground)")
 
-        // Upgrade to foreground worker so Android won't kill us during the wait
-        val notification = NotificationCompat.Builder(applicationContext, "magav_server_channel")
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("מגב - ממתין לסיום שיחה")
-            .setContentText("הודעות SMS ישלחו לאחר סיום השיחה")
-            .setOngoing(true)
-            .build()
-
-        val foregroundInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            ForegroundInfo(102, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } else {
-            ForegroundInfo(102, notification)
+        // Cosmetic re-title of this worker's EXISTING foreground notification (same id — never a
+        // second one); the foreground protection itself was already taken at doWork entry.
+        // Guarded: a refused setForeground must not abort the run. [dup-sms 1.7]
+        try {
+            setForeground(
+                buildForegroundInfo(notificationId, "מגב - ממתין לסיום שיחה", "הודעות SMS ישלחו לאחר סיום השיחה")
+            )
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            android.util.Log.w("SmsWorker", "setForeground refused during call-wait, continuing", e)
         }
-        setForeground(foregroundInfo)
 
         // Poll every 60s, up to 20 minutes
         for (attempt in 1..20) {

@@ -78,7 +78,6 @@ class DatabaseInitializer(private val database: MagavDatabase) {
             // Ignore duplicate insert from concurrent initialization
         }
     }
-
     private suspend fun seedMessageTemplates() {
         val existing = database.messageTemplateDao().getAll()
         if (existing.isNotEmpty()) return

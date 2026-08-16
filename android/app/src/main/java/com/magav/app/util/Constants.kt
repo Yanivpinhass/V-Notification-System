@@ -29,6 +29,7 @@ object AppSettingsKeys {
 object SmsStatuses {
     const val SUCCESS = "Success"
     const val FAIL = "Fail"
+    const val DISPATCHED = "Dispatched"
 }
 
 object DayGroups {

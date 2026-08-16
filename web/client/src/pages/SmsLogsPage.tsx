@@ -95,10 +95,16 @@ export const SmsLogsPage: React.FC = () => {
                     <TableCell className="text-right">{log.volunteerName}</TableCell>
                     <TableCell className="text-center">
                       <Badge
-                        variant={log.status === 'Success' ? 'default' : 'destructive'}
+                        variant={
+                          log.status === 'Success' ? 'default'
+                            : log.status === 'Dispatched' ? 'warning'
+                            : 'destructive'
+                        }
                         className={log.status === 'Success' ? 'bg-primary hover:bg-primary-hover' : ''}
                       >
-                        {log.status === 'Success' ? 'נשלח' : 'נכשל'}
+                        {log.status === 'Success' ? 'נשלח'
+                          : log.status === 'Dispatched' ? 'שוגר (ללא אישור מסירה)'
+                          : 'נכשל'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right text-destructive">

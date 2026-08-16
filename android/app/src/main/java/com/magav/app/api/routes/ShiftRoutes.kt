@@ -22,6 +22,9 @@ import com.magav.app.db.entity.SmsLogEntity
 import com.magav.app.service.ShiftsImportService
 import com.magav.app.service.SmsReminderService
 import com.magav.app.sms.AndroidSmsProvider
+import com.magav.app.sms.SmsProvider
+import com.magav.app.sms.countsAsSent
+import com.magav.app.sms.logStatus
 import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.server.application.*
@@ -223,7 +226,7 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                                 )
                                 val result = smsProvider.sendSms(volunteer.mobilePhone, message)
 
-                                if (result.success) smsSent++ else smsFailed++
+                                if (result.outcome.countsAsSent) smsSent++ else smsFailed++
                             } catch (_: Exception) {
                                 smsFailed++
                             }
@@ -282,7 +285,7 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                                     SmsLogEntity(
                                         shiftId = shift.id,
                                         sentAt = Instant.now().toString(),
-                                        status = if (result.success) SmsStatuses.SUCCESS else SmsStatuses.FAIL,
+                                        status = result.outcome.logStatus,
                                         error = result.error,
                                         reminderType = ReminderTypes.MANUAL
                                     )
@@ -353,7 +356,7 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                                     volunteer.mappingName, shiftDate
                                 )
                                 val result = smsProvider.sendSms(volunteer.mobilePhone, message)
-                                if (result.success) smsSent++ else smsFailed++
+                                if (result.outcome.countsAsSent) smsSent++ else smsFailed++
                             } catch (_: Exception) {
                                 smsFailed++
                             }
@@ -487,32 +490,44 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                 val subIdSetting = database.appSettingDao().getByKey("sms_sim_subscription_id")
                 val subscriptionId = subIdSetting?.value?.toIntOrNull() ?: -1
                 val smsProvider = AndroidSmsProvider(context, subscriptionId)
-                val result = smsProvider.sendSms(volunteer.mobilePhone, message)
 
                 val reminderType = when (templateId) { 1 -> ReminderTypes.SAME_DAY; 2 -> ReminderTypes.ADVANCE; else -> ReminderTypes.MANUAL }
-                database.smsLogDao().insert(
+
+                // Write-ahead: record the dispatch BEFORE handing to the radio (fail-closed — a
+                // process death mid-send can never leave an unlogged dispatch that the scheduler
+                // would later duplicate). Status passed explicitly (entity default is SUCCESS). [dup-sms 3.4]
+                val logId = database.smsLogDao().insert(
                     SmsLogEntity(
                         shiftId = shift.id,
                         sentAt = Instant.now().toString(),
-                        status = if (result.success) SmsStatuses.SUCCESS else SmsStatuses.FAIL,
-                        error = result.error,
+                        status = SmsStatuses.DISPATCHED,
+                        error = null,
                         reminderType = reminderType
                     )
                 )
 
-                if (result.success) {
-                    database.shiftDao().update(shift.copy(smsSentAt = Instant.now().toString()))
-                }
+                val result = smsProvider.sendSms(volunteer.mobilePhone, message)
 
-                if (!result.success) {
-                    call.respond(
-                        HttpStatusCode.InternalServerError,
-                        ApiResponse.fail<Unit>(result.error ?: "שליחת SMS נכשלה")
-                    )
-                    return@post
+                when (result.outcome) {
+                    SmsProvider.Outcome.CONFIRMED -> {
+                        database.smsLogDao().updateStatusById(logId, SmsStatuses.SUCCESS, null)
+                        database.shiftDao().update(shift.copy(smsSentAt = Instant.now().toString()))
+                        call.respond(ApiResponse.ok("הודעת SMS נשלחה בהצלחה"))
+                    }
+                    SmsProvider.Outcome.UNKNOWN -> {
+                        // Dispatched but unconfirmed — most likely delivered. Respond 200 with a
+                        // note, NOT an error: a red toast for a delivered message is exactly what
+                        // drove the Messages-app resend incident. Row stays DISPATCHED. [dup-sms 3.1]
+                        call.respond(ApiResponse.ok("ההודעה שוגרה — טרם התקבל אישור שליחה"))
+                    }
+                    SmsProvider.Outcome.FAILED -> {
+                        database.smsLogDao().updateStatusById(logId, SmsStatuses.FAIL, result.error)
+                        call.respond(
+                            HttpStatusCode.InternalServerError,
+                            ApiResponse.fail<Unit>(result.error ?: "שליחת SMS נכשלה")
+                        )
+                    }
                 }
-
-                call.respond(ApiResponse.ok("הודעת SMS נשלחה בהצלחה"))
             }
 
             // POST /api/shifts - create a new shift assignment
@@ -889,12 +904,12 @@ fun Route.shiftRoutes(database: MagavDatabase, context: Context) {
                             SmsLogEntity(
                                 shiftId = shift.id,
                                 sentAt = now,
-                                status = if (result.success) SmsStatuses.SUCCESS else SmsStatuses.FAIL,
+                                status = result.outcome.logStatus,
                                 error = result.error,
                                 reminderType = ReminderTypes.LOCATION_UPDATE
                             )
                         )
-                        if (result.success) smsSent++ else smsFailed++
+                        if (result.outcome.countsAsSent) smsSent++ else smsFailed++
                     } catch (e: Exception) {
                         android.util.Log.e("ShiftRoutes", "Error sending location update SMS for shift ${shift.id}", e)
                         smsFailed++

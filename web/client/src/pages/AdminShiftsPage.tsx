@@ -273,8 +273,10 @@ export const AdminShiftsPage: React.FC = () => {
   const sendSms = async (shift: AdminShiftDto) => {
     setBusyId(shift.id);
     try {
-      await shiftsService.sendAdminShiftSms(shift.id);
-      toast.success('הודעת SMS נשלחה בהצלחה');
+      const note = await shiftsService.sendAdminShiftSms(shift.id);
+      // Surface the server note — an unconfirmed (Dispatched) send returns 200 with its own
+      // message; showing an error for it is what drove the resend incident. [dup-sms 3.2]
+      toast.success(note || 'הודעת SMS נשלחה בהצלחה');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'שליחת SMS נכשלה');
     } finally {

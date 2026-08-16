@@ -10,6 +10,9 @@ import com.magav.app.db.entity.SmsLogEntity
 import com.magav.app.db.entity.VolunteerEntity
 import com.magav.app.service.SmsReminderService
 import com.magav.app.sms.AndroidSmsProvider
+import com.magav.app.sms.SmsProvider
+import com.magav.app.sms.countsAsSent
+import com.magav.app.sms.logStatus
 import com.magav.app.util.AppSettingsKeys
 import com.magav.app.util.ReminderTypes
 import com.magav.app.util.ShiftTypes
@@ -239,7 +242,11 @@ fun Route.adminShiftRoutes(database: MagavDatabase, context: Context) {
                     for ((shift, volunteer) in created) {
                         if (volunteer.mobilePhone.isNullOrBlank() || volunteer.approveToReceiveSms != 1) continue
                         try {
-                            if (sendAdminSms(database, context, shift, volunteer, template)) smsSent++ else smsFailed++
+                            if (sendAdminSms(database, context, shift, volunteer, template).countsAsSent) {
+                                smsSent++
+                            } else {
+                                smsFailed++
+                            }
                         } catch (_: Exception) {
                             smsFailed++
                         }
@@ -375,12 +382,15 @@ fun Route.adminShiftRoutes(database: MagavDatabase, context: Context) {
                     return@post
                 }
 
-                val ok = sendAdminSms(database, context, shift, volunteer, template)
-                if (!ok) {
-                    call.respond(HttpStatusCode.InternalServerError, ApiResponse.fail<Unit>("שליחת SMS נכשלה"))
-                    return@post
+                when (sendAdminSms(database, context, shift, volunteer, template)) {
+                    SmsProvider.Outcome.CONFIRMED ->
+                        call.respond(ApiResponse.ok("הודעת SMS נשלחה בהצלחה"))
+                    SmsProvider.Outcome.UNKNOWN ->
+                        // Dispatched but unconfirmed — most likely delivered; never a red error. [dup-sms 3.5]
+                        call.respond(ApiResponse.ok("ההודעה שוגרה — טרם התקבל אישור שליחה"))
+                    SmsProvider.Outcome.FAILED ->
+                        call.respond(HttpStatusCode.InternalServerError, ApiResponse.fail<Unit>("שליחת SMS נכשלה"))
                 }
-                call.respond(ApiResponse.ok("הודעת SMS נשלחה בהצלחה"))
             }
         }
     }
@@ -411,7 +421,7 @@ private suspend fun sendAdminSms(
     shift: ShiftEntity,
     volunteer: VolunteerEntity,
     template: MessageTemplateEntity
-): Boolean {
+): SmsProvider.Outcome {
     val shiftDate = Instant.parse(shift.shiftDate).atZone(ISRAEL_TZ).toLocalDate()
     val location = shift.locationId?.let { database.locationDao().getById(it) }
     val locName = location?.name ?: shift.customLocationName
@@ -444,13 +454,13 @@ private suspend fun sendAdminSms(
         SmsLogEntity(
             shiftId = shift.id,
             sentAt = Instant.now().toString(),
-            status = if (result.success) SmsStatuses.SUCCESS else SmsStatuses.FAIL,
+            status = result.outcome.logStatus,
             error = result.error,
             reminderType = ReminderTypes.MANUAL
         )
     )
-    if (result.success) {
+    if (result.outcome == SmsProvider.Outcome.CONFIRMED) {
         database.shiftDao().update(shift.copy(smsSentAt = Instant.now().toString()))
     }
-    return result.success
+    return result.outcome
 }
