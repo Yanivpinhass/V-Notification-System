@@ -1,14 +1,25 @@
 {
   "version": 2,
-  "generated": "2026-06-30",
-  "run_id": "deepinit-2026-06-30",
-  "source_through_commit": "778a2dd + uncommitted working tree (auto-callback-to-gate feature)",
-  "note": "Incremental --update for the Android-only 'auto-callback-to-gate' feature (uncommitted working tree on top of HEAD 778a2dd). Step-0 symmetric set-diff vs the deepinit-2026-06-25b stored hashes: common/server/api UNCHANGED (zero source delta — git-verified, hashes reproduce); web-client + android genuinely dirty (real source changes). DP-1: nothing imports android or web-client (the three REST implementations are independent — ISS-004), so no dependents propagate. content_hash = sha256( for each source file under the component path, sorted by path: 40-hex git blob hash via `git hash-object`, '\\n'-joined with a trailing newline )[:16] — same documented method as prior runs, EXTENDED to include the new not-yet-committed source files (the 4 callback/route .kt + the 2 git-IGNORED db/ files CallbackConfigEntity.kt/CallbackConfigDao.kt — ISS-010) so the recorded hash reflects true current content and reproduces once they are committed (git add -f for the db/ pair). Graphify/ctags unavailable → interface_hash folded to content_hash (degrade-safe). Real source changes this run: android = new CallbackConfig Room entity/DAO + MIGRATION_8_9 (DB version 8->9) + callbackConfigRoutes + callback/ package (2 receivers + CallbackLogic) + 3 telephony perms + 2 manifest receivers + MainActivity perm additions; web-client = CallbackSettingsPage + callbackConfigService + menuItems + Index wiring. New DB @Entity/@Database change (handled per ADR-004, schema-hash verified) + a NEW Android-only endpoint /api/callback-config (accepted divergence under ISS-004). NEW finding ISS-010 (root .gitignore 'db/' rule ignores new Android db/ source files).",
+  "generated": "2026-08-17",
+  "run_id": "deepinit-2026-08-17",
+  "source_through_commit": "339a89c (clean working tree)",
+  "note": "Incremental --update through HEAD 339a89c. Step-0 symmetric set-diff vs the stored deepinit-2026-06-30 hashes: keys(stored) == keys(current) (no component added, none removed) and ALL FIVE content_hashes changed -> the entire dirty set was re-analyzed; nothing was skipped, so DP-1 interface-hash propagation was moot this run. Two feature commits since the last run's baseline (46951bf): cfb8e36 administrative-shifts + general-locations (touches all 5 components + tools/parity-lint.mjs) and 339a89c the Android duplicate-SMS at-most-once fix. content_hash = sha256( for each file under the component path as listed by `git ls-tree -r HEAD -- <path>`, sorted by path (LC_ALL=C): the 40-hex git blob objectname, '\\n'-joined with a trailing newline )[:16] — the SAME documented method as prior runs, and it was VERIFIED to reproduce all five stored 2026-06-30 hashes exactly when computed at commit 46951bf before being recomputed at HEAD. The prior run's special-casing of the two git-IGNORED db/ files is no longer needed: ISS-010 was fixed in cfb8e36 (.gitignore source-only re-include + 12 db/ files tracked), so the plain git file list is now complete. Graphify IS available this run: the structural graph was rebuilt deterministically at Step 0b (`graphify update .` -> 3021 nodes / 4996 edges / 184 communities over 326 files, 0 LLM tokens); interface_hash still folded to content_hash (no per-symbol export extraction performed). Schema moved on BOTH targets for the first time since the Volunteers divergence: Room @Database 9 -> 11 via additive ALTER-only MIGRATION_9_10 + MIGRATION_10_11, mirrored by .NET MigrateShiftTypeColumnsAsync / MigrateLocationTypeColumnsAsync. Android versionCode 76 -> 83 / 1.4.26 -> 1.5.0. Issue lifecycle: ISS-010 RESOLVED, ISS-011 NEW.",
   "components": {
-    "common":     { "content_hash": "sha256:f7a40ce8393d4fa4", "interface_hash": "sha256:f7a40ce8393d4fa4", "files": 35,  "path": "web/server/Magav.Common", "last_analyzed": "2026-06-18", "dirty_this_run": false },
-    "server":     { "content_hash": "sha256:1167cfbcbc3bc616", "interface_hash": "sha256:1167cfbcbc3bc616", "files": 23,  "path": "web/server/Magav.Server", "last_analyzed": "2026-06-24", "dirty_this_run": false },
-    "api":        { "content_hash": "sha256:55f8453b91c8423f", "interface_hash": "sha256:55f8453b91c8423f", "files": 5,   "path": "web/server/Magav.Api", "last_analyzed": "2026-06-24", "dirty_this_run": false },
-    "web-client": { "content_hash": "sha256:e0bc1325fd601d6d", "interface_hash": "sha256:e0bc1325fd601d6d", "files": 121, "path": "web/client/src", "last_analyzed": "2026-06-30", "dirty_this_run": true },
-    "android":    { "content_hash": "sha256:3fa47f306fe213fb", "interface_hash": "sha256:3fa47f306fe213fb", "files": 75,  "path": "android/app/src/main", "last_analyzed": "2026-06-30", "dirty_this_run": true }
+    "common":     { "content_hash": "sha256:a0283500d25802ef", "interface_hash": "sha256:a0283500d25802ef", "files": 37,  "path": "web/server/Magav.Common", "last_analyzed": "2026-08-17", "dirty_this_run": true },
+    "server":     { "content_hash": "sha256:9a05b5631a7e4223", "interface_hash": "sha256:9a05b5631a7e4223", "files": 24,  "path": "web/server/Magav.Server", "last_analyzed": "2026-08-17", "dirty_this_run": true },
+    "api":        { "content_hash": "sha256:04dd67c524b05323", "interface_hash": "sha256:04dd67c524b05323", "files": 5,   "path": "web/server/Magav.Api", "last_analyzed": "2026-08-17", "dirty_this_run": true },
+    "web-client": { "content_hash": "sha256:46a7256f86b88eff", "interface_hash": "sha256:46a7256f86b88eff", "files": 125, "path": "web/client/src", "last_analyzed": "2026-08-17", "dirty_this_run": true },
+    "android":    { "content_hash": "sha256:7620fc0e726e45e8", "interface_hash": "sha256:7620fc0e726e45e8", "files": 89,  "path": "android/app/src/main", "last_analyzed": "2026-08-17", "dirty_this_run": true }
+  },
+  "prior": {
+    "run_id": "deepinit-2026-06-30",
+    "source_through_commit": "778a2dd + uncommitted working tree (auto-callback-to-gate feature)",
+    "components": {
+      "common":     "sha256:f7a40ce8393d4fa4",
+      "server":     "sha256:1167cfbcbc3bc616",
+      "api":        "sha256:55f8453b91c8423f",
+      "web-client": "sha256:e0bc1325fd601d6d",
+      "android":    "sha256:3fa47f306fe213fb"
+    }
   }
 }

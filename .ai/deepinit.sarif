@@ -7,50 +7,56 @@
         "driver": {
           "name": "DeepInit",
           "informationUri": "https://github.com/deepfusionlabs/deep-init-internal",
-          "version": "0.5.0",
+          "version": "0.7.1",
           "rules": [
             { "id": "deepinit/IF-1", "name": "BusinessRuleViolation", "shortDescription": { "text": "Business-rule violation / inconsistent enforcement" } },
             { "id": "deepinit/IF-3a", "name": "SilentCrossComponentCoupling", "shortDescription": { "text": "A resource/contract shared across components with no explicit interface" } },
             { "id": "deepinit/IF-4", "name": "IntentDecisionContradiction", "shortDescription": { "text": "Code contradicts a documented decision/convention, or a name/route lies" } },
-            { "id": "deepinit/IF-7", "name": "ErrorPathContradiction", "shortDescription": { "text": "Error/exception path swallows or contradicts intended behaviour" } }
+            { "id": "deepinit/IF-7", "name": "ErrorPathContradiction", "shortDescription": { "text": "Error/exception path swallows or contradicts intended behaviour" } },
+            { "id": "deepinit/IF-9", "name": "RepoHygiene", "shortDescription": { "text": "Repository-hygiene defect (ignore rules, tracked-file gaps, build reproducibility)" } }
           ]
         }
       },
       "properties": {
-        "runId": "deepinit-2026-06-24",
+        "runId": "deepinit-2026-08-17",
         "runKind": "incremental-update",
-        "basedOnRun": "deepinit-2026-06-18",
-        "sourceThroughCommit": "2989b01",
+        "basedOnRun": "deepinit-2026-06-30",
+        "sourceThroughCommit": "339a89c",
         "lifecycle": {
-          "open": ["ISS-007"],
+          "open": ["ISS-007", "ISS-011"],
           "accepted": ["ISS-003", "ISS-004"],
-          "resolved": ["ISS-001", "ISS-002", "ISS-005", "ISS-006", "ISS-009"],
+          "resolved": ["ISS-001", "ISS-002", "ISS-005", "ISS-006", "ISS-009", "ISS-010"],
           "regressed": [],
-          "note": "5 resolved findings dropped from active results (fixed in 2989b01); ISS-003/ISS-004 retained as accepted-by-design (suppressed); ISS-007 retained — only its appsettings-credentials half was fixed, the hardcoded MagavConstants.PasswordKey remains."
-        }
+          "new": ["ISS-011"],
+          "note": "All five components were dirty this run, so issue detection ran at full horizontal scope. ISS-010 moved to resolved (cfb8e36 added a source-only .gitignore re-include and tracked the 12 db/ files; re-verified via `git check-ignore -v` returning no match and both files appearing in `git ls-files`) and is dropped from active results. ISS-011 is NEW. ISS-007 re-verified persisting even though `common` was otherwise modified. ISS-003/ISS-004 remain accepted-by-design (suppressed); ISS-004's accepted-divergence list gained a sixth, behavioral member — Android at-most-once SMS dedup vs .NET Success-only."
+        },
+        "verification": [
+          "node tools/parity-lint.mjs -> exit 0 across 5 value-sets",
+          "git check-ignore -v on the former ISS-010 paths -> no match",
+          "56 app.Map* vs 51 .RequireAuthorization in Program.cs -> difference == the 5 intentionally-public endpoints",
+          "component content_hash method reproduced all five stored 2026-06-30 values at 46951bf before recomputation at HEAD"
+        ]
       },
       "results": [
         {
           "ruleId": "deepinit/IF-1", "level": "warning", "baselineState": "unchanged",
-          "message": { "text": "Hardcoded symmetric encryption-key constant: MagavConstants.PasswordKey is a source literal used by EncryptedConnectionStringsProvider.cs:46 to decrypt the DB connection string — anyone with the source can decrypt, defeating the at-rest encryption. PERSISTING: the related committed-appsettings-credentials half of ISS-007 was resolved in 2989b01 (secrets externalized to env/user-secrets + fail-loud JWT guard, ADR-017), but this hardcoded-key half was not touched. [ISS-007, persisting]" },
+          "message": { "text": "Hardcoded symmetric encryption-key constant: MagavConstants.PasswordKey is a source literal used by EncryptedConnectionStringsProvider.cs:46 to decrypt the DB connection string - anyone with the source can decrypt, defeating the at-rest encryption. PERSISTING: the related committed-appsettings-credentials half was resolved in 2989b01 (secrets externalized to env/user-secrets + a fail-loud JWT startup guard, ADR-017), but this constant and its use are unchanged - re-verified 2026-08-17 even though MagavConstants.cs was otherwise modified this run. Remediation: supply the key from an environment variable or secret store, and consider modernizing the cipher/KDF (legacy Rijndael + default Rfc2898DeriveBytes iterations). Secret VALUE is never reproduced (R5)." },
           "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "web/server/Magav.Common/MagavConstants.cs" }, "region": { "startLine": 7 } } } ],
-          "partialFingerprints": { "deepinitBaselineKey/v1": "IF-1:web/server/Magav.Common/MagavConstants.cs:PasswordKey#hardcoded" }
+          "partialFingerprints": { "deepinitMatchKey": "IF-1:web/server/Magav.Common/MagavConstants.cs:PasswordKey#hardcoded" },
+          "properties": { "iss": "ISS-007", "severity": "Medium", "criticality": "Core", "certainty": "HIGH", "lifecycle": "persisting", "firstSeenRun": "deepinit-2026-06-18" }
         },
         {
-          "ruleId": "deepinit/IF-3a", "level": "warning", "baselineState": "unchanged",
-          "message": { "text": "Volunteer entity diverges (additively) across backends: .NET adds InternalIdHash/FirstName/LastName/RoleId; Android VolunteerEntity keys on MappingName only. ACCEPTED BY DESIGN (ADR-016) — Android has no SMS-approval flow and never reads those columns; not migrated (Room @Entity change carries the ADR-004 data-wipe hazard). Codified in a VolunteerEntity.kt header comment + tools/parity.md #3. [ISS-003, accepted]" },
-          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "android/app/src/main/java/com/magav/app/db/entity/VolunteerEntity.kt" }, "region": { "startLine": 1 } } } ],
-          "partialFingerprints": { "deepinitBaselineKey/v1": "IF-3a:android/app/src/main/java/com/magav/app/db/entity/VolunteerEntity.kt:VolunteerEntity#schema" },
-          "suppressions": [ { "kind": "external", "justification": "Accepted by design — ADR-016; intentional per-target divergence, no Room migration (ADR-004 hazard)." } ]
-        },
-        {
-          "ruleId": "deepinit/IF-3a", "level": "warning", "baselineState": "unchanged",
-          "message": { "text": "One REST + domain contract is implemented three times with no shared source of truth (.NET Program.cs, Android Ktor routes, React services; entity model triplicated) and no tests. ACCEPTED BY DESIGN (dual-target architecture, ADR-001/012/015) and now GUARDED by a 0-LLM constant parity lint (tools/parity-lint.mjs, ADR-018) for ReminderTypes/SmsStatuses/DayGroups; the refresh-token TTL 7d/3d and password-policy differences are recorded accepted divergences. Endpoint/DTO shapes are still hand-mirrored. [ISS-004, accepted]" },
-          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "web/server/Magav.Api/Program.cs" }, "region": { "startLine": 1 } } } ],
-          "partialFingerprints": { "deepinitBaselineKey/v1": "IF-3a:web/server/Magav.Api/Program.cs:contract#triplicated" },
-          "suppressions": [ { "kind": "external", "justification": "Accepted by design — ADR-001/012/015; mitigated by tools/parity-lint.mjs (ADR-018)." } ]
+          "ruleId": "deepinit/IF-1", "level": "warning", "baselineState": "new",
+          "message": { "text": "The message-template in-use guard does not cover the administrative template ROLES. MessageTemplateRepository.IsInUseAsync (and its Android twin MessageTemplateDao.getUsageCount) count only SchedulerConfig.MessageTemplateId references, but the administrative assignment/today templates are referenced by id stored as AppSettings VALUES (admin_assignment_template_id / admin_today_template_id). An Admin can therefore delete an in-use administrative template. It does not self-heal: the startup migration re-creates the template by name (getting a NEW auto-increment id) while the AppSettings key is seeded INSERT OR IGNORE / once-only, so the key keeps pointing at the deleted id. Effect is fail-safe but silent - administrative SMS sends return 'template not configured' until an Admin re-picks the template. The advance template is unaffected (referenced by the AdminAdvance SchedulerConfig row, which the guard does cover). Present identically on both backends. Fix: extend the in-use check to also count AppSettings rows whose Key is an admin template-role key and whose Value equals the template id - on both backends; or make the AppSettings seed repair a key whose template no longer exists." },
+          "locations": [
+            { "physicalLocation": { "artifactLocation": { "uri": "web/server/Magav.Server/Database/Repositories/MessageTemplateRepository.cs" }, "region": { "startLine": 13, "endLine": 18 } } },
+            { "physicalLocation": { "artifactLocation": { "uri": "android/app/src/main/java/com/magav/app/db/dao/MessageTemplateDao.kt" }, "region": { "startLine": 36, "endLine": 37 } } }
+          ],
+          "partialFingerprints": { "deepinitMatchKey": "IF-1:web/server/Magav.Server/Database/Repositories/MessageTemplateRepository.cs:IsInUseAsync#appsettings-refs-uncovered" },
+          "properties": { "iss": "ISS-011", "severity": "Medium", "criticality": "Supporting", "certainty": "HIGH", "lifecycle": "new", "firstSeenRun": "deepinit-2026-08-17", "autoAccepted": false }
         }
-      ]
+      ],
+      "suppressions_note": "ISS-003 and ISS-004 are accepted-by-design (ADR-016 / ADR-001+012+015 with the ADR-018 parity lint as mitigation) and are not emitted as active results. ISS-008 is a deterministic risk RANKING, not a defect, and is not emitted. ISS-010 is resolved and dropped. Candidates considered and NOT raised this run (stated for honesty): the non-transactional administrative create (identical on both backends, retry-idempotent), the unlinted AppSettingsKeys mirroring obligation (fragility, not a current defect), and the global Locations.Name uniqueness across both types (verified intentional)."
     }
   ]
 }

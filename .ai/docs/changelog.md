@@ -1,5 +1,49 @@
 # DeepInit Changelog
 
+## 2026-08-17 — Run deepinit-2026-08-17 (incremental `--update`, source through `339a89c`, clean tree)
+
+The largest refresh since the baseline: **all five components dirty**, nothing skipped. Change detection
+(Step-0 symmetric set-diff over `.file_hashes.json`): `keys(stored) == keys(current)` — no component added or
+removed — and **every** `content_hash` changed, so DP-1 interface-hash propagation was moot (there was nothing
+left to skip). The hash method was first re-verified to reproduce all five stored `2026-06-30` values exactly at
+commit `46951bf` before being recomputed at HEAD, so the dirty verdict is measured rather than assumed. Step 0b
+rebuilt the structural graph deterministically — **Graphify is available now** (`graphify update .` → 3021 nodes /
+4996 edges / 184 communities over 326 files, 0 LLM tokens), where earlier runs used the grep fallback. Horizontal
+docs re-run in full. DB still not connected (R7 — SQLCipher-encrypted).
+
+Two feature commits since the prior baseline (`46951bf`):
+
+### ADDED — `cfb8e36` administrative shifts + general locations (all 3 platforms)
+- **Administrative shifts (משמרות מנהליות)** via a **`ShiftType` discriminator** on the existing `Shifts` table (`Operational` | `Administrative`) + 5 nullable admin columns; admin groups key on `(ShiftDate, ShiftTime, Description)` with `ShiftName == Description`. **9 new endpoints implemented on BOTH backends** (5 × `/api/shifts/administrative/*`, `GET/PUT /api/admin-scheduler/config`, `GET/PUT /api/admin-settings/templates`) + React `AdminShiftsPage` / `AdminSchedulerSettingsPage` / `adminSchedulerService` / `adminSettingsService`. New reminder type **`AdminAdvance`** reusing the `WeekdayAdvance` half-open window (config `SunThu` / N=1 / seeded disabled). **ADR-022**, **UC-011**, **DR-022/DR-023**, **WA-012**.
+- **Typed locations** — `LocationType` (`Vehicle` | `General`) on the existing `Locations` table, `Vehicle` by default everywhere except PUT (which preserves the row's type); one parameterized React page mounted twice. **ADR-023**, **UC-012**, **DR-025**.
+- **Schema, mirrored on both targets for the first time since the Volunteers divergence:** Room **9→11** via additive `ALTER TABLE ADD COLUMN`-only `MIGRATION_9_10` + `MIGRATION_10_11` (registered in BOTH `addMigrations` sites), mirrored by .NET `MigrateShiftTypeColumnsAsync` / `MigrateLocationTypeColumnsAsync`. `AppSettings` finally exists on .NET too → **drift row D-2 CLOSED**.
+- **Parity lint widened 3 → 5 value-sets** (`+ShiftTypes`, `+LocationTypes`) in the same commit; exits 0.
+- **ISS-010 FIXED** — source-only `.gitignore` re-include (both the directory and `/**`, appended last) + 12 `db/` files tracked.
+
+### ADDED — `339a89c` at-most-once SMS dispatch (Android, v1.5.0) — incident response
+- Response to a **production duplicate-SMS incident (15–16/08/2026)**: write-ahead `SmsLog` INSERT with the new status **`Dispatched`** *before* the radio handoff (fail-closed); dedup on **ANY** row for `(ShiftId, ReminderType)`; tri-state `SmsProvider.Outcome` with `logStatus`/`countsAsSent` as the single status contract; process-global batch mutex; 60s timeout with **all** multipart parts tracked; worker retry cap + per-worker foreground id; run-bounded duplicate detector; `connectionIdleTimeoutSeconds=180`; amber "שוגר (ללא אישור מסירה)" client badge. **No migration** — `Dispatched` is a new value in the existing TEXT column. **ADR-024**, **WF-005**, **DR-024**, **WA-011**, **KL-mistake:015**. versionCode 76→83 / 1.5.0.
+
+### MODIFIED
+- **All five component docs** re-analyzed: `common.md` (+4 BRs, 2 new models, the 5 value-sets), `server.md` (+8 BRs, +2 workflows, `AppSettingsRepository`, the admin migration chain), `api.md` (+8 BRs, the 9 endpoints, DTOs + `AdminSendHelpers`, re-run authorization audit), `android.md` (+10 BRs, WF-android:009, the rewritten WF-android:002, Room v11, ISS-010 resolution), `web-client.md` (+8 BRs, the two new pages, typed locations, the `Dispatched` badge).
+- **All horizontal docs** re-run: `data-layer.md` (§2.2 the additive column set + D-2 closed + NEW D-8 behavioral drift), `domain-model.md` (8 glossary terms, DR-022–025), `functional-workflows.md` (UC-011/012, WF-005, WA-011/012), `technical-dependencies.md` (§4.2 the mirror at scale, §4.3 Room 9→11, §4.4 the deliberate send-path divergence), `cross-references.md` (§1.5/§1.6 maps, §4.6/§4.7 traces, tech-debt rows re-measured + 4 new), `decisions.md` (ADR-022/023/024 + 6 KL entries), `git-intelligence.md` + `discovery.md` (re-measured: 78 commits, ~31.7k lines, Graphify available).
+- State: `manifest.json` (schema 4, +`source_size`, +`verification` block), `.file_hashes.json` (all five hashes, prior values retained), `.issue_baseline.json`.
+
+### BREAKING
+- **No runtime-contract break.** Both Room migrations are additive `ALTER`-only and were done per the full ADR-004 ritual; the `Dispatched` status needed no migration; `GET /api/locations` defaults to `type=Vehicle` so pre-feature callers see an unchanged result set; operational SMS output is byte-for-byte unchanged (the admin placeholder strip/collapse pass is gated on `hasAdmin`).
+- **Behavior change worth knowing (Android only):** a `Fail`-logged SMS is **no longer retried automatically** — at-most-once dispatch means only a manual re-send will retry it.
+
+### ISSUES (lifecycle diff vs baseline deepinit-2026-06-30)
+- **NEW: 1 (ISS-011)** · **RESOLVED: 1 (ISS-010)** · REGRESSED: 0 · PERSISTING: 1 (ISS-007) · ACCEPTED: 2
+- **ISS-011** (IF-1, Medium, HIGH, **not auto-accepted**): the message-template delete guard counts only `SchedulerConfig.MessageTemplateId` references and misses the two administrative template **roles** referenced via `AppSettings` values; because the seed is `INSERT OR IGNORE` / once-only, a dangling key never self-heals. Fail-safe but silent on both backends.
+- **ISS-010 → resolved**, re-verified deterministically (`git check-ignore -v` clean; both files in `git ls-files`).
+- **ISS-007 → persisting**, re-verified even though `common` was modified this run (`MagavConstants.cs:7` + `EncryptedConnectionStringsProvider.cs:46` unchanged).
+- **ISS-004 accepted-list extended** with a sixth, *behavioral* divergence: at-most-once SMS dedup on Android vs `Success`-only on .NET. The 9 administrative endpoints are **not** a divergence — both backends implement them.
+- **Open after this run: 2 (ISS-007 + ISS-011) + 2 accepted-by-design.**
+
+### REVIEW
+- Incremental update. Doc claims were grounded by reading the two feature commits' full diffs plus the current files, and the load-bearing assertions were checked deterministically rather than asserted: `node tools/parity-lint.mjs` (exit 0, 5 value-sets), `git check-ignore -v` (ISS-010), `grep` for the ISS-007 constant + its use, an endpoint-vs-`RequireAuthorization` count in `Program.cs` (56 vs 51 → exactly the 5 public endpoints), file/line counts via `git ls-files` + `wc -l`, and churn via `git log`. No full adversarial re-run (mode = `--update`).
+- **Not verified by DeepInit (manual gates that remain open):** the on-device `MIGRATION_10_11` test on a populated v9/v10 device, and the on-device duplicate-SMS protocol in `Plans/duplicate-sms-fix-implementation-plan.md`.
+
 ## 2026-06-30 — Run deepinit-2026-06-30 (incremental `--update`, source through `778a2dd` + uncommitted working tree)
 
 Refreshes the context layer for the Android-only **Auto-Callback-to-Gate** feature (an eligible unanswered

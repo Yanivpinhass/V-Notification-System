@@ -1,5 +1,6 @@
 <!-- DeepInit Extract | Component: api
-Run ID: deepinit-2026-06-18
+DeepInit C8 update | Run ID: deepinit-2026-08-17 | Generated: 2026-08-17 (commit cfb8e36 administrative-shifts + general-locations: Program.cs 2249→2718 LOC; 8 NEW endpoints — 4 administrative-shift + 2 admin-scheduler + 2 admin-template-role; GET /api/locations becomes type-filtered (?type=, default Vehicle) and POST/PUT gain type handling; operational scheduler GET/PUT/PUT-by-id now exclude the AdminAdvance row; cancel-group + sms-log + sms-log/summary gain the Operational predicate; NEW DTOs + the AdminSendHelpers static class)
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-06-24 (incremental --update over commit 2989b01: secrets externalized + JWT startup guard [ISS-007 appsettings half / ADR-017], Results.Problem→ApiResponse.Fail [ISS-005]) — note: appsettings.Development.json in the input list below was deleted/gitignored
 Input files processed: web/server/Magav.Api/Program.cs, web/server/Magav.Api/appsettings.json, web/server/Magav.Api/appsettings.Development.json, web/server/Magav.Api/Properties/launchSettings.json
 Generated: 2026-06-18 -->
 
@@ -7,13 +8,13 @@ Generated: 2026-06-18 -->
 
 ## 1. Component Overview
 
-**Purpose:** The ASP.NET 8 Minimal-API entry point and HTTP surface of the Magav web backend. A single `Program.cs` (2249 LOC) wires up configuration, DI, middleware, CORS, JWT bearer auth, authorization policies, rate limiting, and defines **every** REST endpoint (auth, users, volunteers, shifts, locations, holidays, scheduler config, message templates, SMS log, public SMS-approval, health). It is the top layer: depends on `Magav.Server` (services/repositories/scheduler) and `Magav.Common` (models/`ApiResponse`/`MagavConstants`). [HIGH] (`web/server/Magav.Api/Program.cs:5-14`)
+**Purpose:** The ASP.NET 8 Minimal-API entry point and HTTP surface of the Magav web backend. A single `Program.cs` (**2718 LOC** as of 2026-08-17) wires up configuration, DI, middleware, CORS, JWT bearer auth, authorization policies, rate limiting, and defines **every** REST endpoint (auth, users, volunteers, shifts, locations, holidays, scheduler config, message templates, SMS log, public SMS-approval, health). It is the top layer: depends on `Magav.Server` (services/repositories/scheduler) and `Magav.Common` (models/`ApiResponse`/`MagavConstants`). [HIGH] (`web/server/Magav.Api/Program.cs:5-14`)
 
 **Tech stack:** .NET 8 Minimal APIs (`WebApplication.CreateBuilder`, `app.MapGet/MapPost/MapPut/MapDelete`); `Microsoft.AspNetCore.Authentication.JwtBearer`; `Microsoft.AspNetCore.RateLimiting`; `Microsoft.IdentityModel.Tokens`; `BCrypt.Net` (password hashing at endpoint level); `System.Text.RegularExpressions` (input validation). Excel import via `Magav.Server` services. [HIGH] (`Program.cs:1-14`)
 
-**Entry point:** `web/server/Magav.Api/Program.cs` — top-level statements; `app.Run()` at `Program.cs:2150`. Request/response DTO records declared after `app.Run()` (`Program.cs:2152-2249`). [HIGH]
+**Entry point:** `web/server/Magav.Api/Program.cs` — top-level statements; `app.Run()` near the end. Request/response DTO records declared after `app.Run()`, now followed by the `AdminSendHelpers` static class (`Program.cs:2658-2718`). [HIGH]
 
-**Complexity:** **Complex — god object.** All ~50 endpoints + DI + middleware + DTOs live in one 2249-line file (see §10). [HIGH]
+**Complexity:** **Complex — god object.** All **56** endpoints + DI + middleware + DTOs live in one 2718-line file (see §10). [HIGH]
 
 **Certainty:** [HIGH] — `Program.cs` read in full; both appsettings files and `launchSettings.json` read; git-tracking of config confirmed.
 
@@ -23,43 +24,54 @@ Generated: 2026-06-18 -->
 
 Endpoint groups (method + representative path → source line, certainty all [HIGH] unless noted):
 
-**Auth** (`Program.cs:166-274`)
-- `POST /api/auth/login` (`:170`) — public; `AuthService.LoginAsync`.
-- `POST /api/auth/refresh` (`:190`) — public; rotates tokens.
-- `POST /api/auth/logout` (`:210`) — `.RequireAuthorization()`; clears refresh token from JWT `sub`/`NameIdentifier` claim.
-- `POST /api/auth/change-password` (`:233`) — `.RequireAuthorization()`; validates new password (≥6 chars, 1 letter + 1 digit), BCrypt-hashes via `Security:BcryptWorkFactor`.
-- `GET /api/health` (`:274`) — public; returns `{status, timestamp}`.
+**Auth** (`Program.cs:180-290`)
+- `POST /api/auth/login` (`:180`) — public; `AuthService.LoginAsync`.
+- `POST /api/auth/refresh` (`:202`) — public; rotates tokens.
+- `POST /api/auth/logout` (`:224`) — `.RequireAuthorization()`; clears refresh token from JWT `sub`/`NameIdentifier` claim.
+- `POST /api/auth/change-password` (`:249`) — `.RequireAuthorization()`; validates new password (≥6 chars, 1 letter + 1 digit), BCrypt-hashes via `Security:BcryptWorkFactor`.
+- `GET /api/health` (`:290`) — public; returns `{status, timestamp}`.
 
-**Volunteers** (`Program.cs:280-363`, `1777-1805`)
-- `GET /api/volunteers` (`:280`) — `CanManageMessages`; projects DTO (no internal-id hash).
-- `POST /api/volunteers/import` (`:305`) — `CanImportVolunteers` + `.DisableAntiforgery()`; Excel upload (full validation pattern, §3 WF-api:006); delegates to `VolunteersImportService`.
-- `POST /api/volunteers/revoke-sms-approval` (`:1777`) — `CanManageMessages`; validates internal-id regex `^[0-9]{1,8}$`.
+**Volunteers** (`Program.cs:296-368`, `2181-2209`)
+- `GET /api/volunteers` (`:296`) — `CanManageMessages`; projects DTO (no internal-id hash).
+- `POST /api/volunteers/import` (`:321`) — `CanImportVolunteers` + `.DisableAntiforgery()`; Excel upload (full validation pattern, §3 WF-api:006); delegates to `VolunteersImportService`.
+- `POST /api/volunteers/revoke-sms-approval` (`:2181`) — `CanManageMessages`; validates internal-id regex `^[0-9]{1,8}$`.
 
-**Shifts** (`Program.cs:617-1353`)
-- `POST /api/shifts/import` (`:617`) — `CanImportVolunteers` + `.DisableAntiforgery()`; Excel upload; `ShiftsImportService`.
-- `GET /api/shifts/by-date?date=` (`:680`), `GET /api/shifts/dates-with-shifts?from=&to=` (`:729`) — `CanManageMessages`.
-- `POST /api/shifts` create (`:1163`), `PUT /api/shifts/update-group` (`:1236`), `PUT /api/shifts/update-group-location` (`:1302`) — `CanManageMessages`.
-- `DELETE /api/shifts/{id}` (`:760`) — hard-delete + cascade SmsLog delete; `CanManageMessages`.
-- `POST /api/shifts/delete-group` (`:784`) — hard-delete a group, optional cancel SMS (template 3); `CanManageMessages`.
-- `POST /api/shifts/{id}/cancel` (`:870`) — **soft-cancel** single (sets `IsCanceled=1`,`CanceledAt`); optional SMS; `CanManageMessages`.
-- `POST /api/shifts/cancel-group` (`:943`) — **soft-cancel** team for Date+ShiftName+CarId (only `IsCanceled=0` rows); optional SMS; `CanManageMessages`.
-- `GET /api/shifts/canceled?month=YYYY-MM` (`:1034`) — lists `IsCanceled=1`; `CanManageMessages`.
-- `POST /api/shifts/{id}/send-sms` (`:1062`) — manual SMS; auto-picks template 1 (same-day, +location) or 2 (advance) by Israel-local date; `CanManageMessages`.
-- `POST /api/shifts/send-location-update` (`:1332`) — `SmsReminderService.SendLocationUpdateAsync`; `CanManageMessages`.
+**Shifts** (`Program.cs:656-1397`)
+- `POST /api/shifts/import` (`:656`) — `CanImportVolunteers` + `.DisableAntiforgery()`; Excel upload; `ShiftsImportService`.
+- `GET /api/shifts/by-date?date=` (`:719`), `GET /api/shifts/dates-with-shifts?from=&to=` (`:768`) — `CanManageMessages`.
+- `POST /api/shifts` create (`:1206`), `PUT /api/shifts/update-group` (`:1279`), `PUT /api/shifts/update-group-location` (`:1345`) — `CanManageMessages`.
+- `DELETE /api/shifts/{id}` (`:799`) — hard-delete + cascade SmsLog delete; `CanManageMessages`.
+- `POST /api/shifts/delete-group` (`:823`) — hard-delete a group, optional cancel SMS (template 3); `CanManageMessages`.
+- `POST /api/shifts/{id}/cancel` (`:909`) — **soft-cancel** single (sets `IsCanceled=1`,`CanceledAt`); optional SMS; `CanManageMessages`.
+- `POST /api/shifts/cancel-group` (`:982`) — **soft-cancel** team for Date+ShiftName+CarId (only `IsCanceled=0` rows); optional SMS; `CanManageMessages`.
+- `GET /api/shifts/canceled?month=YYYY-MM` (`:1077`) — lists `IsCanceled=1`; `CanManageMessages`.
+- `POST /api/shifts/{id}/send-sms` (`:1105`) — manual SMS; auto-picks template 1 (same-day, +location) or 2 (advance) by Israel-local date; `CanManageMessages`.
+- `POST /api/shifts/send-location-update` (`:1375`) — `SmsReminderService.SendLocationUpdateAsync`; `CanManageMessages`.
 
-**Locations** (`Program.cs:370-496`) — `GET` list (`:370`), `GET /{id}` (`:387`), `POST` (`:406`), `PUT /{id}` (`:441`), `DELETE /{id}` (`:475`, blocked if referenced by future shifts). All `CanManageMessages`.
+**Administrative shifts** (`Program.cs:1403-1649`) — NEW 2026-07-14, all `CanManageMessages`:
+- `GET /api/shifts/administrative/by-week?weekStart=YYYY-MM-DD` (`:1404`) — the Sun→Sat week of `AdminShiftRow`s.
+- `POST /api/shifts/administrative` (`:1424`) — create one row per volunteer; `Description` required (it also becomes `ShiftName`); `ShiftTime` normalized to `HH:mm`; **skips volunteers already active in the same `(Date, ShiftTime, Description)` group**, which is what makes the client's add-volunteers-in-edit re-POST idempotent; optional `SendSms` uses the **assignment** template.
+- `PUT /api/shifts/administrative/update-group` (`:1529`) — keyed on the OLD `(Date, OldShiftTime, OldDescription)`; editing re-buckets the group.
+- `POST /api/shifts/administrative/cancel-group` (`:1571`) — soft-cancel by `(Date, ShiftTime, Description)`; never reuses the operational ShiftName+CarId path.
+- `POST /api/shifts/administrative/{id}/send-sms` (`:1598`) — per-volunteer send; picks the **today** template when the shift is on today's Israel-local date, else the **assignment** template; rejects a canceled shift, an unresolved volunteer, a phoneless volunteer, or a non-approved volunteer.
 
-**Jewish Holidays** (`Program.cs:509-611`) — `GET` (`:509`), `POST` (`:526`), `PUT /{id}` (`:559`), `DELETE /{id}` (`:593`). Date validated `^\d{4}-\d{2}-\d{2}$`. All `CanManageMessages`.
+**Admin scheduler + template roles** (`Program.cs:1651-1755`) — NEW 2026-07-14:
+- `GET /api/admin-scheduler/config` (`:1655`, `CanManageMessages`) / `PUT /api/admin-scheduler/config` (`:1675`, **`AdminOnly`**) — the single `AdminAdvance` row; the PUT writes **only** `Time`/`IsEnabled`/`MessageTemplateId` (DayGroup, ReminderType and `DaysBeforeShift` are server-owned and left exactly as stored).
+- `GET /api/admin-settings/templates` (`:1716`, `CanManageMessages`) / `PUT /api/admin-settings/templates` (`:1736`, **`AdminOnly`**) — the assignment + today template-role ids, stored in `AppSettings`; the PUT verifies both templates exist before upserting.
 
-**Users** (`Program.cs:1525-1771`) — `GET` list (`:1525`), `GET /{id}` (`:1554`), `POST` create (`:1585`), `PUT /{id}` (`:1653`), `DELETE /{id}` (`:1735`). All `AdminOnly`. Self-protection rules (§4).
+**Locations** (`Program.cs:387-513`) — `GET` list **`?type=Vehicle|General|All`, defaulting to `Vehicle`** (`:388`), `GET /{id}`, `POST` (default type `Vehicle`), `PUT /{id}` (**preserve-on-omit: an omitted `Type` keeps the row's existing type — defaulting to `Vehicle` would silently flip a `General` row**, `:488`), `DELETE /{id}` (blocked if referenced by a future shift as mission **or** vehicle location). All `CanManageMessages`.
 
-**SMS Log** (`Program.cs:1812-1877`) — `GET /api/sms-log?days=` (`:1812`), `GET /api/sms-log/summary?days=` (`:1844`); lookback clamped 1–90 days; raw parameterized SQL. `CanManageMessages`.
+**Jewish Holidays** (`Program.cs:548-655`) — `GET` (`:548`), `POST` (`:565`), `PUT /{id}` (`:598`), `DELETE /{id}` (`:632`). Date validated `^\d{4}-\d{2}-\d{2}$`. All `CanManageMessages`.
 
-**Scheduler Config** (`Program.cs:1884-2021`) — `GET /api/scheduler/config` (`:1884`, `CanManageMessages`); `PUT /api/scheduler/config` bulk (`:1901`, `AdminOnly`); `PUT /api/scheduler/config/{id}` single (`:1968`, `AdminOnly`); `GET /api/scheduler/run-log` (`:2007`, `CanManageMessages`).
+**Users** (`Program.cs:1929-2175`) — `GET` list (`:1929`), `GET /{id}` (`:1958`), `POST` create (`:1989`), `PUT /{id}` (`:2057`), `DELETE /{id}` (`:2139`). All `AdminOnly`. Self-protection rules (§4).
 
-**Message Templates** (`Program.cs:2028-2138`) — `GET` (`:2028`, `CanManageMessages`); `POST` (`:2045`), `PUT /{id}` (`:2079`), `DELETE /{id}` (`:2113`) all `AdminOnly`. Content must contain `{שם}` and `{תאריך}`, ≤500 chars; cannot delete last template or an in-use template.
+**SMS Log** (`Program.cs:2216-2283`) — `GET /api/sms-log?days=` (`:2216`), `GET /api/sms-log/summary?days=` (`:2249`); lookback clamped 1–90 days; raw parameterized SQL. `CanManageMessages`.
 
-**Public SMS-approval** (`Program.cs:1360-1509`) — `POST /api/public/sms-approval/{accessKey}/verify` (`:1360`), `POST /api/public/sms-approval/{accessKey}/submit` (`:1428`). No auth; `.RequireRateLimiting("sms-approval")`; access-key validated against `PublicPages:SmsApprovalAccessKey`.
+**Scheduler Config** (`Program.cs:2290-2436`) — `GET /api/scheduler/config` (`:2290`, `CanManageMessages`, **operational rows only**); `PUT /api/scheduler/config` bulk (`:2309`, `AdminOnly`); `PUT /api/scheduler/config/{id}` single (`:2377`, `AdminOnly`, 404s on the admin row); `GET /api/scheduler/run-log` (`:2422`, `CanManageMessages`).
+
+**Message Templates** (`Program.cs:2443-2554`) — `GET` (`:2443`, `CanManageMessages`); `POST` (`:2460`), `PUT /{id}` (`:2494`), `DELETE /{id}` (`:2528`) all `AdminOnly`. Content must contain `{שם}` and `{תאריך}`, ≤500 chars; cannot delete last template or an in-use template.
+
+**Public SMS-approval** (`Program.cs:1764-1913`) — `POST /api/public/sms-approval/{accessKey}/verify` (`:1764`), `POST /api/public/sms-approval/{accessKey}/submit` (`:1832`). No auth; `.RequireRateLimiting("sms-approval")`; access-key validated against `PublicPages:SmsApprovalAccessKey`.
 
 ---
 
@@ -99,7 +111,7 @@ Endpoint groups (method + representative path → source line, certainty all [HI
 **WF-api:007 — Standard error-handling pattern**
 - Type: cross-cutting. Trigger: any endpoint catch block.
 - Steps: `catch (Exception ex)` → `Console.Error.WriteLine($"...: {ex}")` (full detail server-side only) → return `Results.Json(ApiResponse<object>.Fail("<generic Hebrew>"), statusCode: 500)`. Used by the vast majority of endpoints (e.g. `:296-302,431-437,1226-1232`).
-- **Deviation:** the two auth endpoints use `Results.Problem("An error occurred...")` instead of `Results.Json`+`ApiResponse.Fail` (`:186,206`) — see §10 (CLAUDE.md says prefer `Results.Json`/`ApiResponse` over `Results.Problem`). The two file-import 500 paths also use `Results.Problem(...)` (`:359` volunteers) while shifts import uses the `Results.Json` form (`:671-673`). [HIGH]
+- **Deviation — RESOLVED 2026-06-19 (`2989b01`):** login/refresh/logout and the volunteers-import 500 path previously used `Results.Problem("…English…")`; all were converted to `Results.Json(ApiResponse<T>.Fail("<Hebrew>"), 500)`. **Zero `Results.Problem` references remain** — the pattern is now followed uniformly. (ISS-005 resolved) [HIGH]
 - Certainty: HIGH.
 
 **WF-api:008 — Public SMS-approval verify/submit**
@@ -125,7 +137,7 @@ Endpoint groups (method + representative path → source line, certainty all [HI
 | BR-api:004 | Public SMS-approval is rate-limited to 3 requests / 5 min (fixed window) | Core | `Program.cs:111-117,1425,1509` |
 | BR-api:005 | API responses are wrapped in `ApiResponse<T>` (`Ok`/`Fail`) — invariant across all data endpoints | Core | e.g. `Program.cs:175,294,2033` |
 | BR-api:006 | Cancelling a shift is a SOFT-cancel (set `IsCanceled=1`+`CanceledAt`), not delete; cancel-group only touches `IsCanceled=0` rows; cancel SMS failure does NOT block the cancel | Core | `Program.cs:870-940,943-1031` |
-| BR-api:007 | Error responses never leak exception detail — full `ex` only to `Console.Error`; client gets generic Hebrew via `ApiResponse.Fail` + 500 (deviation: auth + volunteers-import use `Results.Problem`, §10) | Core | `Program.cs:296-302,359,186,206` |
+| BR-api:007 | Error responses never leak exception detail — full `ex` only to `Console.Error`; client gets generic Hebrew via `ApiResponse.Fail` + 500. The former auth/import `Results.Problem` deviation was converted to this pattern in `2989b01` (no deviations remain; ISS-005 resolved) | Core | `Program.cs:296-302` + auth/import catch blocks |
 | BR-api:008 | File uploads: CSRF `X-Requested-With` header + ext `.xlsx/.xls` + magic bytes (PK / OLE) + ≤10MB + in-memory only | Core | `Program.cs:312-348,624-660` |
 | BR-api:009 | Admin cannot deactivate self, remove own Admin role, delete self, or delete the last remaining Admin | Core | `Program.cs:1669-1674,1750-1758` |
 | BR-api:010 | Valid user roles enforced server-side: `Admin`/`User`/`SystemManager`; password ≥6 chars + 1 letter + 1 digit; username `^[֐-׿a-zA-Z0-9_]{3,50}$` (case-insensitive uniqueness) | Supporting | `Program.cs:1597-1613,1678-1688` |
@@ -135,6 +147,14 @@ Endpoint groups (method + representative path → source line, certainty all [HI
 | BR-api:014 | SMS-log lookback `days` clamped to 1–90 (default 90); summary query filters `IsCanceled=0` | Supporting | `Program.cs:1816-1818,1848-1852,1863` |
 | BR-api:015 | Location cannot be deleted while referenced by future shifts | Supporting | `Program.cs:483-484` |
 | BR-api:016 | `DELETE /api/shifts/{id}` and `delete-group` HARD-delete and cascade-delete `SmsLog WHERE ShiftId=@0` first | Supporting | `Program.cs:769-770,850-854` |
+| BR-api:017 | **Administrative endpoints are read/write at `CanManageMessages`; the two admin *configuration* writes are `AdminOnly`** (`PUT /api/admin-scheduler/config`, `PUT /api/admin-settings/templates`) — the same read-vs-configure split as the operational scheduler | Core | `Program.cs:1414,1521,1560,1590,1640` (`CanManageMessages`) vs `:1712,1755` (`AdminOnly`) |
+| BR-api:018 | **`Description` is required on every admin create/update** because it is also written into the NOT-NULL `ShiftName`; `ShiftTime` is normalized to zero-padded `HH:mm` so `"8:00"` and `"08:00"` bucket into the same group | Core | `Program.cs:1432-1441,1536-1543`; `AdminSendHelpers.NormalizeShiftTime` `:2705-2711` |
+| BR-api:019 | **Admin create is idempotent per volunteer:** volunteers already ACTIVE in the target `(Date, ShiftTime, Description)` group are skipped, so the client's "add volunteers while editing" (update-group, then re-POST the whole group) never double-inserts | Core | `Program.cs:1450,1462` |
+| BR-api:020 | **Vehicle location — "id wins":** when `VehicleLocationId` is supplied, the free-text `VehicleLocation` is stored as NULL; the free text is used only when no id was picked. Applied identically on create and update | Supporting | `Program.cs:1444-1448,1546-1550` |
+| BR-api:021 | **`GET /api/locations` defaults to `type=Vehicle`** (not "all") so pre-feature clients keep seeing exactly today's set; `All` is accepted explicitly; anything else → 400 "סוג מיקום לא תקין". **`PUT` preserves the row's existing type when `Type` is omitted** — defaulting to `Vehicle` there would silently re-bucket a `General` row | Core | `Program.cs:392-396,440-441,488-491` |
+| BR-api:022 | **The operational scheduler endpoints must never see the `AdminAdvance` row:** `GET /api/scheduler/config` and the bulk `PUT` both read `GetOperationalAsync` (if the admin row leaked into the bulk read, the exact id-set equality check of BR-api:011 would reject every operational save), and `PUT /api/scheduler/config/{id}` returns the same 404 as a missing row when the target is the admin config | Core | `Program.cs:2294,2322-2324,2389-2393` |
+| BR-api:023 | **SMS-log reporting is operational-only:** both `GET /api/sms-log` and `GET /api/sms-log/summary` filter `s.ShiftType = 'Operational'`, so administrative sends never appear in the operational SMS report | Supporting | `Program.cs:2234,2269` |
+| BR-api:024 | **`POST /api/shifts/cancel-group` carries `ShiftType = 'Operational'`** — an admin group whose `ShiftName` (== `Description`) happens to match an operational `(ShiftName, CarId)` request would otherwise be wrongly canceled here while the Android mirror skips it. The predicate MUST stay byte-identical to the Android `cancelShiftGroup` DAO query | Core | `Program.cs:1052-1059` |
 
 ---
 
@@ -171,7 +191,14 @@ Request/response DTOs are `record`/`class` declared at the bottom of `Program.cs
 | `LocationRequest` | record | Name, Address?, City?, Navigation? | `:2242` |
 | `UpdateGroupLocationRequest` | record | Date, ShiftName, CarId, LocationId?, CustomLocationName?, CustomLocationNavigation? | `:2243-2244` |
 | `SendLocationUpdateRequest` | record | Date, ShiftName, CarId | `:2245` |
-| `JewishHolidayRequest` | record | Date, Name | `:2248` |
+| `JewishHolidayRequest` | record | Date, Name | `:2657` |
+| `LocationRequest` | record | Name, Address?, City?, Navigation?, **`Type = null`** (Vehicle\|General; null ⇒ default-on-POST / preserve-on-PUT) | `:2650` |
+| `CreateAdminShiftRequest` | record | Description, Date, ShiftTime, Address?, VehicleLocation?, CarId?, LocationId?, CustomLocationName?, CustomLocationNavigation?, VehicleLocationId?, VolunteerIds[], SendSms | `:2662-2668` |
+| `UpdateAdminShiftGroupRequest` | record | Date, OldShiftTime, OldDescription, NewDescription, NewShiftTime, + the same optional location/vehicle fields | `:2670-2676` |
+| `CancelAdminShiftGroupRequest` | record | Date, ShiftTime, Description | `:2678` |
+| `AdminSchedulerConfigUpdateDto` | record | Time, IsEnabled, MessageTemplateId (the ONLY editable fields) | `:2681` |
+| `AdminTemplatesDto` / `AdminTemplatesUpdateDto` | record | AssignmentTemplateId?, TodayTemplateId? / non-null pair | `:2684-2685` |
+| `AdminSendHelpers` | static class | `ResolveAdminTemplateAsync(db, appSettingKey)` (AppSettings value → template, null if unset/non-numeric/missing) + `NormalizeShiftTime(raw)` (zero-pad to `HH:mm`, falls back to the trimmed input) | `:2688-2718` |
 
 Also: anonymous-object DTOs are constructed inline for `GET /api/volunteers` (`:285-293`) and users (`:1530-1541`), deliberately omitting sensitive fields (PasswordHash, InternalIdHash, refresh-token fields). `ApiResponse<T>` shape (from server.md): `{ success, data, message }`. [HIGH]
 
@@ -201,7 +228,7 @@ Also: anonymous-object DTOs are constructed inline for `GET /api/volunteers` (`:
   - `AdminOnly` (Admin) → all `/api/users/*` (`:1551,1582,1650,1732,1771`), scheduler config PUT bulk + single (`:1963,2004`), message-template POST/PUT/DELETE (`:2076,2110,2138`).
   - `CanManageMessages` (Admin + SystemManager) → volunteers GET + revoke, locations CRUD, holidays CRUD, all shift read/write/cancel/send-SMS, sms-log GET + summary, scheduler config GET, run-log GET, message-templates GET (numerous `.RequireAuthorization("CanManageMessages")` sites).
   - `CanImportVolunteers` (Admin + SystemManager) → `POST /api/volunteers/import` (`:362`), `POST /api/shifts/import` (`:676`).
-- **JWT config** (`Jwt` section, `Program.cs:45-59`): HMAC-SHA256 over `Jwt:SecretKey`; validates issuer/audience/lifetime/key; `ClockSkew=0`. Access-token 15 min, refresh 7 days (config keys `AccessTokenExpirationMinutes`/`RefreshTokenExpirationDays`; issuance in `AuthService`).
+- **JWT config** (`Jwt` section, `Program.cs:45-59`): HMAC-SHA256 over `Jwt:SecretKey`; validates issuer/audience/lifetime/key; `ClockSkew=0`. Access-token 15 min, refresh 7 days (config keys `AccessTokenExpirationMinutes`/`RefreshTokenExpirationDays`; issuance in `AuthService`). **Since `2989b01`, `Jwt:SecretKey`/`Issuer`/`Audience` are externalized (env/user-secrets) and a startup guard (`Program.cs:26-34`) throws if any is empty** — fail-loud rather than failing at first token validation (ADR-017). The refresh TTL (7d) intentionally diverges from the Android mirror (3d) — accepted (`tools/parity.md` #1).
 - **Lockout** (`Security` section): `MaxFailedLoginAttempts=5`, `LockoutMinutes=15`, `BcryptWorkFactor=12` — enforced in `AuthService`; `BcryptWorkFactor` also read at endpoint level for password hashing (`Program.cs:255,1615,1706`). [HIGH]
 
 ---
@@ -226,8 +253,13 @@ Also: anonymous-object DTOs are constructed inline for `GET /api/volunteers` (`:
 | Message Templates | `GET /api/message-templates` | CanManageMessages |
 | Message Templates | `POST /api/message-templates`, `PUT/DELETE /api/message-templates/{id}` | AdminOnly |
 | Users | `GET/POST /api/users`, `GET/PUT/DELETE /api/users/{id}` | AdminOnly |
+| **Administrative shifts** | `GET /api/shifts/administrative/by-week`, `POST /api/shifts/administrative`, `PUT /api/shifts/administrative/update-group`, `POST /api/shifts/administrative/cancel-group`, `POST /api/shifts/administrative/{id}/send-sms` | CanManageMessages |
+| **Admin scheduler** | `GET /api/admin-scheduler/config` · `GET /api/admin-settings/templates` | CanManageMessages |
+| **Admin scheduler** | `PUT /api/admin-scheduler/config` · `PUT /api/admin-settings/templates` | AdminOnly |
 
 All responses wrapped in `ApiResponse<T>` (`success`/`data`/`message`); errors are generic Hebrew + appropriate status code. [HIGH]
+
+**Contract-mirror status of the 2026-07-14 additions:** unlike `/api/settings/sms-sim` and `/api/callback-config` (Android-only by design), **all 9 new endpoints above are implemented on BOTH backends** — the Android twins live in `android/.../api/routes/AdminShiftRoutes.kt` and `AdminSchedulerRoutes.kt`. They are ordinary members of the triplicated contract (ISS-004), not a new accepted divergence. [HIGH]
 
 ---
 
@@ -251,12 +283,14 @@ All responses wrapped in `ApiResponse<T>` (`success`/`data`/`message`); errors a
 
 ## 10. Legacy Warnings
 
-- **God object:** `Program.cs` = **2249 LOC** — every endpoint (~50), all DI, middleware, auth/policy config, and all request/response DTOs in one file. No endpoint modularization (no route groups / extension methods). High change-collision risk; hard to navigate. [HIGH]
-- **🚨 Committed secrets in `appsettings.json` (git-tracked):** the base `appsettings.json` (NOT the `.Development` override, and confirmed `git ls-files` tracked + not gitignored) contains **real-looking, non-placeholder values** for `Jwt:SecretKey`, `Database:Password`, and `PublicPages:SmsApprovalAccessKey` (a fully-formed GUID). These are committed to source control. Even if intended as dev defaults, the `Jwt:SecretKey` and access-key are reused at runtime when no environment override is present, and a leaked JWT signing key allows token forgery. **Concern: rotate these out of source control and inject via environment/secret store; ensure production overrides exist.** (Values not reproduced here.) `InforUMobile` user/password/sender are empty placeholders (OK). [HIGH] (`web/server/Magav.Api/appsettings.json:9-36`)
-- **Error-handling pattern deviation (CLAUDE.md violation):** `POST /api/auth/login` (`:186`), `POST /api/auth/refresh` (`:206`), and `POST /api/volunteers/import` 500-path (`:359`) use `Results.Problem(...)` instead of the mandated `Results.Json(ApiResponse.Fail(...))`. CLAUDE.md explicitly warns `Results.Problem` "can leak details in dev mode." The login/refresh messages are English ("An error occurred during login") not Hebrew, also inconsistent with the rest of the surface. [HIGH]
+- **God object (grew 21%):** `Program.cs` = **2718 LOC** (was 2249) — every endpoint (**56**), all DI, middleware, auth/policy config, and all request/response DTOs in one file. No endpoint modularization (no route groups / extension methods). High change-collision risk; hard to navigate. The administrative-shifts feature added 9 endpoints + 7 DTO records + a helper class straight into it rather than extracting a route group. [HIGH]
+- **Admin create is non-transactional and can partially succeed.** `POST /api/shifts/administrative` inserts one `Shift` per volunteer inside a loop, and returns `404 "מתנדב {id} לא נמצא"` the moment a volunteer id doesn't resolve — leaving the rows created for the *earlier* ids in the DB (`Program.cs:1460-1487`). The blast radius is limited because the dup-volunteer guard (BR-api:019) makes a retry idempotent, and the Android mirror behaves identically (`AdminShiftRoutes.kt:204-231`), so it is a consistent design rather than cross-platform drift. Still: a caller reading the 404 has no signal that a partial group now exists. [HIGH]
+- **The admin template roles are referenced from `AppSettings`, which the template-delete guard does not check** — see ISS-011. `MessageTemplateRepository.IsInUseAsync` counts only `SchedulerConfig.MessageTemplateId` rows (`Database/Repositories/MessageTemplateRepository.cs:13-18`), so the assignment/today templates are deletable while in use. [HIGH]
+- **✅ RESOLVED 2026-06-19 (`2989b01`) — secrets externalized out of tracked `appsettings.json`:** `Jwt:SecretKey`, `Database:Password`, and the `PublicPages:SmsApprovalAccessKey` block were **removed** from the tracked file → supplied via environment variables in prod / .NET user-secrets in dev (`<UserSecretsId>` added to `Magav.Api.csproj`; `appsettings.Development.json` gitignored). A **fail-loud startup guard** (`Program.cs:26-34`) throws if `Jwt:SecretKey`/`Issuer`/`Audience` resolve empty. (ISS-007, appsettings half resolved — ADR-017.) ⚠️ The *separate* hardcoded `MagavConstants.PasswordKey` in `common` still persists (ISS-007 stays open; see common.md §10). (`web/server/Magav.Api/appsettings.json`, `Program.cs:26-34`, `Magav.Api.csproj`)
+- **✅ RESOLVED 2026-06-19 (`2989b01`) — error-handling pattern:** login/refresh/logout and the volunteers-import 500-path no longer use `Results.Problem(...)` — all converted to `Results.Json(ApiResponse<T>.Fail("<Hebrew>"), 500)`. Zero `Results.Problem` remain; messages are Hebrew. (ISS-005 resolved)
 - **Authorization audit — all mutating/sensitive endpoints ARE protected.** Every data-mutating or data-exposing endpoint carries `.RequireAuthorization(...)`. The only no-auth endpoints are the four intentionally-public ones (login, refresh, health, sms-approval verify/submit), and the public sms-approval pair is additionally gated by access-key + 3/5min rate limit. **No endpoint was found that mutates data or exposes sensitive info while missing `.RequireAuthorization()`.** [HIGH]
   - Note: `POST /api/auth/logout` reads JWT claims but is correctly behind `.RequireAuthorization()` (`:230`) so an unauthenticated caller can't invoke it.
-- **`launchSettings.json` is stale/scaffold:** profiles still reference the ASP.NET template `launchUrl: "weatherforecast"` and ports `5228/7207/2811` that do NOT match the real Kestrel binding `http://localhost:5015` (`appsettings.json:37-43`) documented in CLAUDE.md. Running via a `launchSettings` profile would bind the wrong port and a 404 launch URL. [HIGH] (`Properties/launchSettings.json:14,17,27`)
+- **`launchSettings.json` is stale/scaffold:** profiles still reference the ASP.NET template `launchUrl: "weatherforecast"` and ports `5228/7207/2811` that do NOT match the real Kestrel binding `http://localhost:5015` (`appsettings.json:32-36`) documented in CLAUDE.md. Running via a `launchSettings` profile would bind the wrong port and a 404 launch URL. [HIGH] (`Properties/launchSettings.json:14,17,27`)
 - **CORS `AllowCredentials` + `AllowAnyHeader`/`AllowAnyMethod`:** permissive on headers/methods, but origins ARE restricted to the configured allow-list (not `*`), which is required when `AllowCredentials` is set. Default fallback origin is `http://localhost:8080`. Production must supply real origins via `AllowedOrigins`; an over-broad production list would be a CSRF/exfiltration risk. [MEDIUM] (`Program.cs:25-42`)
 - **TODO/FIXME/HACK markers:** 0 found in `Program.cs` (grep). [HIGH]
 - **Missing tests:** none (project-wide, per CLAUDE.md). [HIGH]
@@ -282,6 +316,7 @@ All responses wrapped in `ApiResponse<T>` (`success`/`data`/`message`); errors a
 ---
 
 ### Summary
-- **Business rules:** 16 (BR-api:001–016). **Workflows:** 9 (WF-api:001–009). **Integration points:** 10 (IP-api:001–010).
-- Authorization audit is CLEAN — no data-mutating/sensitive endpoint lacks `.RequireAuthorization()`; the only public endpoints are login, refresh, health, and the access-key + rate-limited sms-approval pair.
-- Most concerning fact: `appsettings.json` is **git-tracked and committed with real-looking secret values** for `Jwt:SecretKey`, `Database:Password`, and the `PublicPages:SmsApprovalAccessKey` GUID — a leaked JWT signing key enables token forgery; these belong in environment/secret stores, not source control. Secondary: login/refresh deviate from the mandated `ApiResponse`/Hebrew error pattern by using English `Results.Problem`.
+- **Business rules:** 24 (BR-api:001–024; 017–024 added 2026-08-17 for the administrative endpoints, typed locations, scheduler isolation and the operational-only SMS-log reporting). **Workflows:** 9 (WF-api:001–009, unchanged in shape). **Integration points:** 10 (IP-api:001–010, unchanged).
+- **Authorization audit re-run 2026-08-17 and still CLEAN.** `Program.cs` declares **56** `app.Map*` endpoints and **51** `.RequireAuthorization(...)` calls; the difference of 5 is exactly the intentionally-public set — `POST /api/auth/login` (`:180`), `POST /api/auth/refresh` (`:202`), `GET /api/health` (`:290`), and the access-key + rate-limited `POST /api/public/sms-approval/{accessKey}/{verify,submit}` pair (`:1764`, `:1832`). **All 9 new administrative endpoints carry a policy** (7 × `CanManageMessages`, 2 × `AdminOnly`). [HIGH — counted]
+- **Standing concern:** the god-object `Program.cs`, now 2718 LOC. The residual secret risk (the hardcoded `MagavConstants.PasswordKey`) still lives in `common`, not here (ISS-007 open).
+- **2026-06-24 `--update`:** the two former top concerns were remediated in `2989b01` — `appsettings.json` secrets externalized + fail-loud JWT guard (ADR-017; ISS-007 appsettings half), and the `Results.Problem` error-pattern deviation converted to `ApiResponse.Fail`/Hebrew (ISS-005). The standing api concern is now the **god-object `Program.cs` (~2250 LOC)**; the residual secret risk (the hardcoded `MagavConstants.PasswordKey`) lives in `common`, not here (ISS-007 open).

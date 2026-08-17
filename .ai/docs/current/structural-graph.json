@@ -1,44 +1,53 @@
 {
-  "version": 1,
-  "source": "grep-inferred (Graphify/ctags unavailable)",
-  "note": "Edges from project references (.csproj) + documented architecture. web-client/android integrate with api over HTTP / mirrored surface, not compile-time imports.",
+  "generated": "2026-08-17",
+  "run_id": "deepinit-2026-08-17",
+  "source": "graphify update . (Step 0b, deterministic, 0 LLM tokens)",
+  "graph_totals": {
+    "nodes": 3021,
+    "edges": 4996,
+    "files": 326,
+    "communities": 184
+  },
+  "confidence": "[GRAPHIFY] — AST-derived this run (earlier runs used the [GREP] fallback)",
+  "cycles": [],
+  "cycles_note": "IF-8 negative: the .NET chain common -> server -> api is acyclic; web-client and android are sinks with no compile edge into .NET.",
   "components": {
     "common": {
       "path": "web/server/Magav.Common",
-      "exports": ["Models.*", "DbHelper", "MagavConstants", "ExcelHelper", "Encryption.*"],
-      "imports_from": {},
-      "imported_by": { "server": ["DbHelper", "Models.*", "MagavConstants"], "api": ["Models.*", "MagavConstants", "ApiResponse"] }
+      "imports": [],
+      "imported_by": [
+        "server",
+        "api"
+      ]
     },
     "server": {
       "path": "web/server/Magav.Server",
-      "exports": ["MagavDbManager", "AuthService", "SmsReminderService", "SmsSchedulerService", "Repositories.*", "DbInitializer"],
-      "imports_from": { "common": ["DbHelper", "Models.*", "MagavConstants"] },
-      "imported_by": { "api": ["MagavDbManager", "AuthService", "SmsReminderService", "SmsSchedulerService"] }
+      "imports": [
+        "common"
+      ],
+      "imported_by": [
+        "api"
+      ]
     },
     "api": {
       "path": "web/server/Magav.Api",
-      "exports": ["Program (Minimal API endpoints)", "request/response DTO records"],
-      "imports_from": { "server": ["MagavDbManager", "AuthService", "SmsReminderService", "SmsSchedulerService"], "common": ["Models.*", "ApiResponse", "MagavConstants"] },
-      "imported_by": {}
+      "imports": [
+        "server",
+        "common"
+      ],
+      "imported_by": []
     },
     "web-client": {
       "path": "web/client/src",
-      "exports": ["React SPA build (consumed by api static host AND android WebView)"],
-      "imports_from": { "api": ["HTTP /api/* (runtime, not compile-time)"] },
-      "imported_by": {}
+      "imports": [],
+      "imported_by": [],
+      "note": "runtime HTTP consumer of the api contract (or the Android Ktor mirror); no compile edge"
     },
     "android": {
       "path": "android/app/src/main",
-      "exports": ["Ktor server (localhost:5015) mirroring the .NET API surface", "WebView host of the React build"],
-      "imports_from": { "web-client": ["React dist copied to assets (build-time)"] },
-      "imported_by": {}
+      "imports": [],
+      "imported_by": [],
+      "note": "re-implements the api REST contract in Kotlin Ktor; build-time consumer of the web-client dist"
     }
-  },
-  "external_dependencies": {
-    "common": ["NPoco", "SQLitePCLRaw/SQLCipher"],
-    "server": ["Microsoft.Extensions.Hosting", "System.Net.Http (InforUMobile)"],
-    "api": ["ASP.NET Core 8", "JWT bearer"],
-    "web-client": ["react@18.3", "vite", "tailwind", "@radix-ui/*", "react-hook-form", "zod", "sonner"],
-    "android": ["ktor@2.3.12", "room@2.6.1", "sqlcipher@4.5.4", "koin@3.5.6", "apache-poi@5.2.5"]
   }
 }

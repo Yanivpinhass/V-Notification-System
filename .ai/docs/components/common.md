@@ -1,4 +1,5 @@
 <!-- DeepInit Extract | Component: common
+DeepInit C8 update | Run ID: deepinit-2026-08-17 | Generated: 2026-08-17 (commit cfb8e36 administrative-shifts + general-locations: MagavConstants gains ReminderTypes.AdminAdvance, two NEW value-sets ShiftTypes{Operational,Administrative} + LocationTypes{Vehicle,General} and an AppSettingsKeys pool; Shift gains ShiftType + 5 admin columns; Location gains LocationType; NEW models AdminShiftRow (read DTO) + AppSetting (table AppSettings). commit 339a89c duplicate-SMS fix: SmsStatuses gains Dispatched — .NET declares it but NEVER writes it, accepted divergence) · prior: deepinit-2026-06-18 (last full extraction of this component)
 Run ID: deepinit-2026-06-18
 Input files processed: Magav.Common.csproj, MagavConstants.cs, Database/DbHelper.cs, Database/DbHelperCore.cs, Excel/ExcelHelper.cs, Excel/ExcelModels.cs, Excel/ExcelRowReader.cs, DataStructures/IndexedList.cs, Email/BrevoEmailNotifier.cs, Email/DataFile.cs, Email/EmailNotifier.cs, Encryption/EncryptedConnectionStringsProvider.cs, Encryption/EncryptedConnectionStringsSource.cs, Encryption/EncryptionHelper.cs, Extensions/DataTableExtensions.cs, Extensions/EntityExtensions.cs, Extensions/EnumerableExtensions.cs, Extensions/IgnoreOnCompareAttribute.cs, Extensions/ReflectionExtensions.cs, Attributes/HebrewDescriptionAttribute.cs, Logger/Log.cs, Utils/ConfigurationHelper.cs, Utils/DateTimeHelper.cs, Models/Auth/User.cs, Models/Volunteer.cs, Models/Shift.cs, Models/SmsLog.cs, Models/SchedulerConfig.cs, Models/SchedulerRunLog.cs, Models/MessageTemplate.cs, Models/Location.cs, Models/JewishHoliday.cs, Models/CanceledShiftRow.cs, Models/ExcelShift.cs
 Generated: 2026-06-18 -->
@@ -102,9 +103,13 @@ Generated: 2026-06-18 -->
 
 | ID | Rule | Criticality | Source |
 |---|---|---|---|
-| BR-common:001 | Reminder type is one of the canonical strings: `SameDay`, `Advance`, `LocationUpdate`, `Manual`, `WeekdayAdvance` | Core | `MagavConstants.cs:9-16` |
-| BR-common:002 | SMS status is exactly `Success` or `Fail` | Core | `MagavConstants.cs:18-22` |
-| BR-common:003 | Day group is one of `SunThu`, `Fri`, `Sat` | Core | `MagavConstants.cs:24-29` |
+| BR-common:001 | Reminder type is one of the **6** canonical strings: `SameDay`, `Advance`, `LocationUpdate`, `Manual`, `WeekdayAdvance`, **`AdminAdvance`** (the administrative-shifts advance reminder, added 2026-07-14) | Core | `MagavConstants.cs:9-17` |
+| BR-common:002 | SMS status is one of `Success`, `Fail`, **`Dispatched`**. `Dispatched` = "handed to the radio, no send confirmation inside the wait window — most likely delivered". **It is declared here but NEVER written by .NET** — only the Android write-ahead send path writes it (an accepted, in-comment-documented divergence) | Core | `MagavConstants.cs:39-47` (declaration + the "written by the ANDROID write-ahead send path" comment at `:43-45`) |
+| BR-common:003 | Day group is one of `SunThu`, `Fri`, `Sat` | Core | `MagavConstants.cs:49-54` |
+| BR-common:015 | **Shift type is exactly `Operational` or `Administrative`** — the discriminator that separates patrol shifts from administrative missions (משמרות מנהליות). Every shift row is exactly one type | Core | `MagavConstants.cs:19-23` |
+| BR-common:016 | **Location type is exactly `Vehicle` or `General`** — `Vehicle` = מיקומי ניידות (patrol parking spots), `General` = מיקומים כללי (mission locations). `Location.LocationType` defaults to `Vehicle`, so every pre-existing row backfills to `Vehicle` | Core | `MagavConstants.cs:25-29`, `Models/Location.cs:19` |
+| BR-common:017 | **The two administrative template-role AppSettings keys are canonical string literals** — `admin_assignment_template_id` / `admin_today_template_id`. They are NOT part of the parity-lint value-sets but MUST match the Android `util/Constants.kt AppSettingsKeys` literals exactly (stated in-comment) | Supporting | `MagavConstants.cs:31-37` |
+| BR-common:018 | **`Shift.ShiftType` defaults to `Operational` and the 5 admin-only columns (`Description`, `ShiftTime`, `Address`, `VehicleLocation`, `VehicleLocationId`) are nullable** — they stay NULL on operational rows, so an operational shift is byte-compatible with the pre-feature model | Core | `Models/Shift.cs:23-37` |
 | BR-common:004 | `SmsLog` defaults: Status=`Success`, ReminderType=`SameDay` (constants, not inline strings) | Supporting | `Models/SmsLog.cs:13,15` |
 | BR-common:005 | An `onlyFields` update must affect ≤1 row; >1 → `InvalidOperationException` + rollback | Core | `Database/DbHelper.cs:475-476,509-510,545-546` |
 | BR-common:006 | An update entity must have a non-null primary key value or the op throws before executing | Core | `Database/DbHelper.cs:465-466,499-500,532-533` |
@@ -187,6 +192,12 @@ Relationship: referenced by `Shift.VolunteerId`. [MEDIUM — FK inferred by nami
 | IsCanceled | bool | — | soft-cancel flag (CLAUDE.md: active queries must filter `=0`) |
 | CanceledAt | DateTime? | no | soft-cancel timestamp |
 | CreatedAt / UpdatedAt | DateTime? | no | audit |
+| **ShiftType** | string | default `Operational` | **type discriminator** (`Operational` \| `Administrative`) — added 2026-07-14; backfilled by the column DEFAULT (`Models/Shift.cs:28`) |
+| **Description** | string? | no | admin-only: the mission description. Also copied into `ShiftName` on create (ShiftName is NOT NULL) (`Shift.cs:29`) |
+| **ShiftTime** | string? | no | admin-only: `HH:mm` mission time; part of the admin group key `(ShiftDate, ShiftTime, Description)` (`Shift.cs:30`) |
+| **Address** | string? | no | admin-only: free-text mission address snapshot (`Shift.cs:31`) |
+| **VehicleLocation** | string? | no | admin-only: free-text vehicle location (used only when `VehicleLocationId` is NULL — "id wins") (`Shift.cs:32`) |
+| **VehicleLocationId** | int? | no | admin-only (v2): FK-by-convention to a `Vehicle`-typed `Location` (no DB FK declared) (`Shift.cs:36`) |
 
 ### SmsLog — `Models/SmsLog.cs` (table `SmsLog`)
 | Property | Type | Required | Description |
@@ -226,7 +237,10 @@ Relationship: referenced by `Shift.VolunteerId`. [MEDIUM — FK inferred by nami
 Id (PK), Name (string, default ""), Content (string, default "" — body with `{שם}`/`{תאריך}` placeholders), CreatedAt/UpdatedAt (DateTime?).
 
 ### Location — `Models/Location.cs` (table `Locations`)
-Id (PK), Name (string, default ""), Address/City/Navigation (string?, nullable — Navigation = Waze link), CreatedAt/UpdatedAt (DateTime?). Referenced by `Shift.LocationId`.
+Id (PK), Name (string, default ""), Address/City/Navigation (string?, nullable — Navigation = Waze link), CreatedAt/UpdatedAt (DateTime?), **`LocationType` (string, default `MagavConstants.LocationTypes.Vehicle`)**. Referenced by `Shift.LocationId` (mission location) and — v2 — by `Shift.VehicleLocationId` (vehicle location). `Name` uniqueness stays **global across both types** (there is one `Locations` table, one unique-name rule). [HIGH] (`Models/Location.cs:16-19`)
+
+### AppSetting — `Models/AppSetting.cs` (table `AppSettings`) — NEW 2026-07-14
+Key-value settings row. **String primary key, `AutoIncrement = false`** (`[PrimaryKey("Key", AutoIncrement = false)]`). Columns: `Key` (string, default ""), `Value` (string, default ""). Mirrors the pre-existing Android `AppSettingEntity` table — this is the **first .NET model for it** (before this feature `AppSettings` was Android-only, data-layer §3.2 D-2). In .NET it currently stores only the two administrative template-role ids. [HIGH] (`Models/AppSetting.cs:9-15`)
 
 ### JewishHoliday — `Models/JewishHoliday.cs` (table `JewishHolidays`)
 Id (PK), Date (string, default ""), Name (string, default ""). Note: Date stored as string, not DateTime. [HIGH]
@@ -236,6 +250,9 @@ Read-model joining Shift + Volunteer + Location for the canceled-shifts page. Fi
 
 ### ExcelShift — `Models/ExcelShift.cs` (DTO, no table)
 Parsed shift block from the schedule Excel: Date (DateTime), Name (string), Car (string), Volunteers (List<string>). [HIGH]
+
+### AdminShiftRow — `Models/AdminShiftRow.cs` (DTO, no table) — NEW 2026-07-14
+Read model for the administrative-shifts week view: a join of `Shifts` + `Volunteers` + `Locations` (twice — mission and vehicle). One row per assigned volunteer; the UI groups rows by `(ShiftDate, ShiftTime, Description)`. Fields: Id, ShiftDate, ShiftName, CarId, Description?, ShiftTime?, Address?, VehicleLocation?, VolunteerId?, LocationId?, VolunteerName?, VolunteerPhone?, VolunteerApproved (bool), LocationName?, LocationNavigation?, LocationCity?, and the v2 vehicle-location quartet VehicleLocationId?, VehicleLocationName?, VehicleLocationNavigation?, VehicleLocationCity?. Populated only by `ShiftsRepository.GetAdministrativeByWeekAsync` in `server`. [HIGH] (`Models/AdminShiftRow.cs:7-31`)
 
 **Enums:** only `DbType { SqlServer, Sqlite, Mysql, PostgreSql }` (`Database/DbHelperCore.cs:516-522`). No domain enums — domain "enums" are the string constants in `MagavConstants`. [HIGH]
 
@@ -267,11 +284,14 @@ No authorization policies or role-checking logic defined in this component. The 
 
 ## 8. Interfaces Exposed
 
-**`MagavConstants`** (`MagavConstants.cs`) — exact canonical values:
-- `ReminderTypes`: `SameDay`="SameDay", `Advance`="Advance", `LocationUpdate`="LocationUpdate", `Manual`="Manual", `WeekdayAdvance`="WeekdayAdvance" (`MagavConstants.cs:11-15`). **Note: `WeekdayAdvance` exists here but is NOT listed in CLAUDE.md's ReminderTypes — extra value.** [HIGH]
-- `SmsStatuses`: `Success`="Success", `Fail`="Fail" (`MagavConstants.cs:20-21`).
-- `DayGroups`: `SunThu`="SunThu", `Fri`="Fri", `Sat`="Sat" (`MagavConstants.cs:26-28`).
-- `ServerName` (from config), `SendEmail` (bool from config), `PasswordKey` (const string used to decrypt connection strings) (`MagavConstants.cs:5-7`).
+**`MagavConstants`** (`MagavConstants.cs`) — exact canonical values (**5 parity-linted value-sets** as of 2026-07-14; `node tools/parity-lint.mjs` compares all five .NET↔Android and exits 0 today):
+- `ReminderTypes` (**6**): `SameDay`, `Advance`, `LocationUpdate`, `Manual`, `WeekdayAdvance`, `AdminAdvance` (`MagavConstants.cs:11-16`). CLAUDE.md now lists all six.
+- `ShiftTypes` (**NEW**): `Operational`, `Administrative` (`MagavConstants.cs:21-22`).
+- `LocationTypes` (**NEW**): `Vehicle`, `General` (`MagavConstants.cs:27-28`).
+- `SmsStatuses` (**3**): `Success`, `Fail`, `Dispatched` (`MagavConstants.cs:41-46`) — `Dispatched` is declared for parity but written only by Android.
+- `DayGroups`: `SunThu`, `Fri`, `Sat` (`MagavConstants.cs:51-53`).
+- `AppSettingsKeys` (**NEW**, not parity-linted): `AdminAssignmentTemplateId`="admin_assignment_template_id", `AdminTodayTemplateId`="admin_today_template_id" (`MagavConstants.cs:35-36`).
+- `ServerName` (from config), `SendEmail` (bool from config), `PasswordKey` (const string used to decrypt connection strings — still hardcoded, ISS-007) (`MagavConstants.cs:5-7`).
 
 **`DbHelper`** (`Database/DbHelper.cs`) — factory + CRUD API surface used by `Magav.Server` repositories:
 - Factories: `CreateSqliteDbHelper`, `CreateMySqlDbHelper`, `CreateSqlServerDbHelper`, `CreatePostgreSqlDbHelper` (`DbHelper.cs:12-30`).
@@ -360,5 +380,7 @@ No authorization policies or role-checking logic defined in this component. The 
 ---
 
 ### Summary
-- **Business rules:** 14 (BR-common:001–014) plus a key-invariants block. **Workflows:** 8 (WF-common:001–008). **Integration points:** 8 (IP-common:001–008).
-- **Most non-obvious fact:** `MagavConstants.ReminderTypes` defines a fifth value `WeekdayAdvance` (`MagavConstants.cs:15`) that is absent from CLAUDE.md's documented reminder-type list — the canonical constant set has drifted ahead of the docs, and the constant pool itself (along with "Avidov.Common" assembly names and a stale "lessons/activities" batch-size comment) shows DbHelper is a vendored library carried in from another codebase.
+- **Business rules:** 18 (BR-common:001–018; 015–018 added 2026-08-17 for the ShiftTypes/LocationTypes/AppSettingsKeys value-sets and the additive `Shift`/`Location` columns). **Workflows:** 8 (WF-common:001–008, unchanged). **Integration points:** 8 (IP-common:001–008, unchanged). **Models:** 14 (11 table-mapped + 3 DTOs) — `AppSetting` and `AdminShiftRow` added 2026-07-14.
+- **Most non-obvious fact (2026-08-17):** `MagavConstants` now declares **`SmsStatuses.Dispatched` that .NET never writes** (`MagavConstants.cs:46`). It exists so the .NET and Android constant pools stay byte-identical under `tools/parity-lint.mjs`, while only the Android write-ahead send path actually produces the value — a deliberate declare-but-don't-use asymmetry, spelled out in the constant's own comment (`:43-45`) and in `tools/parity.md`. A reader who greps .NET for `Dispatched` will find the declaration and no writer; that is correct, not dead code.
+- **Second-most non-obvious:** the two new value-sets are enforced across platforms, but `AppSettingsKeys` deliberately is **not** — it is a mirroring obligation carried only by an in-code comment (`MagavConstants.cs:31-33`), so a typo'd key on one platform would silently break the admin template-role lookup with no lint failure.
+- Standing: `common` (esp. `DbHelper`, with the "Avidov.Common" assembly names and the stale "lessons/activities" batch-size comment) remains a vendored library carried in from another codebase, and `PasswordKey` remains a hardcoded source literal (ISS-007).
