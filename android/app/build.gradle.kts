@@ -13,13 +13,13 @@ android {
         applicationId = "com.magav.app"
         minSdk = 29
         targetSdk = 35
-        versionCode = 83
-        versionName = "1.5.0"
+        versionCode = 84
+        versionName = "1.5.1"
 
         buildConfigField("String", "LICENSE_PHONES",
             "\"${project.findProperty("LICENSE_PHONES") ?: "0547504775,0506271989"}\"")
         buildConfigField("String", "LICENSE_EXPIRY_DATE",
-            "\"${project.findProperty("LICENSE_EXPIRY_DATE") ?: "2026-10-06"}\"")
+            "\"${project.findProperty("LICENSE_EXPIRY_DATE") ?: "2027-06-01"}\"")
     }
 
     buildTypes {
