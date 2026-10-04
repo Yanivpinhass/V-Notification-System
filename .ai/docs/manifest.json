@@ -1,49 +1,51 @@
 {
   "schema_version": 4,
-  "deepinit_version": "0.7.1",
-  "run_id": "deepinit-2026-08-17",
+  "deepinit_version": "0.7.2",
+  "run_id": "deepinit-2026-10-04",
   "run_kind": "incremental-update",
-  "based_on_run": "deepinit-2026-06-30",
-  "generated": "2026-08-17",
-  "source_through_commit": "339a89c (clean working tree)",
-  "reconciliation_note": "Incremental --update through HEAD 339a89c. Step-0 symmetric set-diff of the stored .file_hashes.json against a fresh content_hash scan: keys(stored) == keys(current) (no component added or removed) and ALL FIVE content_hashes changed, so the entire component set was re-analyzed — DP-1 interface-hash propagation was moot (nothing could be skipped). The hash method was first VERIFIED to reproduce all five stored 2026-06-30 values exactly at commit 46951bf before being recomputed at HEAD, so the dirty verdict is trustworthy rather than assumed. Step 0b rebuilt the structural graph deterministically (`graphify update .` → 3021 nodes / 4996 edges / 184 communities over 326 files, 0 LLM tokens) — Graphify is available this run, unlike earlier runs which used the grep fallback. Two feature commits since the prior baseline: cfb8e36 (administrative shifts + general locations — 9 endpoints implemented on BOTH backends, 6 additive columns on BOTH schemas, Room 9→11, parity-lint widened 3→5 value-sets, ISS-010 fixed) and 339a89c (Android duplicate-SMS at-most-once dispatch rewrite after a production incident; the new 'Dispatched' status needed NO migration). DB not connected (R7 — SQLCipher-encrypted); schema documented from code.",
-  "profile": { "depth": "deep", "review": "update (incremental; full dirty set — no DP-1 skip possible)", "issues": "on (lifecycle diff)", "db": "skipped (R7 — SQLCipher-encrypted, no live read)", "graphify": "available (graph.json rebuilt via `graphify update .` at Step 0b)" },
+  "based_on_run": "deepinit-2026-08-17",
+  "generated": "2026-10-04",
+  "source_through_commit": "719e71a (clean working tree; untracked .mcp.json only)",
+  "reconciliation_note": "Incremental --update through HEAD 719e71a (clean tree apart from the untracked .mcp.json). Step-0 symmetric set-diff: keys(stored) == keys(current) (no component added, none removed) and NO component is dirty. One source file changed since the last run — android/app/build.gradle.kts in 719e71a (versionCode 83 -> 84, versionName 1.5.0 -> 1.5.1, LICENSE_EXPIRY_DATE default 2026-10-06 -> 2027-06-01) — and it lies OUTSIDE every component path (android = android/app/src/main), so it lands in the virtual `shared` pseudo-component, which is now hashed explicitly for the first time. It has no importers, so nothing was propagated; the facts it carries were refreshed in place (android.md, the lean CLAUDE.md files, the horizontal docs). HASH-METHOD CORRECTION this run: the prior method hashed every file under the component path, which included DeepInit's OWN nested CLAUDE.md (web/server/Magav.Common|Server|Api/CLAUDE.md). Those were re-emitted in 8c3f17f AFTER the 2026-08-17 hashes were stored, so the unmodified method reports common/server/api as changed at HEAD (1733d2303ebcb987 / ecbae7f577aa4c66 / 2706229df3a4b50d) although no source file in them moved — a self-inflicted false dirty. content_hash now = sha256( for each file listed by `git ls-tree -r HEAD -- <path>` EXCLUDING any file named CLAUDE.md, sorted by path (LC_ALL=C): the 40-hex git blob objectname, '\\n'-joined with a trailing newline )[:16]. Verified both ways: the OLD method reproduces all five stored 2026-08-17 values exactly at 339a89c, and the NEW method yields identical values at 339a89c and at HEAD for all five components — that equality is the proof that nothing is dirty. web-client and android contain no nested CLAUDE.md inside their hashed path, so their values are unchanged by the correction. Step 0b rebuilt the structural graph deterministically (`graphify update .` -> 3093 nodes / 5074 edges / 201 communities over 331 files, 0 LLM tokens); interface_hash still folded to content_hash (no per-symbol export extraction). No schema change (Room stays 11). Issue lifecycle: 0 new, 0 resolved, 0 regressed. DB not connected (R7 — SQLCipher-encrypted); schema documented from code.",
+  "profile": { "depth": "deep", "review": "update (incremental; empty component dirty set — targeted fact refresh only)", "issues": "on (lifecycle diff)", "db": "skipped (R7 — SQLCipher-encrypted, no live read)", "graphify": "available (graph.json rebuilt via `graphify update .` at Step 0b)" },
   "update_summary": {
-    "dirty_components": ["common", "server", "api", "web-client", "android"],
-    "skipped_unchanged": [],
-    "skipped_note": "None. Every component's content_hash changed — the administrative-shifts feature alone touched all five plus tools/parity-lint.mjs.",
+    "dirty_components": [],
+    "dirty_shared": ["android/app/build.gradle.kts"],
+    "skipped_unchanged": ["common", "server", "api", "web-client", "android"],
+    "skipped_note": "All five component content_hashes are unchanged (CLAUDE.md-excluded method, identical at 339a89c and HEAD). The single changed source file is outside every component path; its facts (versionCode 84 / 1.5.1, license expiry 2027-06-01) were refreshed in place without re-analysis.",
+    "docs_touched": ["CLAUDE.md", "android/CLAUDE.md", ".ai/docs/components/android.md", ".ai/docs/functional-workflows.md", ".ai/docs/decisions.md", ".ai/docs/discovery.md", ".ai/docs/git-intelligence.md", ".ai/docs/issues.md (header only)"],
     "horizontal_rerun": true,
-    "issue_lifecycle": { "resolved": 1, "accepted": 2, "persisting": 1, "new": 1, "regressed": 0 }
+    "issue_lifecycle": { "resolved": 0, "accepted": 2, "persisting": 2, "new": 0, "regressed": 0 }
   },
   "components": {
     "common": {
       "doc": ".ai/docs/components/common.md",
       "path": "web/server/Magav.Common",
-      "files": 37,
-      "content_hash": "sha256:a0283500d25802ef",
-      "interface_hash": "sha256:a0283500d25802ef",
+      "files": 36,
+      "content_hash": "sha256:510893cfe01100de",
+      "interface_hash": "sha256:510893cfe01100de",
       "verified_at": "2026-08-17",
-      "dirty_this_run": true,
+      "dirty_this_run": false,
       "metrics": { "risk": 3161.0, "churn": 11, "bus_factor": 1, "coverage": 0, "criticality": "Core" }
     },
     "server": {
       "doc": ".ai/docs/components/server.md",
       "path": "web/server/Magav.Server",
-      "files": 24,
-      "content_hash": "sha256:9a05b5631a7e4223",
-      "interface_hash": "sha256:9a05b5631a7e4223",
+      "files": 23,
+      "content_hash": "sha256:6a4394dbae819b12",
+      "interface_hash": "sha256:6a4394dbae819b12",
       "verified_at": "2026-08-17",
-      "dirty_this_run": true,
+      "dirty_this_run": false,
       "metrics": { "risk": 3168.0, "churn": 18, "bus_factor": 1, "coverage": 0, "criticality": "Core" }
     },
     "api": {
       "doc": ".ai/docs/components/api.md",
       "path": "web/server/Magav.Api",
-      "files": 5,
-      "content_hash": "sha256:04dd67c524b05323",
-      "interface_hash": "sha256:04dd67c524b05323",
+      "files": 4,
+      "content_hash": "sha256:f188674516fa93af",
+      "interface_hash": "sha256:f188674516fa93af",
       "verified_at": "2026-08-17",
-      "dirty_this_run": true,
+      "dirty_this_run": false,
       "metrics": { "risk": 3170.0, "churn": 20, "bus_factor": 1, "coverage": 0, "criticality": "Core" }
     },
     "web-client": {
@@ -53,7 +55,7 @@
       "content_hash": "sha256:46a7256f86b88eff",
       "interface_hash": "sha256:46a7256f86b88eff",
       "verified_at": "2026-08-17",
-      "dirty_this_run": true,
+      "dirty_this_run": false,
       "metrics": { "risk": 3191.0, "churn": 41, "bus_factor": 1, "coverage": 0, "criticality": "Core" }
     },
     "android": {
@@ -63,11 +65,11 @@
       "content_hash": "sha256:7620fc0e726e45e8",
       "interface_hash": "sha256:7620fc0e726e45e8",
       "verified_at": "2026-08-17",
-      "dirty_this_run": true,
+      "dirty_this_run": false,
       "metrics": { "risk": 3185.0, "churn": 35, "bus_factor": 1, "coverage": 0, "criticality": "Core" }
     }
   },
-  "metrics_note": "churn recomputed 2026-08-17 over the full 78-commit history (`git log --oneline -- <path> | wc -l`); risk = 1000·CRIT + churn + (100−coverage) + 50·[bus_factor==1] with the documented illustrative weights. coverage is 0 everywhere (no tests). bus_factor is 1 system-wide (all 78 commits by a single author).",
+  "metrics_note": "NOT recomputed 2026-10-04 (no component source changed; the 2 newer commits touch only DeepInit docs and build.gradle.kts, so repo history is now 80 commits). churn recomputed 2026-08-17 over the full 78-commit history (`git log --oneline -- <path> | wc -l`); risk = 1000·CRIT + churn + (100−coverage) + 50·[bus_factor==1] with the documented illustrative weights. coverage is 0 everywhere (no tests). bus_factor is 1 system-wide (all 78 commits by a single author).",
   "source_size": { "measured": "2026-08-17 via git ls-files + wc -l", "total_source_lines": 31700, "web-client": { "files": 124, "lines": 15562 }, "android": { "files": 71, "lines": 8861 }, "common": { "files": 35, "lines": 3718 }, "server": { "files": 22, "lines": 3556 }, "api": { "files": 1, "lines": 2718 } },
   "deep_docs": ["decisions.md", "domain-model.md", "technical-dependencies.md", "data-layer.md", "functional-workflows.md", "cross-references.md", "discovery.md", "git-intelligence.md"],
   "issues": {
@@ -75,10 +77,13 @@
     "sarif": ".ai/deepinit.sarif",
     "baseline": ".ai/docs/.issue_baseline.json",
     "counts": { "open": 2, "accepted": 2, "resolved": 6, "regressed": 0, "ranking": 1, "by_severity_open": { "Medium": 2 } },
-    "lifecycle_note": "Through 339a89c: Open = ISS-007 (persisting, narrowed to the hardcoded PasswordKey — re-verified present even though common was modified this run) + ISS-011 (NEW — the message-template delete guard counts only SchedulerConfig references and misses the two administrative template ROLES referenced via AppSettings values; the once-only INSERT-OR-IGNORE seed never repairs the dangling key; grounded on BOTH backends; IF-1, Medium, NOT auto-accepted). Resolved = ISS-001,002,005,006,009 + ISS-010 (the .gitignore db/ source-package rule — fixed in cfb8e36 with a source-only re-include and 12 files tracked; re-verified deterministically via git check-ignore + git ls-files). Accepted-by-design = ISS-003, ISS-004; ISS-004's divergence list gains a sixth member — the at-most-once SMS dedup semantics (Android-only behavioral divergence; .NET deliberately left on the pre-incident scheme per tools/parity.md). ISS-008 = ranking. NO finding from the Room 9→10→11 bump (additive ALTER-only, no index/FK added, registered in both addMigrations sites, entity/migration defaults byte-matched) and NONE from the 9 new administrative endpoints (all carry an authorization policy; the 56-endpoint vs 51-RequireAuthorization count still reconciles exactly to the 5 intentionally-public endpoints)."
+    "lifecycle_note": "2026-10-04 (through 719e71a): no change — 0 new / 0 resolved / 0 regressed; ISS-007 and ISS-011 persist (their components are hash-proven unchanged; ISS-007 additionally re-grepped), ISS-003/ISS-004 stay accepted. The license-expiry bump is recorded as KL-mistake:016 (an operational hazard by design), not an issue. Prior note — Through 339a89c: Open = ISS-007 (persisting, narrowed to the hardcoded PasswordKey — re-verified present even though common was modified this run) + ISS-011 (NEW — the message-template delete guard counts only SchedulerConfig references and misses the two administrative template ROLES referenced via AppSettings values; the once-only INSERT-OR-IGNORE seed never repairs the dangling key; grounded on BOTH backends; IF-1, Medium, NOT auto-accepted). Resolved = ISS-001,002,005,006,009 + ISS-010 (the .gitignore db/ source-package rule — fixed in cfb8e36 with a source-only re-include and 12 files tracked; re-verified deterministically via git check-ignore + git ls-files). Accepted-by-design = ISS-003, ISS-004; ISS-004's divergence list gains a sixth member — the at-most-once SMS dedup semantics (Android-only behavioral divergence; .NET deliberately left on the pre-incident scheme per tools/parity.md). ISS-008 = ranking. NO finding from the Room 9→10→11 bump (additive ALTER-only, no index/FK added, registered in both addMigrations sites, entity/migration defaults byte-matched) and NONE from the 9 new administrative endpoints (all carry an authorization policy; the 56-endpoint vs 51-RequireAuthorization count still reconciles exactly to the 5 intentionally-public endpoints)."
   },
   "verification": {
     "deterministic_checks_run": [
+      "2026-10-04: content_hash (CLAUDE.md-excluded) identical at 339a89c and HEAD for all five components; the old method reproduces all five stored 2026-08-17 values at 339a89c",
+      "2026-10-04: node tools/parity-lint.mjs → exit 0 (5 value-sets); endpoint audit still 56 app.Map* vs 51 .RequireAuthorization; PasswordKey still at MagavConstants.cs:7 + EncryptedConnectionStringsProvider.cs:46 (value never reproduced — R5)",
+      "2026-10-04: build.gradle.kts:16-17 = versionCode 84 / 1.5.1, :21-22 = LICENSE_EXPIRY_DATE default 2027-06-01; LicenseValidator.kt:19-27 + MainActivity.kt:218 read directly",
       "node tools/parity-lint.mjs → exit 0 across all 5 value-sets (ReminderTypes 6, SmsStatuses 3, DayGroups 3, ShiftTypes 2, LocationTypes 2)",
       "git check-ignore -v on the former ISS-010 paths → no match (rule gone); both files present in git ls-files",
       "grep PasswordKey → still declared at MagavConstants.cs:7 and used at EncryptedConnectionStringsProvider.cs:46 (ISS-007 persists; value never reproduced — R5)",

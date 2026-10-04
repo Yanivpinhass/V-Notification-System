@@ -1,5 +1,39 @@
 # DeepInit Changelog
 
+## 2026-10-04 — Run deepinit-2026-10-04 (incremental `--update`, source through `719e71a`, clean tree)
+
+The smallest refresh so far: **no component dirty**. Step-0 symmetric set-diff over `.file_hashes.json`:
+`keys(stored) == keys(current)` (nothing added or removed). Exactly one source file changed since the last run —
+`android/app/build.gradle.kts` in `719e71a` — and it sits **outside** every component path (`android` =
+`android/app/src/main`), i.e. in the virtual `shared` pseudo-component, which has no importers. So no component was
+re-analyzed and DP-1 had nothing to propagate; the facts that file carries were refreshed in place. Step 0b rebuilt the
+structural graph (`graphify update .` → 3093 nodes / 5074 edges / 201 communities over 331 files, 0 LLM tokens).
+Horizontal docs re-checked for the affected facts. DB still not connected (R7 — SQLCipher-encrypted).
+
+### MODIFIED — `719e71a` license expiry + version bump (Android build config only)
+- `LICENSE_EXPIRY_DATE` default `2026-10-06` → **`2027-06-01`**; `versionCode` 83 → **84**; `versionName` 1.5.0 → **1.5.1**. No code, schema, endpoint or value-set change (Room stays 11; parity lint exits 0).
+- `components/android.md`: tech-stack line, the versionCode gotcha, and **BR-android:019** (license gate) — new expiry, the exact compare (`today.isAfter(expiry)`, Israel tz, unparseable date fails closed), the generic block page, certainty MEDIUM → HIGH after a direct read of `LicenseValidator.kt` + `MainActivity.kt:218`.
+- `decisions.md`: **+KL-mistake:016** (the compiled-in license expiry is a time-bomb; extended two days before it fired; next deadline 2027-06-01). Knowledge Log 38 → 39. KL-mistake:001's stale "current versionCode=75" corrected to 84.
+- `functional-workflows.md` WA-003: stale "versionCode=75 / 1.4.25" (left over from an earlier run) corrected to 84 / 1.5.1.
+- `discovery.md`, `git-intelligence.md`: 78 → 80 commits, history through 2026-10-04, `build.gradle.kts` churn 37 → 38.
+- Lean tier: root `CLAUDE.md` (version 84 / 1.5.1, **new license-expiry bullet**, issues summary re-dated) and `android/CLAUDE.md` (same two facts).
+
+### MODIFIED — change-detection method (state only)
+- **`content_hash` now excludes files named `CLAUDE.md`.** The previous method hashed DeepInit's own nested `CLAUDE.md` outputs, which were re-emitted in `8c3f17f` *after* the hashes were stored — so `common`, `server` and `api` looked changed at HEAD although no source file in them moved. Verified both ways: the old method reproduces all five stored `2026-08-17` values at `339a89c`; the corrected method gives identical values at `339a89c` and HEAD for all five. `.file_hashes.json` → version 3 (three hash values re-based, two unchanged).
+- **`shared` pseudo-component is now hashed** (`android/app/build.gradle.kts`, `tools/parity-lint.mjs`, `tools/parity.md`) so an out-of-component change like this one is detected by the set-diff itself rather than only by the git accelerator.
+
+### BREAKING
+- (none)
+
+### ISSUES (lifecycle diff vs baseline deepinit-2026-08-17)
+- NEW: (none) · RESOLVED: (none) · REGRESSED: (none)
+- PERSISTING: ISS-007 (hardcoded `MagavConstants.PasswordKey`, re-verified present), ISS-011 (template-delete guard misses the two `AppSettings`-referenced admin template roles — moves from *new* to *persisting*).
+- ACCEPTED (by design): ISS-003, ISS-004.
+- **Open after this run: 2 (ISS-007, ISS-011) + 2 accepted-by-design; 6 resolved.** The license expiry is an intentional gate and is logged as a Knowledge Log hazard, not an issue.
+
+### REVIEW
+- No adversarial cycles (mode = `--update`, empty component dirty set). Deterministic checks: parity lint exit 0; endpoint audit 56 vs 51 (= the 5 public endpoints); citation verifier re-run over the docs.
+
 ## 2026-08-17 — Run deepinit-2026-08-17 (incremental `--update`, source through `339a89c`, clean tree)
 
 The largest refresh since the baseline: **all five components dirty**, nothing skipped. Change detection

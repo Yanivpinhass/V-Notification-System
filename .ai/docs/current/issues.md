@@ -1,4 +1,4 @@
-<!-- DeepInit C8 update | Run ID: deepinit-2026-08-17 | Generated: 2026-08-17 · prior: deepinit-2026-06-30 · prior: deepinit-2026-06-25b (consolidating --update through 778a2dd) · prior: deepinit-2026-06-25 · prior: deepinit-2026-06-24
+<!-- DeepInit C8 update | Run ID: deepinit-2026-10-04 | Generated: 2026-10-04 (lifecycle diff only — no component dirty; 0 new / 0 resolved / 0 regressed; ISS-007 + ISS-011 re-verified persisting, ISS-003/004 accepted) · prior: deepinit-2026-08-17 · prior: deepinit-2026-06-30 · prior: deepinit-2026-06-25b (consolidating --update through 778a2dd) · prior: deepinit-2026-06-25 · prior: deepinit-2026-06-24
 Input files processed: ALL FIVE components (every content_hash changed) + horizontal docs + targeted code re-reads of the two feature commits (cfb8e36 administrative-shifts + general-locations; 339a89c duplicate-SMS at-most-once fix) + deterministic re-verification (git check-ignore for ISS-010; grep for the ISS-007 constant + its use; endpoint-vs-RequireAuthorization count; node tools/parity-lint.mjs)
 Generated: 2026-08-17 -->
 

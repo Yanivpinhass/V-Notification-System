@@ -1,11 +1,11 @@
 <!-- DeepInit Detect | Component: system-wide | git intelligence
-Run ID: deepinit-2026-08-17 · Updated: deepinit-2026-08-17 (re-measured over the full 78-commit history through 339a89c; churn/hotspot table recomputed, change-coupling re-confirmed and widened) · prior: deepinit-2026-06-25b (through 778a2dd) · prior: deepinit-2026-06-24
+Run ID: deepinit-2026-08-17 · Updated: deepinit-2026-10-04 (80 commits through 719e71a; +2 since the last run — the 8c3f17f docs refresh and the 719e71a license/version bump; per-component source churn unchanged) · prior: deepinit-2026-08-17 (re-measured over the full 78-commit history through 339a89c; churn/hotspot table recomputed, change-coupling re-confirmed and widened) · prior: deepinit-2026-06-25b (through 778a2dd) · prior: deepinit-2026-06-24
 Generated: 2026-06-18 -->
 
 # Git Intelligence
 
-- **Repo:** not shallow (full history) → IF-5 signals reliable. **78 commits, 2026-01-27 → 2026-08-17** (~6.7 months). [HIGH — counted via `git rev-list --count`]
-- **Bus factor: 1.** All 78 commits authored by `Yanivpinhass` (`git shortlog -sn` shows a single author). Every component carries the single-author risk (+50 in the IF-5 score). A second maintainer / documentation remains the highest-leverage resilience investment. [HIGH — counted]
+- **Repo:** not shallow (full history) → IF-5 signals reliable. **80 commits, 2026-01-27 → 2026-10-04** (~8.3 months). [HIGH — counted via `git rev-list --count`]
+- **Bus factor: 1.** All 80 commits authored by `Yanivpinhass` (`git shortlog -sn` shows a single author). Every component carries the single-author risk (+50 in the IF-5 score). A second maintainer / documentation remains the highest-leverage resilience investment. [HIGH — counted]
 - **Note on recent authorship:** the two feature commits since the last run carry `Co-Authored-By: Claude Fable 5` trailers, and their bodies document multi-agent plan validation + adversarial review as the substitute for the absent test suite. The *human* bus factor is unchanged.
 
 ## Churn (commits touching each component, full history)
@@ -13,7 +13,7 @@ Generated: 2026-06-18 -->
 | Component | Churn (commits) | Notes |
 |-----------|-----------------|-------|
 | web-client | 41 | highest; `ShiftsManagementPage.tsx` alone churns 22 |
-| android | 35 | `build.gradle.kts` 37 (versionCode bump per APK build — expected); `SmsSchedulerWorker.kt` / `ShiftRoutes.kt` / `MagavApplication.kt` 13 each |
+| android | 35 | `build.gradle.kts` 38 (versionCode bump per APK build — expected); `SmsSchedulerWorker.kt` / `ShiftRoutes.kt` / `MagavApplication.kt` 13 each |
 | api | 20 | `Program.cs` 18 (single god-object file) |
 | server | 18 | `DbInitializer.cs`, `SmsReminderService.cs` lead |
 | common | 11 | still the most stable layer |

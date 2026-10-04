@@ -1,25 +1,75 @@
 {
-  "version": 2,
-  "generated": "2026-08-17",
-  "run_id": "deepinit-2026-08-17",
-  "source_through_commit": "339a89c (clean working tree)",
-  "note": "Incremental --update through HEAD 339a89c. Step-0 symmetric set-diff vs the stored deepinit-2026-06-30 hashes: keys(stored) == keys(current) (no component added, none removed) and ALL FIVE content_hashes changed -> the entire dirty set was re-analyzed; nothing was skipped, so DP-1 interface-hash propagation was moot this run. Two feature commits since the last run's baseline (46951bf): cfb8e36 administrative-shifts + general-locations (touches all 5 components + tools/parity-lint.mjs) and 339a89c the Android duplicate-SMS at-most-once fix. content_hash = sha256( for each file under the component path as listed by `git ls-tree -r HEAD -- <path>`, sorted by path (LC_ALL=C): the 40-hex git blob objectname, '\\n'-joined with a trailing newline )[:16] — the SAME documented method as prior runs, and it was VERIFIED to reproduce all five stored 2026-06-30 hashes exactly when computed at commit 46951bf before being recomputed at HEAD. The prior run's special-casing of the two git-IGNORED db/ files is no longer needed: ISS-010 was fixed in cfb8e36 (.gitignore source-only re-include + 12 db/ files tracked), so the plain git file list is now complete. Graphify IS available this run: the structural graph was rebuilt deterministically at Step 0b (`graphify update .` -> 3021 nodes / 4996 edges / 184 communities over 326 files, 0 LLM tokens); interface_hash still folded to content_hash (no per-symbol export extraction performed). Schema moved on BOTH targets for the first time since the Volunteers divergence: Room @Database 9 -> 11 via additive ALTER-only MIGRATION_9_10 + MIGRATION_10_11, mirrored by .NET MigrateShiftTypeColumnsAsync / MigrateLocationTypeColumnsAsync. Android versionCode 76 -> 83 / 1.4.26 -> 1.5.0. Issue lifecycle: ISS-010 RESOLVED, ISS-011 NEW.",
+  "version": 3,
+  "generated": "2026-10-04",
+  "run_id": "deepinit-2026-10-04",
+  "source_through_commit": "719e71a (clean working tree; untracked .mcp.json only)",
+  "hash_method": "sha256 over git blob objectnames of `git ls-tree -r HEAD -- <path>`, excluding files named CLAUDE.md, sorted by path (LC_ALL=C), newline-joined with trailing newline, first 16 hex",
+  "note": "Incremental --update through HEAD 719e71a (clean tree apart from the untracked .mcp.json). Step-0 symmetric set-diff: keys(stored) == keys(current) (no component added, none removed) and NO component is dirty. One source file changed since the last run — android/app/build.gradle.kts in 719e71a (versionCode 83 -> 84, versionName 1.5.0 -> 1.5.1, LICENSE_EXPIRY_DATE default 2026-10-06 -> 2027-06-01) — and it lies OUTSIDE every component path (android = android/app/src/main), so it lands in the virtual `shared` pseudo-component, which is now hashed explicitly for the first time. It has no importers, so nothing was propagated; the facts it carries were refreshed in place (android.md, the lean CLAUDE.md files, the horizontal docs). HASH-METHOD CORRECTION this run: the prior method hashed every file under the component path, which included DeepInit's OWN nested CLAUDE.md (web/server/Magav.Common|Server|Api/CLAUDE.md). Those were re-emitted in 8c3f17f AFTER the 2026-08-17 hashes were stored, so the unmodified method reports common/server/api as changed at HEAD (1733d2303ebcb987 / ecbae7f577aa4c66 / 2706229df3a4b50d) although no source file in them moved — a self-inflicted false dirty. content_hash now = sha256( for each file listed by `git ls-tree -r HEAD -- <path>` EXCLUDING any file named CLAUDE.md, sorted by path (LC_ALL=C): the 40-hex git blob objectname, '\\n'-joined with a trailing newline )[:16]. Verified both ways: the OLD method reproduces all five stored 2026-08-17 values exactly at 339a89c, and the NEW method yields identical values at 339a89c and at HEAD for all five components — that equality is the proof that nothing is dirty. web-client and android contain no nested CLAUDE.md inside their hashed path, so their values are unchanged by the correction. Step 0b rebuilt the structural graph deterministically (`graphify update .` -> 3093 nodes / 5074 edges / 201 communities over 331 files, 0 LLM tokens); interface_hash still folded to content_hash (no per-symbol export extraction). No schema change (Room stays 11). Issue lifecycle: 0 new, 0 resolved, 0 regressed.",
   "components": {
-    "common":     { "content_hash": "sha256:a0283500d25802ef", "interface_hash": "sha256:a0283500d25802ef", "files": 37,  "path": "web/server/Magav.Common", "last_analyzed": "2026-08-17", "dirty_this_run": true },
-    "server":     { "content_hash": "sha256:9a05b5631a7e4223", "interface_hash": "sha256:9a05b5631a7e4223", "files": 24,  "path": "web/server/Magav.Server", "last_analyzed": "2026-08-17", "dirty_this_run": true },
-    "api":        { "content_hash": "sha256:04dd67c524b05323", "interface_hash": "sha256:04dd67c524b05323", "files": 5,   "path": "web/server/Magav.Api", "last_analyzed": "2026-08-17", "dirty_this_run": true },
-    "web-client": { "content_hash": "sha256:46a7256f86b88eff", "interface_hash": "sha256:46a7256f86b88eff", "files": 125, "path": "web/client/src", "last_analyzed": "2026-08-17", "dirty_this_run": true },
-    "android":    { "content_hash": "sha256:7620fc0e726e45e8", "interface_hash": "sha256:7620fc0e726e45e8", "files": 89,  "path": "android/app/src/main", "last_analyzed": "2026-08-17", "dirty_this_run": true }
+    "common": {
+      "content_hash": "sha256:510893cfe01100de",
+      "interface_hash": "sha256:510893cfe01100de",
+      "files": 36,
+      "path": "web/server/Magav.Common",
+      "last_analyzed": "2026-08-17",
+      "dirty_this_run": false
+    },
+    "server": {
+      "content_hash": "sha256:6a4394dbae819b12",
+      "interface_hash": "sha256:6a4394dbae819b12",
+      "files": 23,
+      "path": "web/server/Magav.Server",
+      "last_analyzed": "2026-08-17",
+      "dirty_this_run": false
+    },
+    "api": {
+      "content_hash": "sha256:f188674516fa93af",
+      "interface_hash": "sha256:f188674516fa93af",
+      "files": 4,
+      "path": "web/server/Magav.Api",
+      "last_analyzed": "2026-08-17",
+      "dirty_this_run": false
+    },
+    "web-client": {
+      "content_hash": "sha256:46a7256f86b88eff",
+      "interface_hash": "sha256:46a7256f86b88eff",
+      "files": 125,
+      "path": "web/client/src",
+      "last_analyzed": "2026-08-17",
+      "dirty_this_run": false
+    },
+    "android": {
+      "content_hash": "sha256:7620fc0e726e45e8",
+      "interface_hash": "sha256:7620fc0e726e45e8",
+      "files": 89,
+      "path": "android/app/src/main",
+      "last_analyzed": "2026-08-17",
+      "dirty_this_run": false
+    },
+    "shared": {
+      "content_hash": "sha256:1f8c499a2c53bce8",
+      "virtual": true,
+      "files": 3,
+      "paths": [
+        "android/app/build.gradle.kts",
+        "tools/parity-lint.mjs",
+        "tools/parity.md"
+      ],
+      "last_analyzed": "2026-10-04",
+      "dirty_this_run": true,
+      "note": "Out-of-component files the docs cite. First hashed this run; the same method gives 007c386173c19c72 at 339a89c, so the change is android/app/build.gradle.kts (719e71a). No importers."
+    }
   },
   "prior": {
-    "run_id": "deepinit-2026-06-30",
-    "source_through_commit": "778a2dd + uncommitted working tree (auto-callback-to-gate feature)",
+    "run_id": "deepinit-2026-08-17",
+    "source_through_commit": "339a89c (clean working tree)",
+    "method": "same, but INCLUDING nested CLAUDE.md files",
     "components": {
-      "common":     "sha256:f7a40ce8393d4fa4",
-      "server":     "sha256:1167cfbcbc3bc616",
-      "api":        "sha256:55f8453b91c8423f",
-      "web-client": "sha256:e0bc1325fd601d6d",
-      "android":    "sha256:3fa47f306fe213fb"
+      "common": "sha256:a0283500d25802ef",
+      "server": "sha256:9a05b5631a7e4223",
+      "api": "sha256:04dd67c524b05323",
+      "web-client": "sha256:46a7256f86b88eff",
+      "android": "sha256:7620fc0e726e45e8"
     }
   }
 }

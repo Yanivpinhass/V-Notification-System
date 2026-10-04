@@ -1,12 +1,12 @@
 {
-  "generated": "2026-08-17",
-  "run_id": "deepinit-2026-08-17",
+  "generated": "2026-10-04",
+  "run_id": "deepinit-2026-10-04",
   "source": "graphify update . (Step 0b, deterministic, 0 LLM tokens)",
   "graph_totals": {
-    "nodes": 3021,
-    "edges": 4996,
-    "files": 326,
-    "communities": 184
+    "nodes": 3093,
+    "edges": 5074,
+    "files": 331,
+    "communities": 201
   },
   "confidence": "[GRAPHIFY] — AST-derived this run (earlier runs used the [GREP] fallback)",
   "cycles": [],

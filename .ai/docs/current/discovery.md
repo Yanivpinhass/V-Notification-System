@@ -1,5 +1,5 @@
 <!-- DeepInit Detect | Component: system-wide
-Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-08-17 (re-measured through 339a89c: 78 commits; source sizing recounted from `git ls-files`; component registry refreshed — Graphify IS now available and the structural graph was rebuilt deterministically at Step 0b) · prior: deepinit-2026-06-25b (re-verified through 778a2dd — + Duty Log feature (features/duty-log/* + editable-hours preview), + Android device-allowlist gate (license/DeviceAllowlist.kt, DeviceClipboardBridge.kt); detect-stage provenance — a full `deep-init` run recomputes the structural graph + scc sizing) · prior: deepinit-2026-06-24 (incremental --update; versionCode 63, secrets externalized)
+Run ID: deepinit-2026-06-18 · Updated: deepinit-2026-10-04 (through 719e71a: 80 commits; one source change — build.gradle.kts version + license-expiry bump; no component dirty) · prior: deepinit-2026-08-17 (re-measured through 339a89c: 78 commits; source sizing recounted from `git ls-files`; component registry refreshed — Graphify IS now available and the structural graph was rebuilt deterministically at Step 0b) · prior: deepinit-2026-06-25b (re-verified through 778a2dd — + Duty Log feature (features/duty-log/* + editable-hours preview), + Android device-allowlist gate (license/DeviceAllowlist.kt, DeviceClipboardBridge.kt); detect-stage provenance — a full `deep-init` run recomputes the structural graph + scc sizing) · prior: deepinit-2026-06-24 (incremental --update; versionCode 63, secrets externalized)
 Input files processed: git ls-files (252 source candidates), package.json, *.csproj, build.gradle.kts, appsettings*.json, git log
 Generated: 2026-06-18 -->
 
@@ -15,7 +15,7 @@ Two deployment targets share **one React frontend**:
 ## 2. Tech Stack
 - **Frontend:** React 18.3 + TypeScript + Vite; Tailwind + Shadcn/UI (Radix); React Hook Form + Zod; Sonner toasts; vite-plugin-pwa. 37 deps / 18 devDeps.
 - **Web backend:** ASP.NET 8 Minimal APIs (net8.0); NPoco ORM via custom `DbHelper`; SQLCipher (encrypted SQLite), WAL + 30s busy timeout; JWT auth.
-- **Android:** Kotlin 1.9.22 / Java 17; Ktor 2.3.12 (CIO, `connectionIdleTimeoutSeconds=180`); Room 2.6.1 + SQLCipher 4.5.4 (**`@Database(version=11)`**); Koin DI; Apache POI 5.2.5; AlarmManager + WorkManager; native SmsManager. **versionCode 83 / 1.5.0.** minSdk 29 / target 35.
+- **Android:** Kotlin 1.9.22 / Java 17; Ktor 2.3.12 (CIO, `connectionIdleTimeoutSeconds=180`); Room 2.6.1 + SQLCipher 4.5.4 (**`@Database(version=11)`**); Koin DI; Apache POI 5.2.5; AlarmManager + WorkManager; native SmsManager. **versionCode 84 / 1.5.1.** minSdk 29 / target 35.
 - **SMS provider (web):** InforUMobile XML API. **(Android:** native `SmsManager` with the v1.5.0 at-most-once dispatch scheme.**)**
 - **Source size (recounted 2026-08-17 from `git ls-files` + `wc -l`):** **~31.7k source lines / 257 tracked source files.** Breakdown: web-client **15.6k** (124 .ts/.tsx), android **8.9k** (71 .kt — all of `db/` now tracked after the ISS-010 fix), .NET **~7.3k** (62 .cs: common 35 / server 22 / api 5). Growth since 2026-06-18 is concentrated in the two feature commits (~4.1k inserted lines across all five components).
 
@@ -37,7 +37,7 @@ Two deployment targets share **one React frontend**:
 **Dependency order (toposort):** Wave 2a leaves = `common`, `web-client`, `android`; Wave 2b = `server` (→common); Wave 2c = `api` (→server, common). `web-client`/`android` have **no compile-time edge** into .NET — they integrate over HTTP / re-implement the API surface, so the React build is a runtime dependency only.
 
 ## 5. Git Intelligence Summary
-**78 commits**, active 2026-01-27 → 2026-08-17 (~6.7 months); **not shallow** → IF-5 signals reliable. Top churn: `android/app/build.gradle.kts` (37 — version bumps per APK build), `ShiftsManagementPage.tsx` (22), `Program.cs` (18), `Index.tsx` / `menuItems.ts` / `SmsSchedulerWorker.kt` / `ShiftRoutes.kt` / `MagavApplication.kt` (13 each), `service/SmsReminderService.kt` / `RequestDtos.kt` (12 each). Single primary author (Yanivpinhass, all 78) ⇒ **bus_factor ≈ 1 system-wide** — IF-5 weights this. See `git-intelligence.md` for the full table and the incident-commit signal.
+**80 commits**, active 2026-01-27 → 2026-10-04 (~8.3 months); **not shallow** → IF-5 signals reliable. Top churn: `android/app/build.gradle.kts` (38 — version bumps per APK build), `ShiftsManagementPage.tsx` (22), `Program.cs` (18), `Index.tsx` / `menuItems.ts` / `SmsSchedulerWorker.kt` / `ShiftRoutes.kt` / `MagavApplication.kt` (13 each), `service/SmsReminderService.kt` / `RequestDtos.kt` (12 each). Single primary author (Yanivpinhass, all 80) ⇒ **bus_factor ≈ 1 system-wide** — IF-5 weights this. See `git-intelligence.md` for the full table and the incident-commit signal.
 
 ## 6. Database Connectivity
 - **Web dev:** SQLCipher-encrypted SQLite at `db/magav.db` (gitignored, with `db/Pass.txt` passphrase + WAL files — **all untracked, local-only**).
